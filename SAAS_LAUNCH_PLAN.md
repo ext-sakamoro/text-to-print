@@ -31,7 +31,8 @@
 - [x] Rust API Gateway + Next.js を単一コンテナに統合
 - [x] entrypoint.sh: Node.js (port 3000) → Rust (port 8080, 外部公開)
 - [x] Rust fallback で全リクエストを Next.js にプロキシ
-- [x] Railway 自動デプロイ成功
+- [x] Location ヘッダー書き換え (127.0.0.1:3000 → 相対パス)
+- [x] ログイン画面表示確認 ✅
 
 ## Step 5: Stripe 設定
 - [ ] Stripe Product 作成 (3dvbgaran Pro)
