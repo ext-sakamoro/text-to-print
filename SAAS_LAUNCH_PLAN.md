@@ -27,12 +27,11 @@
 - [x] テスト 4/4 パス
 - [x] Railway 自動再デプロイ
 
-## Step 4: Frontend デプロイ
-- [ ] Railway 別サービス or Vercel にデプロイ
-- [ ] 環境変数: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-- [ ] NEXT_PUBLIC_WORKER_URL=(API Gateway URL)
-- [ ] STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-- [ ] Public domain 発行
+## Step 4: Frontend デプロイ ✅
+- [x] Rust API Gateway + Next.js を単一コンテナに統合
+- [x] entrypoint.sh: Node.js (port 3000) → Rust (port 8080, 外部公開)
+- [x] Rust fallback で全リクエストを Next.js にプロキシ
+- [x] Railway 自動デプロイ成功
 
 ## Step 5: Stripe 設定
 - [ ] Stripe Product 作成 (3dvbgaran Pro)

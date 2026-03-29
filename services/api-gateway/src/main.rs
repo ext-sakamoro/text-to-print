@@ -409,15 +409,23 @@ async fn record_usage(
 // ---------------------------------------------------------------------------
 
 async fn proxy_frontend(frontend_url: String, req: Request) -> Response {
-    let client = reqwest::Client::new();
+    // Don't follow redirects — pass them through to the client
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
     let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
     let method = req.method().clone();
     let hdrs = req.headers().clone();
     let body = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024).await.unwrap_or_default();
 
-    let mut r = client.request(method, format!("{frontend_url}{path}"));
+    let target = format!("{frontend_url}{path}");
+    tracing::debug!(target = %target, "proxy_frontend");
+
+    let mut r = client.request(method, &target);
     for (k, v) in hdrs.iter() {
-        if k != "host" { r = r.header(k, v); }
+        if k != "host" && k != "transfer-encoding" { r = r.header(k, v); }
     }
 
     match r.body(body).send().await {
@@ -426,13 +434,28 @@ async fn proxy_frontend(frontend_url: String, req: Request) -> Response {
             let rh = resp.headers().clone();
             let rb = resp.bytes().await.unwrap_or_default();
             let mut b = Response::builder().status(st);
-            for (k, v) in rh.iter() { b = b.header(k, v); }
+            for (k, v) in rh.iter() {
+                // Rewrite Location header to remove internal URL
+                if k == "location" {
+                    if let Ok(loc) = v.to_str() {
+                        let rewritten = loc
+                            .replace("http://127.0.0.1:3000", "")
+                            .replace("http://localhost:3000", "");
+                        b = b.header(k, rewritten);
+                        continue;
+                    }
+                }
+                // Skip transfer-encoding — axum handles it
+                if k == "transfer-encoding" { continue; }
+                b = b.header(k, v);
+            }
             b.body(axum::body::Body::from(rb)).unwrap_or_else(|_| {
                 Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(axum::body::Body::from("proxy error")).unwrap()
             })
         }
-        Err(_) => {
+        Err(e) => {
+            tracing::error!(error = %e, target = %target, "frontend proxy failed");
             Response::builder().status(StatusCode::BAD_GATEWAY)
                 .header("content-type", "text/plain")
                 .body(axum::body::Body::from("Frontend unavailable")).unwrap()
