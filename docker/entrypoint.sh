@@ -1,18 +1,19 @@
 #!/bin/sh
 set -e
 
-# Start Next.js frontend on port 3000 (background)
+echo "Starting Next.js frontend..."
 cd /app/frontend
-PORT=3000 node server.js &
+PORT=3000 HOSTNAME=0.0.0.0 node server.js &
 FRONTEND_PID=$!
 
-# Wait for frontend to be ready
+echo "Waiting for frontend (pid=$FRONTEND_PID)..."
 for i in $(seq 1 30); do
-  if wget -q -O /dev/null http://127.0.0.1:3000/auth/login 2>/dev/null; then
+  if curl -sf http://127.0.0.1:3000/ > /dev/null 2>&1; then
+    echo "Frontend ready"
     break
   fi
   sleep 1
 done
 
-# Start Rust API Gateway on $PORT (foreground)
+echo "Starting API Gateway..."
 exec api-gateway
