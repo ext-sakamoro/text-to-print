@@ -1,0 +1,23 @@
+name: 3dvbgaran CI
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+jobs:
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/api-gateway
+      - run: cd services/api-gateway && cargo check
+      - run: cd services/api-gateway && cargo clippy -- -D warnings
+  lint-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd frontend && npm ci || npm install
+      - run: cd frontend && npm run type-check
