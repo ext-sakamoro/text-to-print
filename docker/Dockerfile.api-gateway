@@ -22,7 +22,7 @@ COPY --from=rust-builder /app/target/release/api-gateway /usr/local/bin/api-gate
 # Copy Next.js standalone
 COPY --from=node-builder /app/.next/standalone /app/frontend/
 COPY --from=node-builder /app/.next/static /app/frontend/.next/static
-COPY --from=node-builder /app/public /app/frontend/public 2>/dev/null || true
+COPY --from=node-builder /app/public /app/frontend/public
 
 # Entrypoint: start Node.js frontend, then Rust gateway
 COPY docker/entrypoint.sh /entrypoint.sh
