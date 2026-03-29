@@ -3,7 +3,7 @@ name = "api-gateway"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "3dvbgaran API Gateway: auth, billing, rate limit"
+description = "3dvbgaran unified server: auth, billing, rate limit, LLM pipeline"
 
 [dependencies]
 axum = { version = "0.8", features = ["macros"] }
@@ -17,6 +17,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 reqwest = { version = "0.12", features = ["json"] }
 jsonwebtoken = "9"
 dashmap = "6"
+uuid = { version = "1", features = ["v4"] }
 
 [profile.release]
 opt-level = 3
