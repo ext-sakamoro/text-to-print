@@ -15,17 +15,17 @@
 - [x] RLS ポリシー + トリガー動作確認
 - 注意: `uuid_generate_v4()` → `gen_random_uuid()` に修正が必要だった
 
-## Step 2: Railway 環境変数設定 (API Gateway)
-- [ ] SUPABASE_URL=https://erxsdbjpiiwzzeeelyie.supabase.co
-- [ ] SUPABASE_SERVICE_ROLE_KEY=(secret key)
-- [ ] JWT_SECRET=(生成)
-- [ ] CORE_ENGINE_URL=(Step 4で決定)
+## Step 2: Railway 環境変数設定 (API Gateway) ✅
+- [x] SUPABASE_URL
+- [x] SUPABASE_SERVICE_ROLE_KEY
+- [x] JWT_SECRET
 
-## Step 3: Core Engine デプロイ (Railway 別サービス)
-- [ ] Railway に core-engine サービス追加
-- [ ] Dockerfile.core-engine でビルド
-- [ ] Private networking で API Gateway から接続
-- [ ] 環境変数: LLM_ENDPOINT, OUTPUT_DIR
+## Step 3: Core Engine → API Gateway に統合 ✅
+- [x] Core Engine のエンドポイントを API Gateway に直接組み込み
+- [x] プロキシ方式廃止 → LLM呼び出し・LOL処理を直接実行
+- [x] CORE_ENGINE_URL 環境変数不要に
+- [x] テスト 4/4 パス
+- [x] Railway 自動再デプロイ
 
 ## Step 4: Frontend デプロイ
 - [ ] Railway 別サービス or Vercel にデプロイ

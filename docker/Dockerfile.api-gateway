@@ -1,11 +1,35 @@
-FROM rust:1.88-bookworm AS builder
+# Stage 1: Build Rust API Gateway
+FROM rust:1.88-bookworm AS rust-builder
 WORKDIR /app
 COPY services/api-gateway/ .
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+# Stage 2: Build Next.js Frontend
+FROM node:22-alpine AS node-builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci || npm install
+COPY frontend/ .
+RUN npm run build
+
+# Stage 3: Runtime — both Rust binary + Node.js standalone
+FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/api-gateway /usr/local/bin/
+
+# Copy Rust binary
+COPY --from=rust-builder /app/target/release/api-gateway /usr/local/bin/api-gateway
+
+# Copy Next.js standalone
+COPY --from=node-builder /app/.next/standalone /app/frontend/
+COPY --from=node-builder /app/.next/static /app/frontend/.next/static
+COPY --from=node-builder /app/public /app/frontend/public 2>/dev/null || true
+
+# Entrypoint: start Node.js frontend, then Rust gateway
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV PORT=8080
+ENV FRONTEND_URL=http://127.0.0.1:3000
 EXPOSE 8080
-CMD ["api-gateway"]
+
+CMD ["/entrypoint.sh"]

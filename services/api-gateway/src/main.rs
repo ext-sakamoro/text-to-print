@@ -157,6 +157,8 @@ async fn main() {
     });
     let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
 
+    let frontend_url = env("FRONTEND_URL", "http://127.0.0.1:3000");
+
     let public = Router::new()
         .route("/health", get(health))
         .route("/license", get(license_handler));
@@ -168,9 +170,13 @@ async fn main() {
         .layer(middleware::from_fn_with_state(state.clone(), auth_mw))
         .layer(middleware::from_fn_with_state(state.clone(), rate_mw));
 
+    let frontend_proxy = Router::new()
+        .fallback(move |req: Request| proxy_frontend(frontend_url.clone(), req));
+
     let app = Router::new()
         .merge(public)
         .merge(api)
+        .merge(frontend_proxy)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -394,6 +400,42 @@ async fn record_usage(
         .header("Authorization", format!("Bearer {}", state.supabase_service_key))
         .header("Content-Type", "application/json")
         .json(&body).send().await;
+}
+
+// ---------------------------------------------------------------------------
+// Frontend proxy
+// ---------------------------------------------------------------------------
+
+async fn proxy_frontend(frontend_url: String, req: Request) -> Response {
+    let client = reqwest::Client::new();
+    let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
+    let method = req.method().clone();
+    let hdrs = req.headers().clone();
+    let body = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024).await.unwrap_or_default();
+
+    let mut r = client.request(method, format!("{frontend_url}{path}"));
+    for (k, v) in hdrs.iter() {
+        if k != "host" { r = r.header(k, v); }
+    }
+
+    match r.body(body).send().await {
+        Ok(resp) => {
+            let st = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let rh = resp.headers().clone();
+            let rb = resp.bytes().await.unwrap_or_default();
+            let mut b = Response::builder().status(st);
+            for (k, v) in rh.iter() { b = b.header(k, v); }
+            b.body(axum::body::Body::from(rb)).unwrap_or_else(|_| {
+                Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(axum::body::Body::from("proxy error")).unwrap()
+            })
+        }
+        Err(_) => {
+            Response::builder().status(StatusCode::BAD_GATEWAY)
+                .header("content-type", "text/plain")
+                .body(axum::body::Body::from("Frontend unavailable")).unwrap()
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
