@@ -85,6 +85,7 @@ struct Claims {
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct GenerateRequest {
     prompt: String,
     #[serde(default = "default_quality")]
@@ -92,6 +93,7 @@ struct GenerateRequest {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct DirectLolRequest {
     lol_source: String,
     #[serde(default = "default_quality")]
