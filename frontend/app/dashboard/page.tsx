@@ -1,8 +1,10 @@
 'use client';
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useGeneration } from '@/lib/hooks/use-generation';
 
 const ModelPreview = lazy(() => import('./components/ModelPreview'));
+
+type ServiceStatus = 'checking' | 'online' | 'offline';
 
 export default function DashboardPage() {
   const [prompt, setPrompt] = useState('');
@@ -10,8 +12,27 @@ export default function DashboardPage() {
   const [lolMode, setLolMode] = useState(false);
   const [lolSource, setLolSource] = useState('');
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatus>('checking');
 
   const { loading, result, error, run } = useGeneration();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || '';
+        if (!workerUrl) { setServiceStatus('offline'); return; }
+        const resp = await fetch(`${workerUrl}/health`, { signal: AbortSignal.timeout(5000) });
+        if (resp.ok) {
+          const data = await resp.json();
+          setServiceStatus(data.llm_endpoint && data.llm_endpoint !== 'http://localhost:8000' ? 'online' : 'offline');
+        } else {
+          setServiceStatus('offline');
+        }
+      } catch {
+        setServiceStatus('offline');
+      }
+    })();
+  }, []);
 
   const handleGenerate = async () => {
     setPreviewBlob(null);
@@ -36,12 +57,24 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  const isLlmError = error?.error?.includes('LLM error') || error?.error?.includes('request failed');
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">3dvbgaran</h1>
       <p className="text-sm text-muted-foreground">
         Describe what you want to 3D print. The AI generates a mathematically precise .3mf file.
       </p>
+
+      {serviceStatus === 'offline' && (
+        <div className="border border-yellow-400 bg-yellow-50 dark:bg-yellow-950 rounded-lg p-4">
+          <p className="font-medium text-yellow-700 dark:text-yellow-300">3D Generation Engine: Offline</p>
+          <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
+            The inference server is currently unavailable. LOL DSL direct input mode is available.
+            Natural language generation requires the inference server.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Input */}
@@ -131,8 +164,14 @@ export default function DashboardPage() {
         <div className={`border rounded-lg p-4 ${error ? 'border-red-500 bg-red-50 dark:bg-red-950' : 'border-green-500 bg-green-50 dark:bg-green-950'}`}>
           {error ? (
             <div>
-              <p className="font-medium text-red-700 dark:text-red-300">Error</p>
-              <p className="text-sm mt-1">{error.error}</p>
+              <p className="font-medium text-red-700 dark:text-red-300">
+                {isLlmError ? 'Inference Server Unavailable' : 'Error'}
+              </p>
+              <p className="text-sm mt-1">
+                {isLlmError
+                  ? 'The 3D generation engine is currently offline. Please try again later or use LOL DSL direct input mode.'
+                  : error.error}
+              </p>
             </div>
           ) : result ? (
             <div>

@@ -1,56 +1,53 @@
 # 3dvbgaran SaaS Launch Plan
 
-## 現状
-- [x] GitHub private repo (ext-sakamoro/3dvbgaran)
-- [x] API Gateway (Rust/axum) — Railway デプロイ済み (3dvbgaran-production.up.railway.app)
-- [x] Core Engine (Rust/axum) — コード完成、テスト4/4パス
-- [x] Frontend (Next.js) — コード完成
-- [x] DB Migrations — SQLファイル6本作成済み
-- [x] Supabase プロジェクト作成済み (texttocad / erxsdbjpiiwzzeeelyie)
+## アーキテクチャ
 
-## Step 1: Supabase DB migrations 適用 ✅
-- [x] `supabase link` でプロジェクト接続
-- [x] migrations 6本を CLI (`supabase db push`) で適用
-- [x] テーブル作成確認 (profiles, projects, plan_configs, api_usage, generations)
-- [x] RLS ポリシー + トリガー動作確認
-- 注意: `uuid_generate_v4()` → `gen_random_uuid()` に修正が必要だった
+```
+Railway (単一コンテナ)
+  Rust API Gateway (port 8080) ──→ Next.js Frontend (port 3000, 内部)
+  /health, /license               認証, UI, 課金
+  /api/v1/* (認証+レートリミット)
+  /api/v1/generate → Mac mini にプロキシ
+  それ以外 → Next.js にプロキシ
+         │
+         │ Cloudflare Tunnel
+         ▼
+Mac mini (自宅)
+  Core Engine (Rust/axum)
+  LLM (Qwen3.5-9B) → LOL DSL → alice-lol → alice-sdf → .3mf
+         │
+         ▼
+Supabase (texttocad / erxsdbjpiiwzzeeelyie)
+  PostgreSQL + Auth + RLS
+```
 
-## Step 2: Railway 環境変数設定 (API Gateway) ✅
-- [x] SUPABASE_URL
-- [x] SUPABASE_SERVICE_ROLE_KEY
-- [x] JWT_SECRET
+## 完了済み
 
-## Step 3: Core Engine → API Gateway に統合 ✅
-- [x] Core Engine のエンドポイントを API Gateway に直接組み込み
-- [x] プロキシ方式廃止 → LLM呼び出し・LOL処理を直接実行
-- [x] CORE_ENGINE_URL 環境変数不要に
-- [x] テスト 4/4 パス
-- [x] Railway 自動再デプロイ
+- [x] Step 1: Supabase DB migrations 適用 (6本, `supabase db push`)
+- [x] Step 2: Railway 環境変数設定 (SUPABASE_URL, SERVICE_ROLE_KEY, JWT_SECRET)
+- [x] Step 3: Core Engine → API Gateway 統合 (単一バイナリ)
+- [x] Step 4: Frontend デプロイ (Rust + Next.js 単一コンテナ)
+- [x] Step 6: E2E テスト 17/17 パス (Playwright)
+- [x] Admin ユーザー作成 (sakamoro@extoria.co.jp, Enterprise)
 
-## Step 4: Frontend デプロイ ✅
-- [x] Rust API Gateway + Next.js を単一コンテナに統合
-- [x] entrypoint.sh: Node.js (port 3000) → Rust (port 8080, 外部公開)
-- [x] Rust fallback で全リクエストを Next.js にプロキシ
-- [x] Location ヘッダー書き換え (127.0.0.1:3000 → 相対パス)
-- [x] ログイン画面表示確認 ✅
+## Step 5: Stripe 設定 (後日)
+- [ ] Stripe Product/Price 作成
+- [ ] Webhook URL 設定
+- [ ] billing/page.tsx priceId 更新
 
-## Step 5: Stripe 設定
-- [ ] Stripe Product 作成 (3dvbgaran Pro)
-- [ ] Price 作成 ($19/mo)
-- [ ] Webhook URL 設定 (Frontend URL/api/stripe/webhook)
-- [ ] billing/page.tsx の priceId 更新
-
-## Step 6: 動作確認
-- [ ] ユーザー登録 (Supabase Auth)
-- [ ] ログイン → Dashboard 表示
-- [ ] Project 作成
-- [ ] Generate ページ表示 (LLM未接続のためエラーは想定内)
-- [ ] Billing ページ表示
-- [ ] Settings ページ (API Key 生成)
-- [ ] Stripe Checkout フロー (テストモード)
-
-## Step 7: LLM 接続 (将来)
-- [ ] LLM エンドポイント確保 (llama.cpp / Ollama / 外部API)
-- [ ] Core Engine の LLM_ENDPOINT 環境変数設定
-- [ ] alice-lol パイプライン統合 (.3mf バイナリ返却)
+## Step 7: Mac mini パイプライン (マシン準備後)
+- [ ] Mac mini に Core Engine デプロイ (alice-lol依存付き)
+- [ ] LLM サーバー起動 (llama.cpp / Ollama)
+- [ ] Cloudflare Tunnel 設定 (Mac mini ↔ Railway)
+- [ ] Railway 環境変数 `CORE_ENGINE_URL` を Tunnel URL に設定
 - [ ] E2E テスト (テキスト → .3mf 生成 → ダウンロード)
+
+## Step 8: Mac mini 不要で先に進める機能
+- [ ] メール認証フロー確認 (Supabase email confirm)
+- [ ] 新規登録ページの改善 (パスワードバリデーション表示)
+- [ ] `/dashboard` トップにサービス説明・ステータス表示
+- [ ] LLM未接続時のユーザー向けエラーメッセージ改善
+- [ ] favicon 追加
+- [ ] OGP / メタデータ設定
+- [ ] 404 ページ作成
+- [ ] fbx エクスポート対応 (alice-sdf 側の機能追加が必要 → 後日)
