@@ -115,16 +115,33 @@ ollama を llama.cpp server に置き換え、continuous batching + 4スロッ�
 | 40 | 18.90s | 1.67s | 10.81s | 18.81s | 18.81s | 10.19s | 2.1 req/s |
 | 50 | 23.91s | 1.60s | 13.03s | 22.63s | 23.80s | 12.47s | 2.1 req/s |
 
-### ollama vs llama.cpp server 比較
+### Qwen2.5 7B 段階的負荷テスト (llama.cpp server, continuous batching, parallel=8)
 
-| 並列数 | ollama wall | llama.cpp wall | 改善率 | ollama throughput | llama.cpp throughput |
-|---|---|---|---|---|---|
-| 1 | 0.84s | 0.91s | -8% | 1.2 req/s | 1.1 req/s |
-| 5 | 3.39s | 2.48s | **27%** | 1.5 req/s | 2.0 req/s |
-| 10 | 6.82s | 4.68s | **31%** | 1.5 req/s | 2.1 req/s |
-| 20 | 14.48s | 9.95s | **31%** | 1.4 req/s | 2.0 req/s |
-| 30 | 22.11s | 15.74s | **29%** | 1.4 req/s | 1.9 req/s |
-| 50 | 38.11s | 23.91s | **37%** | 1.3 req/s | 2.1 req/s |
+parallel=4 → 8 に増やした結果。KVキャッシュ 448MB (VRAM 25GB中 1.7%)。
+
+| 並列数 | wall時間 | min | p50 | p95 | max | avg | throughput |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.78s | 0.74s | 0.74s | 0.74s | 0.74s | 0.74s | 1.3 req/s |
+| 2 | 1.33s | 1.26s | 1.29s | 1.29s | 1.29s | 1.28s | 1.5 req/s |
+| 3 | 1.71s | 1.61s | 1.67s | 1.67s | 1.67s | 1.65s | 1.8 req/s |
+| 5 | 2.32s | 2.14s | 2.22s | 2.28s | 2.28s | 2.22s | 2.2 req/s |
+| 8 | 3.19s | 3.03s | 3.14s | 3.15s | 3.15s | 3.09s | **2.5 req/s** |
+| 10 | 3.82s | 2.47s | 2.76s | 3.78s | 3.78s | 2.90s | **2.6 req/s** |
+| 15 | 6.45s | 2.86s | 3.98s | 6.40s | 6.40s | 4.65s | 2.3 req/s |
+| 20 | 8.37s | 2.87s | 6.52s | 8.32s | 8.32s | 5.46s | 2.4 req/s |
+| 30 | 12.58s | 2.86s | 6.53s | 12.50s | 12.50s | 7.68s | 2.4 req/s |
+| 40 | 18.50s | 3.00s | 10.89s | 18.32s | 18.41s | 10.81s | 2.2 req/s |
+| 50 | 21.29s | 2.87s | 13.23s | 20.01s | 21.18s | 11.88s | **2.3 req/s** |
+
+### 全構成比較
+
+| 並列数 | ollama | llama.cpp p=4 | llama.cpp p=8 | p=8 vs ollama |
+|---|---|---|---|---|
+| 1 | 0.84s / 1.2 req/s | 0.91s / 1.1 req/s | 0.78s / 1.3 req/s | +8% |
+| 5 | 3.39s / 1.5 req/s | 2.48s / 2.0 req/s | 2.32s / 2.2 req/s | **+47%** |
+| 10 | 6.82s / 1.5 req/s | 4.68s / 2.1 req/s | 3.82s / 2.6 req/s | **+73%** |
+| 20 | 14.48s / 1.4 req/s | 9.95s / 2.0 req/s | 8.37s / 2.4 req/s | **+71%** |
+| 50 | 38.11s / 1.3 req/s | 23.91s / 2.1 req/s | 21.29s / 2.3 req/s | **+77%** |
 
 ### ボトルネック分析
 
@@ -134,33 +151,40 @@ ollama を llama.cpp server に置き換え、continuous batching + 4スロッ�
 2. **Go HTTP → llama.cpp FFI のオーバーヘッド** — リクエストごとにGo/CGo境界を跨ぐ
 3. **GPU演算は遊んでいる** — 直列処理のため、1リクエスト完了→次リクエスト開始の間にGPUがidle
 
-**llama.cpp server (throughput ~2.1 req/s, +50%):**
+**llama.cpp server parallel=4 (throughput ~2.1 req/s, ollamaから+50%):**
 
 1. **continuous batching** — 4リクエストのトークンを1回のGPU演算にバッチ化。GPU idle時間を削減
 2. **C++直接** — Go/Python層なし。HTTP → 推論が最短パス
-3. **KVキャッシュ効率** — 4スロット × 1024 token = 224MB。VRAM 25GB中 1% で余裕
-4. **残るボトルネック**: GPUの演算能力自体。M2 Pro のGPUコア19基がフル稼働でも ~2 req/s が物理限界に近い
+3. **ボトルネック**: GPU演算能力。4スロットでもGPU使用率が飽和しきらない
+
+**llama.cpp server parallel=8 (throughput ~2.5 req/s, ollamaから+77%):**
+
+1. **8スロット同時バッチ** — GPU演算のバッチサイズ倍増。matmulの効率が向上
+2. **N=8で最高効率 2.5 req/s** — 8スロットが全て埋まった状態が最適
+3. **N>8でも2.2-2.4 req/s維持** — キュー待ちは増えるがスループットは安定
+4. **KVキャッシュ 448MB** — VRAM 25GB中 1.7%。parallel=16以上も余裕あり
+5. **最終ボトルネック**: M2 Pro GPU 19コアの演算能力上限。これ以上はハード増設が必要
 
 ### 同時ユーザー数の目安
 
-| 体感 | ollama | llama.cpp server | p95レイテンシ (llama.cpp) |
+| 体感 | ollama | llama.cpp p=4 | llama.cpp p=8 (推奨) |
 |---|---|---|---|
-| 快適 (< 1s) | 1人 | 1人 | 0.9s |
-| 良好 (< 3s) | 3〜5人 | **5〜8人** | 3.6s |
-| 許容 (< 5s) | 5〜8人 | **8〜10人** | 4.6s |
-| 実用限界 (< 10s) | 10〜15人 | **15〜20人** | 9.9s |
-| 劣化 (> 15s) | 20人以上 | **30人以上** | 15.6s |
+| 快適 (< 1s) | 1人 | 1人 | **1〜2人** |
+| 良好 (< 3s) | 3〜5人 | 5〜8人 | **8〜10人** |
+| 許容 (< 5s) | 5〜8人 | 8〜10人 | **10〜15人** |
+| 実用限界 (< 10s) | 10〜15人 | 15〜20人 | **20〜30人** |
+| 劣化 (> 15s) | 20人以上 | 30人以上 | **40人以上** |
 
 ### 起動コマンド
 
 ```bash
-# llama.cpp server (推奨)
+# llama.cpp server (推奨構成)
 llama-server \
   --model ~/.3dvbgaran/models/qwen2.5-7b-instruct-q4_k_m.gguf \
   --port 8000 \
   --cont-batching \
-  --parallel 4 \
-  --ctx-size 4096 \
+  --parallel 8 \
+  --ctx-size 8192 \
   --n-gpu-layers 99 \
   --flash-attn on
 ```
