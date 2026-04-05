@@ -18,6 +18,8 @@ reqwest = { version = "0.12", features = ["json"] }
 jsonwebtoken = "9"
 dashmap = "6"
 uuid = { version = "1", features = ["v4"] }
+alice-lol = { path = "../../../ALICE-LOL/alice-lol", default-features = false }
+glam = "0.29"
 
 [profile.release]
 opt-level = 3

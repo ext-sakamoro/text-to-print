@@ -1,4 +1,6 @@
+use alice_lol::print_export::{lol_to_3mf, PrintConfig, ExportError};
 use axum::{
+    body::Body,
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
     middleware::{self, Next},
@@ -321,20 +323,69 @@ async fn license_handler() -> (HeaderMap, Json<LicenseInfo>) {
 async fn generate(
     State(s): State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
+) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
     tracing::info!(job_id = %job_id, prompt = %req.prompt, "generate");
 
     let lol_source = cached_llm(&s, &req.prompt).await
         .map_err(|e| (StatusCode::BAD_GATEWAY, Json(err_resp(&job_id, &format!("LLM error: {e}")))))?;
 
-    // TODO: alice-lol pipeline (lol_to_3mf)
-    Ok(Json(GenerateResponse {
-        job_id,
-        status: "completed".into(),
-        lol_source: Some(lol_source),
-        error: None,
-    }))
+    let config = print_config_for_quality(&req.quality);
+    let out_dir = std::env::var("OUTPUT_DIR").unwrap_or_else(|_| "/tmp/3dvbgaran".into());
+    std::fs::create_dir_all(&out_dir).ok();
+    let out_path = format!("{out_dir}/{job_id}.3mf");
+
+    let lol = lol_source.clone();
+    let path = out_path.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        lol_to_3mf(&lol, &path, &config)
+    }).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task error: {e}")))))?;
+
+    match result {
+        Ok(stats) => {
+            tracing::info!(job_id = %job_id, vertices = stats.vertex_count, triangles = stats.triangle_count, "3mf generated");
+            let bytes = std::fs::read(&out_path).map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read error: {e}"))))
+            })?;
+            std::fs::remove_file(&out_path).ok();
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/vnd.ms-package.3dmanufacturing-3dmodel+xml")
+                .header("Content-Disposition", format!("attachment; filename=\"{job_id}.3mf\""))
+                .header("X-Job-Id", &job_id)
+                .header("X-LOL-Source", &lol_source)
+                .header("X-Vertex-Count", stats.vertex_count.to_string())
+                .header("X-Triangle-Count", stats.triangle_count.to_string())
+                .body(Body::from(bytes))
+                .unwrap())
+        }
+        Err(e) => {
+            let msg = match &e {
+                ExportError::Parse(pe) => format!("LOL parse error: {pe}"),
+                ExportError::EmptyMesh => "Empty mesh (SDF produced no geometry)".into(),
+                ExportError::Io(io) => format!("IO error: {io}"),
+            };
+            tracing::warn!(job_id = %job_id, error = %msg, "3mf generation failed");
+            Err((StatusCode::UNPROCESSABLE_ENTITY, Json(GenerateResponse {
+                job_id, status: "error".into(),
+                lol_source: Some(lol_source), error: Some(msg),
+            })))
+        }
+    }
+}
+
+fn print_config_for_quality(quality: &str) -> PrintConfig {
+    let resolution = match quality {
+        "preview" => 128,
+        "high" => 256,
+        _ => 128,
+    };
+    PrintConfig {
+        resolution,
+        bounds_min: glam::Vec3::splat(-20.0),
+        bounds_max: glam::Vec3::splat(20.0),
+        scale_mm: 1.0,
+    }
 }
 
 async fn generate_preview(
@@ -367,16 +418,48 @@ async fn cached_llm(state: &AppState, prompt: &str) -> Result<String, String> {
 async fn generate_from_lol(
     State(_s): State<Arc<AppState>>,
     Json(req): Json<DirectLolRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
+) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
+    let config = print_config_for_quality(&req.quality);
+    let out_dir = std::env::var("OUTPUT_DIR").unwrap_or_else(|_| "/tmp/3dvbgaran".into());
+    std::fs::create_dir_all(&out_dir).ok();
+    let out_path = format!("{out_dir}/{job_id}.3mf");
 
-    // TODO: alice-lol pipeline (lol_to_3mf)
-    Ok(Json(GenerateResponse {
-        job_id,
-        status: "completed".into(),
-        lol_source: Some(req.lol_source),
-        error: None,
-    }))
+    let lol = req.lol_source.clone();
+    let path = out_path.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        lol_to_3mf(&lol, &path, &config)
+    }).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task error: {e}")))))?;
+
+    match result {
+        Ok(stats) => {
+            let bytes = std::fs::read(&out_path).map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read error: {e}"))))
+            })?;
+            std::fs::remove_file(&out_path).ok();
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/vnd.ms-package.3dmanufacturing-3dmodel+xml")
+                .header("Content-Disposition", format!("attachment; filename=\"{job_id}.3mf\""))
+                .header("X-Job-Id", &job_id)
+                .header("X-LOL-Source", &req.lol_source)
+                .header("X-Vertex-Count", stats.vertex_count.to_string())
+                .header("X-Triangle-Count", stats.triangle_count.to_string())
+                .body(Body::from(bytes))
+                .unwrap())
+        }
+        Err(e) => {
+            let msg = match &e {
+                ExportError::Parse(pe) => format!("LOL parse error: {pe}"),
+                ExportError::EmptyMesh => "Empty mesh".into(),
+                ExportError::Io(io) => format!("IO error: {io}"),
+            };
+            Err((StatusCode::UNPROCESSABLE_ENTITY, Json(GenerateResponse {
+                job_id, status: "error".into(),
+                lol_source: Some(req.lol_source), error: Some(msg),
+            })))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
