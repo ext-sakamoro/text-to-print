@@ -8,10 +8,91 @@ use axum::{
 };
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
+
+// ---------------------------------------------------------------------------
+// Prompt cache
+// ---------------------------------------------------------------------------
+
+struct CacheEntry {
+    value: String,
+    created: Instant,
+}
+
+struct PromptCache {
+    entries: DashMap<u64, CacheEntry>,
+    hits: AtomicU64,
+    misses: AtomicU64,
+    max_entries: usize,
+    ttl_secs: u64,
+}
+
+impl PromptCache {
+    fn new(max_entries: usize, ttl_secs: u64) -> Self {
+        Self {
+            entries: DashMap::new(),
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+            max_entries,
+            ttl_secs,
+        }
+    }
+
+    fn cache_key(prompt: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        prompt.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn get(&self, prompt: &str) -> Option<String> {
+        let key = Self::cache_key(prompt);
+        if let Some(entry) = self.entries.get(&key) {
+            if entry.created.elapsed().as_secs() < self.ttl_secs {
+                self.hits.fetch_add(1, Ordering::Relaxed);
+                return Some(entry.value.clone());
+            }
+            drop(entry);
+            self.entries.remove(&key);
+        }
+        self.misses.fetch_add(1, Ordering::Relaxed);
+        None
+    }
+
+    fn put(&self, prompt: &str, value: String) {
+        if self.entries.len() >= self.max_entries {
+            self.evict_expired();
+        }
+        if self.entries.len() >= self.max_entries {
+            if let Some(oldest_key) = self.entries.iter()
+                .min_by_key(|e| e.value().created)
+                .map(|e| *e.key())
+            {
+                self.entries.remove(&oldest_key);
+            }
+        }
+        let key = Self::cache_key(prompt);
+        self.entries.insert(key, CacheEntry { value, created: Instant::now() });
+    }
+
+    fn evict_expired(&self) {
+        let ttl = self.ttl_secs;
+        self.entries.retain(|_, v| v.created.elapsed().as_secs() < ttl);
+    }
+
+    fn stats(&self) -> (u64, u64, usize) {
+        (
+            self.hits.load(Ordering::Relaxed),
+            self.misses.load(Ordering::Relaxed),
+            self.entries.len(),
+        )
+    }
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -25,6 +106,7 @@ struct AppState {
     start_time: Instant,
     llm_endpoint: String,
     system_prompt: String,
+    cache: PromptCache,
 }
 
 struct TokenBucket {
@@ -58,6 +140,15 @@ struct Health {
     uptime_secs: u64,
     llm_endpoint: String,
     printers: Vec<PrinterInfo>,
+    cache: CacheStats,
+}
+
+#[derive(Serialize)]
+struct CacheStats {
+    hits: u64,
+    misses: u64,
+    entries: usize,
+    hit_rate: String,
 }
 
 #[derive(Serialize)]
@@ -148,6 +239,8 @@ async fn main() {
         )
         .init();
     let env = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.into());
+    let cache_max: usize = env("CACHE_MAX_ENTRIES", "1000").parse().unwrap_or(1000);
+    let cache_ttl: u64 = env("CACHE_TTL_SECS", "3600").parse().unwrap_or(3600);
     let state = Arc::new(AppState {
         jwt_secret: env("JWT_SECRET", "dev-secret-change-me"),
         supabase_url: env("SUPABASE_URL", ""),
@@ -156,6 +249,7 @@ async fn main() {
         start_time: Instant::now(),
         llm_endpoint: env("LLM_ENDPOINT", "http://localhost:8000"),
         system_prompt: load_system_prompt(),
+        cache: PromptCache::new(cache_max, cache_ttl),
     });
     let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
 
@@ -198,12 +292,16 @@ async fn main() {
 // ---------------------------------------------------------------------------
 
 async fn health(State(s): State<Arc<AppState>>) -> Json<Health> {
+    let (hits, misses, entries) = s.cache.stats();
+    let total = hits + misses;
+    let hit_rate = if total > 0 { format!("{:.1}%", hits as f64 / total as f64 * 100.0) } else { "N/A".into() };
     Json(Health {
         status: "ok".into(),
         version: env!("CARGO_PKG_VERSION").into(),
         uptime_secs: s.start_time.elapsed().as_secs(),
         llm_endpoint: s.llm_endpoint.clone(),
         printers: printers(),
+        cache: CacheStats { hits, misses, entries, hit_rate },
     })
 }
 
@@ -227,8 +325,7 @@ async fn generate(
     let job_id = uuid::Uuid::new_v4().to_string();
     tracing::info!(job_id = %job_id, prompt = %req.prompt, "generate");
 
-    let lol_source = call_llm(&s.llm_endpoint, &s.system_prompt, &req.prompt)
-        .await
+    let lol_source = cached_llm(&s, &req.prompt).await
         .map_err(|e| (StatusCode::BAD_GATEWAY, Json(err_resp(&job_id, &format!("LLM error: {e}")))))?;
 
     // TODO: alice-lol pipeline (lol_to_3mf)
@@ -246,8 +343,7 @@ async fn generate_preview(
 ) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
 
-    let lol_source = call_llm(&s.llm_endpoint, &s.system_prompt, &req.prompt)
-        .await
+    let lol_source = cached_llm(&s, &req.prompt).await
         .map_err(|e| (StatusCode::BAD_GATEWAY, Json(err_resp(&job_id, &format!("LLM error: {e}")))))?;
 
     Ok(Json(GenerateResponse {
@@ -256,6 +352,16 @@ async fn generate_preview(
         lol_source: Some(lol_source),
         error: None,
     }))
+}
+
+async fn cached_llm(state: &AppState, prompt: &str) -> Result<String, String> {
+    if let Some(cached) = state.cache.get(prompt) {
+        tracing::info!(prompt = %prompt, "cache hit");
+        return Ok(cached);
+    }
+    let result = call_llm(&state.llm_endpoint, &state.system_prompt, prompt).await?;
+    state.cache.put(prompt, result.clone());
+    Ok(result)
 }
 
 async fn generate_from_lol(
@@ -483,9 +589,9 @@ async fn call_llm(endpoint: &str, system_prompt: &str, user_prompt: &str) -> Res
     let resp = client
         .post(format!("{endpoint}/v1/chat/completions"))
         .json(&Req {
-            model: "default".into(),
+            model: std::env::var("LLM_MODEL").unwrap_or_else(|_| "qwen3.5:9b".into()),
             messages: vec![
-                Msg { role: "system".into(), content: system_prompt.into() },
+                Msg { role: "system".into(), content: format!("/no_think\n{system_prompt}") },
                 Msg { role: "user".into(), content: user_prompt.into() },
             ],
             temperature: 0.3, max_tokens: 2048,
@@ -562,5 +668,27 @@ mod tests {
     fn printers_not_empty() {
         assert!(!printers().is_empty());
         assert_eq!(printers()[0].id, "bambu_h2d");
+    }
+
+    #[test]
+    fn cache_hit_miss() {
+        let cache = PromptCache::new(10, 3600);
+        assert!(cache.get("hello").is_none());
+        let (h, m, _) = cache.stats();
+        assert_eq!((h, m), (0, 1));
+
+        cache.put("hello", "world".into());
+        assert_eq!(cache.get("hello").unwrap(), "world");
+        let (h, m, e) = cache.stats();
+        assert_eq!((h, m, e), (1, 1, 1));
+    }
+
+    #[test]
+    fn cache_eviction() {
+        let cache = PromptCache::new(2, 3600);
+        cache.put("a", "1".into());
+        cache.put("b", "2".into());
+        cache.put("c", "3".into());
+        assert_eq!(cache.entries.len(), 2);
     }
 }
