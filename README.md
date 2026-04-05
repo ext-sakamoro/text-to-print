@@ -97,43 +97,73 @@ npm install && npm run build
 | 40 | 30.20s | 0.88s | 15.72s | 29.35s | 30.14s | 15.37s | 1.3 req/s |
 | 50 | 38.11s | 1.03s | 19.74s | 36.53s | 37.99s | 19.40s | 1.3 req/s |
 
+### Qwen2.5 7B 段階的負荷テスト (llama.cpp server, continuous batching, parallel=4)
+
+ollama を llama.cpp server に置き換え、continuous batching + 4スロット並列で同一テストを実施。
+
+| 並列数 | wall時間 | min | p50 | p95 | max | avg | throughput |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.91s | 0.88s | 0.88s | 0.88s | 0.88s | 0.88s | 1.1 req/s |
+| 2 | 1.24s | 1.20s | 1.21s | 1.21s | 1.21s | 1.20s | 1.6 req/s |
+| 3 | 1.86s | 1.80s | 1.80s | 1.83s | 1.83s | 1.81s | 1.6 req/s |
+| 5 | 2.48s | 1.76s | 1.76s | 2.45s | 2.45s | 1.93s | 2.0 req/s |
+| 8 | 3.59s | 1.64s | 3.43s | 3.55s | 3.55s | 2.64s | 2.2 req/s |
+| 10 | 4.68s | 1.59s | 3.46s | 4.64s | 4.64s | 2.98s | 2.1 req/s |
+| 15 | 7.70s | 1.74s | 4.17s | 7.65s | 7.65s | 4.60s | 1.9 req/s |
+| 20 | 9.95s | 1.59s | 5.73s | 9.89s | 9.89s | 5.67s | 2.0 req/s |
+| 30 | 15.74s | 1.59s | 8.30s | 15.64s | 15.67s | 8.39s | 1.9 req/s |
+| 40 | 18.90s | 1.67s | 10.81s | 18.81s | 18.81s | 10.19s | 2.1 req/s |
+| 50 | 23.91s | 1.60s | 13.03s | 22.63s | 23.80s | 12.47s | 2.1 req/s |
+
+### ollama vs llama.cpp server 比較
+
+| 並列数 | ollama wall | llama.cpp wall | 改善率 | ollama throughput | llama.cpp throughput |
+|---|---|---|---|---|---|
+| 1 | 0.84s | 0.91s | -8% | 1.2 req/s | 1.1 req/s |
+| 5 | 3.39s | 2.48s | **27%** | 1.5 req/s | 2.0 req/s |
+| 10 | 6.82s | 4.68s | **31%** | 1.5 req/s | 2.1 req/s |
+| 20 | 14.48s | 9.95s | **31%** | 1.4 req/s | 2.0 req/s |
+| 30 | 22.11s | 15.74s | **29%** | 1.4 req/s | 1.9 req/s |
+| 50 | 38.11s | 23.91s | **37%** | 1.3 req/s | 2.1 req/s |
+
 ### ボトルネック分析
 
-**スループットが ~1.4 req/s で頭打ちになる原因:**
+**ollama (throughput ~1.4 req/s で頭打ち):**
 
-1. **ollama の推論直列化 (`num_parallel=1`)**
-   - ollamaはデフォルトで1リクエストずつ逐次処理。並列リクエストは内部キューで待機する
-   - wall 時間が並列数にほぼ比例して増加（N=50 → 38s ≒ 0.81s × 50）するのが証拠
-   - `OLLAMA_NUM_PARALLEL=4` 等で緩和可能だが、KVキャッシュがVRAMを圧迫する
+1. **推論直列化 (`num_parallel=1`)** — 並列リクエストを内部キューで逐次処理。wall時間が N に比例（N=50 → 38s ≒ 0.81s × 47）
+2. **Go HTTP → llama.cpp FFI のオーバーヘッド** — リクエストごとにGo/CGo境界を跨ぐ
+3. **GPU演算は遊んでいる** — 直列処理のため、1リクエスト完了→次リクエスト開始の間にGPUがidle
 
-2. **GPU (Metal) 使用率**
-   - M2 Pro の GPU は単一リクエスト処理中に十分活用されている
-   - 並列化してもGPU演算自体は直列 → スループット向上しない
-   - ollama の RSS 5.7GB（モデル4.7GB + KVキャッシュ）でVRAM 25GB中 23%
+**llama.cpp server (throughput ~2.1 req/s, +50%):**
 
-3. **CPU (10コア) は余裕あり**
-   - ollama CPU使用率 3.9% — トークナイズ・サンプリングは軽量
-   - CPUはボトルネックではない
+1. **continuous batching** — 4リクエストのトークンを1回のGPU演算にバッチ化。GPU idle時間を削減
+2. **C++直接** — Go/Python層なし。HTTP → 推論が最短パス
+3. **KVキャッシュ効率** — 4スロット × 1024 token = 224MB。VRAM 25GB中 1% で余裕
+4. **残るボトルネック**: GPUの演算能力自体。M2 Pro のGPUコア19基がフル稼働でも ~2 req/s が物理限界に近い
 
-### 改善オプション
+### 同時ユーザー数の目安
 
-| 施策 | 効果 | リスク |
-|---|---|---|
-| `OLLAMA_NUM_PARALLEL=4` | スループット ~4x | VRAM不足でOOM可能 |
-| llama.cpp server (continuous batching) | スループット ~3-5x | ollama置き換え、運用複雑化 |
-| ALICE-LLM (wgpu Metal直接) | レイテンシ改善 | Qwen2.5 GPU推論の品質問題要修正 |
-| モデル量子化 Q2_K | レイテンシ半減 | 出力品質低下 |
-| 複数Mac Mini | 線形スケール | コスト増 |
+| 体感 | ollama | llama.cpp server | p95レイテンシ (llama.cpp) |
+|---|---|---|---|
+| 快適 (< 1s) | 1人 | 1人 | 0.9s |
+| 良好 (< 3s) | 3〜5人 | **5〜8人** | 3.6s |
+| 許容 (< 5s) | 5〜8人 | **8〜10人** | 4.6s |
+| 実用限界 (< 10s) | 10〜15人 | **15〜20人** | 9.9s |
+| 劣化 (> 15s) | 20人以上 | **30人以上** | 15.6s |
 
-### 同時ユーザー数の目安 (現状 ollama)
+### 起動コマンド
 
-| 体感 | 同時ユーザー | p95レイテンシ |
-|---|---|---|
-| 快適 (< 1s) | 1〜2人 | 0.8s |
-| 良好 (< 3s) | 3〜5人 | 3.4s |
-| 許容 (< 7s) | 8〜10人 | 6.8s |
-| 限界 (< 15s) | 15〜20人 | 14.4s |
-| 劣化 (> 20s) | 30人以上 | 21s+ |
+```bash
+# llama.cpp server (推奨)
+llama-server \
+  --model ~/.3dvbgaran/models/qwen2.5-7b-instruct-q4_k_m.gguf \
+  --port 8000 \
+  --cont-batching \
+  --parallel 4 \
+  --ctx-size 4096 \
+  --n-gpu-layers 99 \
+  --flash-attn on
+```
 
 ## ライセンス
 
