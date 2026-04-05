@@ -1,0 +1,172 @@
+{"lol": "smooth_union(0.3, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "sphere(1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "box3d(1.0, 1.0, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "union(sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "translate(2.0, 0.0, 0.0, sphere(0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "rotate(0.0, 90.0, 0.0, box3d(2.0, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "scale(2.0, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "subtract(sphere(1.0), sphere(0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "intersection(sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "round(0.1, box3d(1.0, 1.0, 1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "onion(0.1, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "twist(0.5, box3d(1.0, 2.0, 1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "mirror(1.0, 0.0, 0.0, translate(1.0, 0.0, 0.0, sphere(0.3)))", "source": "runtime_parser", "category": "test"}
+{"lol": "polar_repeat(6, translate(2.0, 0.0, 0.0, sphere(0.3)))", "source": "runtime_parser", "category": "test"}
+{"lol": "torus(1.0, 0.3)", "source": "runtime_parser", "category": "test"}
+{"lol": "cylinder(0.5, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "capsule(0.3, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "cone(1.0, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "ellipsoid(1.0, 0.5, 0.7)", "source": "runtime_parser", "category": "test"}
+{"lol": "octahedron(1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "heart(1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "egg(1.0, 0.3)", "source": "runtime_parser", "category": "test"}
+{"lol": "tetrahedron(1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "diamond(0.8, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "box_frame(1.0, 1.0, 1.0, 0.1)", "source": "runtime_parser", "category": "test"}
+{"lol": "helix(1.0, 0.1, 1.0, 2.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "union(sphere(1.0), sphere(0.5), sphere(0.3))", "source": "runtime_parser", "category": "test"}
+{"lol": "smooth_subtract(0.1, sphere(1.0), sphere(0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "xor(sphere(1.0), sphere(0.8))", "source": "runtime_parser", "category": "test"}
+{"lol": "morph(0.5, sphere(1.0), box3d(1.0, 1.0, 1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "scale_non_uniform(2.0, 1.0, 1.0, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "translate(-1.0, -2.0, 0.0, sphere(0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "chamfer_union(0.1, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "elongate(0.0, 1.0, 0.0, sphere(0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "extrude(0.5, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "taper(0.3, cylinder(1.0, 2.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "displacement(0.1, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "noise(0.1, 2.0, 42, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "bend(0.3, box3d(0.5, 2.0, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "shear(0.5, 0.0, 0.0, box3d(1.0, 1.0, 1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "revolution(1.0, sphere(0.3))", "source": "runtime_parser", "category": "test"}
+{"lol": "pipe(0.1, sphere(1.0), box3d(1.0, 1.0, 1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "engrave(0.05, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "animate(1.0, 0.5, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "with_material(1, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "plane(0.0, 1.0, 0.0, 0.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "pyramid(1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "hex_prism(0.5, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "link(0.5, 0.5, 0.1)", "source": "runtime_parser", "category": "test"}
+{"lol": "capped_cone(1.0, 0.8, 0.3)", "source": "runtime_parser", "category": "test"}
+{"lol": "rounded_cone(0.5, 0.2, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "rounded_cylinder(0.5, 0.05, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "tube(1.0, 0.1, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "barrel(0.8, 1.0, 0.2)", "source": "runtime_parser", "category": "test"}
+{"lol": "star_polygon(1.0, 5.0, 0.4, 0.3)", "source": "runtime_parser", "category": "test"}
+{"lol": "cross_shape(1.0, 0.3, 0.05, 0.3)", "source": "runtime_parser", "category": "test"}
+{"lol": "rounded_box(1.0, 1.0, 1.0, 0.1)", "source": "runtime_parser", "category": "test"}
+{"lol": "capped_torus(1.0, 0.3, 1.57)", "source": "runtime_parser", "category": "test"}
+{"lol": "repeat_finite(3.0, 1.0, 3.0, 2.0, 0.0, 2.0, sphere(0.3))", "source": "runtime_parser", "category": "test"}
+{"lol": "octant_mirror(translate(1.0, 1.0, 1.0, sphere(0.2)))", "source": "runtime_parser", "category": "test"}
+{"lol": "icosahedral_symmetry(translate(1.0, 0.0, 0.0, sphere(0.2)))", "source": "runtime_parser", "category": "test"}
+{"lol": "surface_roughness(5.0, 0.1, 3, sphere(1.0))", "source": "runtime_parser", "category": "test"}
+{"lol": "groove(0.1, 0.05, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "runtime_parser", "category": "test"}
+{"lol": "tongue(0.1, 0.05, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "runtime_parser", "category": "test"}
+{"lol": "columns_union(0.1, 4.0, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "exp_smooth_union(0.3, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "stairs_union(0.2, 4.0, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "horseshoe(0.5, 1.0, 0.3, 0.1, 0.05)", "source": "runtime_parser", "category": "test"}
+{"lol": "superellipsoid(0.5, 0.5, 0.5, 1.0, 1.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "segment_2d(0.0, 0.0, 1.0, 1.0, 0.1, 0.5)", "source": "runtime_parser", "category": "test"}
+{"lol": "triangle(0.0,0.0,0.0, 1.0,0.0,0.0, 0.5,1.0,0.0)", "source": "runtime_parser", "category": "test"}
+{"lol": "bezier(0.0,0.0,0.0, 0.5,1.0,0.0, 1.0,0.0,0.0, 0.1)", "source": "runtime_parser", "category": "test"}
+{"lol": "sweep_bezier(0.0, 0.0, 0.5, 1.0, 1.0, 0.0, circle_2d(0.2, 0.5))", "source": "runtime_parser", "category": "test"}
+{"lol": "subtract( subtract( subtract( subtract( subtract( subtract( subtract( // ベース: 円盤（100mm径 x 5mm厚） cylinder(2.5, 0.125), // 同心円グルーブ1: トーラス r=2.0（上面に食い込み） translate(0.0, 0.125, 0.0, torus(2.0, 0.06) ) ), // 同心円グルーブ2: r=1.4 translate(0.0, 0.125, 0.0, torus(1.4, 0.06) ) ), // 同心円グルーブ3: r=0.8 translate(0.0, 0.125, 0.0, torus(0.8, 0.06) ) ), // 「A」の左脚 translate(-0.15, 0.0, 0.0, rotate(0.0, 0.0, -12.0, rounded_box(0.06, 0.2, 0.35, 0.02) ) ) ), // 「A」の右脚 translate(0.15, 0.0, 0.0, rotate(0.0, 0.0, 12.0, rounded_box(0.06, 0.2, 0.35, 0.02) ) ) ), // 「A」の横棒 rounded_box(0.18, 0.2, 0.04, 0.01) ), // 「A」の頂点三角穴 translate(0.0, 0.0, 0.25, cylinder(0.08, 0.2) ) )", "source": "example/alice_coaster", "category": "example"}
+{"lol": "sphere(2.0)", "source": "example/autodiff_demo", "category": "example"}
+{"lol": "torus(2.0, 0.5)", "source": "example/autodiff_demo", "category": "example"}
+{"lol": "smooth_union(0.3, sphere(1.0), translate(2.0, 0.0, 0.0, box3d(0.5, 0.5, 0.5)) )", "source": "example/autodiff_demo", "category": "example"}
+{"lol": "sphere({r})", "source": "example/autodiff_demo", "category": "example"}
+{"lol": "smooth_union(0.3, sphere(1.0), translate(2.5, 0.0, 0.0, box3d(0.5, 0.5, 0.5) ), translate(0.0, 2.0, 0.0, torus(0.8, 0.2) ) )", "source": "example/basic", "category": "example"}
+{"lol": "subtract( sphere(1.0), translate(0.5, 0.0, 0.0, box3d(0.6, 0.6, 0.6) ) )", "source": "example/basic", "category": "example"}
+{"lol": "twist(2.0, cylinder(0.5, 2.0) )", "source": "example/basic", "category": "example"}
+{"lol": "smooth_union(0.2, sphere(1.0), translate(2.5, 0.0, 0.0, smooth_union(0.15, torus(0.8, 0.3), translate(0.0, 1.0, 0.0, capsule(0.2, 0.5)) ) ) )", "source": "example/compiled_demo", "category": "example"}
+{"lol": "smooth_union(0.2, sphere({r}), translate({offset}, 0.0, 0.0, sphere({r * 0.5})) )", "source": "example/compiled_demo", "category": "example"}
+{"lol": "translate(0.5, 0.0, 0.0, sphere(1.0))", "source": "example/law_demo", "category": "example"}
+{"lol": "translate(5.0, 0.0, 0.0, sphere(1.0))", "source": "example/law_demo", "category": "example"}
+{"lol": "translate(2.0, 0.0, 0.0, sphere(1.0))", "source": "example/law_demo", "category": "example"}
+{"lol": "onion(0.03, sphere(1.0))", "source": "example/law_demo", "category": "example"}
+{"lol": "translate(1.5, 0.0, 0.0, sphere(0.8))", "source": "example/law_demo", "category": "example"}
+{"lol": "sphere(3.0)", "source": "example/law_demo", "category": "example"}
+{"lol": "box3d(2.0, 0.3, 2.0)", "source": "example/law_demo", "category": "example"}
+{"lol": "onion(0.02, sphere(1.0))", "source": "example/print_demo", "category": "example"}
+{"lol": "lattice_infill(0.05, 5.0, 0.02, box3d(1.0, 1.0, 1.0))", "source": "example/print_demo", "category": "example"}
+{"lol": "diamond_infill(0.05, 5.0, 0.02, sphere(1.0))", "source": "example/print_demo", "category": "example"}
+{"lol": "schwarz_infill(0.05, 5.0, 0.02, cylinder(0.8, 1.0))", "source": "example/print_demo", "category": "example"}
+{"lol": "onion(0.03, twist(0.8, taper(0.4, cylinder(0.8, 1.2) ) ) )", "source": "example/print_export", "category": "example"}
+{"lol": "lattice_infill(0.05, 6.0, 0.02, subtract( rounded_box(1.0, 0.6, 0.4, 0.05), translate(0.5, 0.0, 0.0, cylinder(0.2, 0.5)) ) )", "source": "example/print_export", "category": "example"}
+{"lol": "diamond_infill(0.04, 5.0, 0.02, box3d(0.8, 0.8, 0.8))", "source": "example/print_export", "category": "example"}
+{"lol": "lattice_infill(0.05, 5.0, 0.02, sphere(1.0))", "source": "example/print_verify", "category": "example"}
+{"lol": "onion(0.05, sphere(1.0))", "source": "example/print_verify", "category": "example"}
+{"lol": "schwarz_infill(0.05, 5.0, 0.02, sphere(1.0))", "source": "example/print_verify", "category": "example"}
+{"lol": "smooth_union(0.3, sphere(1.0), translate(6.0, 0.0, 0.0, box3d(0.8, 0.8, 0.8)), translate(0.0, 6.0, 0.0, torus(0.8, 0.3)) )", "source": "example/pruning_demo", "category": "example"}
+{"lol": "subtract( smooth_union(0.1, translate(0.0, 0.3, 0.0, torus(0.8, 0.15)), translate(0.0, 0.0, 0.0, cylinder(0.15, 0.7)) ), translate(0.0, -0.3, 0.0, box3d(2.0, 0.6, 2.0)) )", "source": "example/roblox_accessory", "category": "example"}
+{"lol": "subtract( smooth_intersection(0.1, scale(1.5, sphere(1.0)), box3d(0.1, 1.2, 0.9) ), translate(0.0, 0.0, 0.3, sphere(0.6)) )", "source": "example/roblox_accessory", "category": "example"}
+{"lol": "box3d(0.5, 0.5, 0.5)", "source": "example/showcase", "category": "example"}
+{"lol": "rounded_box(0.5, 0.5, 0.5, 0.1)", "source": "example/showcase", "category": "example"}
+{"lol": "cone(0.5, 1.0)", "source": "example/showcase", "category": "example"}
+{"lol": "ellipsoid(1.0, 0.5, 0.8)", "source": "example/showcase", "category": "example"}
+{"lol": "link(0.5, 0.3, 0.1)", "source": "example/showcase", "category": "example"}
+{"lol": "capped_cone(1.0, 0.5, 0.2)", "source": "example/showcase", "category": "example"}
+{"lol": "rounded_cylinder(0.5, 0.1, 1.0)", "source": "example/showcase", "category": "example"}
+{"lol": "tube(0.5, 0.1, 1.0)", "source": "example/showcase", "category": "example"}
+{"lol": "barrel(0.5, 1.0, 0.2)", "source": "example/showcase", "category": "example"}
+{"lol": "egg(0.5, 0.3)", "source": "example/showcase", "category": "example"}
+{"lol": "helix(1.0, 0.1, 0.5, 2.0)", "source": "example/showcase", "category": "example"}
+{"lol": "box_frame(0.5, 0.5, 0.5, 0.05)", "source": "example/showcase", "category": "example"}
+{"lol": "diamond(0.5, 1.0)", "source": "example/showcase", "category": "example"}
+{"lol": "star_polygon(1.0, 5.0, 2.0, 0.3)", "source": "example/showcase", "category": "example"}
+{"lol": "cross_shape(1.0, 0.3, 0.05, 0.5)", "source": "example/showcase", "category": "example"}
+{"lol": "smooth_union(0.2, sphere(0.5), translate(1.5, 0.0, 0.0, box3d(0.4, 0.4, 0.4)), translate(0.0, 1.5, 0.0, torus(0.5, 0.15)))", "source": "example/showcase", "category": "example"}
+{"lol": "smooth_intersection(0.1, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "subtract(sphere(1.0), box3d(0.6, 0.6, 0.6))", "source": "example/showcase", "category": "example"}
+{"lol": "smooth_subtract(0.1, sphere(1.0), box3d(0.6, 0.6, 0.6))", "source": "example/showcase", "category": "example"}
+{"lol": "chamfer_union(0.2, sphere(1.0), translate(1.5, 0.0, 0.0, sphere(1.0)))", "source": "example/showcase", "category": "example"}
+{"lol": "chamfer_intersection(0.2, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "chamfer_subtraction(0.2, sphere(1.0), box3d(0.6, 0.6, 0.6))", "source": "example/showcase", "category": "example"}
+{"lol": "stairs_union(0.2, 4.0, sphere(1.0), translate(1.5, 0.0, 0.0, sphere(1.0)))", "source": "example/showcase", "category": "example"}
+{"lol": "xor(sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "pipe(0.1, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "engrave(0.1, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "groove(0.2, 0.1, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "tongue(0.2, 0.1, sphere(1.0), box3d(0.8, 0.8, 0.8))", "source": "example/showcase", "category": "example"}
+{"lol": "translate(3.0, 0.0, 0.0, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "rotate(0.0, 0.0, 45.0, box3d(1.0, 0.2, 0.2))", "source": "example/showcase", "category": "example"}
+{"lol": "scale_non_uniform(2.0, 1.0, 0.5, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "round(0.1, box3d(0.5, 0.5, 0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "twist(2.0, box3d(0.5, 0.5, 1.5))", "source": "example/showcase", "category": "example"}
+{"lol": "bend(1.0, box3d(0.3, 0.3, 2.0))", "source": "example/showcase", "category": "example"}
+{"lol": "mirror(1.0, 0.0, 0.0, translate(2.0, 0.0, 0.0, sphere(0.5)))", "source": "example/showcase", "category": "example"}
+{"lol": "repeat(4.0, 4.0, 4.0, sphere(0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "elongate(0.5, 0.0, 0.0, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "revolution(0.5, sphere(0.3))", "source": "example/showcase", "category": "example"}
+{"lol": "extrude(1.0, sphere(0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "taper(0.5, cylinder(0.5, 1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "polar_repeat(6.0, translate(2.0, 0.0, 0.0, sphere(0.3)))", "source": "example/showcase", "category": "example"}
+{"lol": "shear(0.5, 0.0, 0.0, box3d(0.5, 0.5, 0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "noise(0.1, 2.0, 42.0, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "repeat_finite(3.0, 1.0, 1.0, 2.0, 2.0, 2.0, sphere(0.3))", "source": "example/showcase", "category": "example"}
+{"lol": "octant_mirror(translate(1.0, 1.0, 1.0, sphere(0.3)))", "source": "example/showcase", "category": "example"}
+{"lol": "icosahedral_symmetry(translate(2.0, 0.0, 0.0, sphere(0.2)))", "source": "example/showcase", "category": "example"}
+{"lol": "with_material(1.0, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "surface_roughness(5.0, 0.05, 3.0, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "animate(2.0, 0.5, sphere(1.0))", "source": "example/showcase", "category": "example"}
+{"lol": "morph(0.5, sphere(1.0), box3d(0.5, 0.5, 0.5))", "source": "example/showcase", "category": "example"}
+{"lol": "sphere({radius})", "source": "example/showcase", "category": "example"}
+{"lol": "sphere(r)", "source": "example/showcase", "category": "example"}
+{"lol": "sphere({base * 3.0})", "source": "example/showcase", "category": "example"}
+{"lol": "smooth_union(0.15, sphere({joint_r}), translate({arm_len}, 0.0, 0.0, smooth_union(0.15, capsule({arm_r}, {arm_len * 0.5}), sphere({joint_r}) ) ) )", "source": "example/showcase", "category": "example"}
+{"lol": "sphere({make_radius(2.0)})", "source": "example/showcase", "category": "example"}
+{"lol": "smooth_union(0.3, sphere(1.0), translate(2.5, 0.0, 0.0, smooth_intersection(0.2, torus(1.0, 0.4), box3d(0.8, 0.8, 0.8) ) ) )", "source": "example/showcase", "category": "example"}
+{"lol": "box3d(0.6, 0.6, 0.6)", "source": "sdf_test/mod", "category": "sdfnode"}
+{"lol": "box3d(0.5, 2.0, 0.5)", "source": "sdf_test/mod", "category": "sdfnode"}
+{"lol": "torus(0.8, 0.2)", "source": "sdf_test/mod", "category": "sdfnode"}
+{"lol": "sphere(0.3)", "source": "sdf_test/test_new_transforms", "category": "sdfnode"}
+{"lol": "box3d(2.0, 2.0, 2.0)", "source": "sdf_test/test_rendering_pipeline", "category": "sdfnode"}
+{"lol": "sphere(0.5)", "source": "sdf_test/test_rendering_pipeline", "category": "sdfnode"}
+{"lol": "box3d(0.8, 0.8, 0.8)", "source": "sdf_example/csg_operations", "category": "sdfnode"}
+{"lol": "cylinder(0.3, 2.0)", "source": "sdf_example/gpu_eval", "category": "sdfnode"}
+{"lol": "box3d(0.4, 0.4, 0.4)", "source": "sdf_example/new_transforms", "category": "sdfnode"}
+{"lol": "sphere(0.8)", "source": "sdf_example/new_transforms", "category": "sdfnode"}
+{"lol": "sphere(0.6)", "source": "sdf_example/new_transforms", "category": "sdfnode"}
+{"lol": "box3d(100.0, 100.0, 5.0)", "source": "bamboo/lib", "category": "sdfnode"}
+{"lol": "box3d(400.0, 400.0, 5.0)", "source": "bamboo/lib", "category": "sdfnode"}
