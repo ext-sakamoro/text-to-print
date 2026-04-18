@@ -3,8 +3,9 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useGeneration } from '@/lib/hooks/use-generation';
+import { usePlan } from '@/lib/hooks/use-plan';
 
-const ModelPreview = lazy(() => import('../components/ModelPreview'));
+const PreviewSwitcher = lazy(() => import('../components/PreviewSwitcher'));
 
 interface Generation {
   id: string;
@@ -37,6 +38,7 @@ function ConsoleInner() {
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
 
   const { loading, result, error, run } = useGeneration();
+  const { canDownload } = usePlan();
 
   useEffect(() => {
     if (!projectId) {
@@ -188,12 +190,21 @@ function ConsoleInner() {
                     {result.triangles.toLocaleString()} triangles / {result.vertices.toLocaleString()} vertices
                   </p>
                 </div>
-                <button
-                  onClick={handleDownload}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90"
-                >
-                  Download .3mf
-                </button>
+                {canDownload ? (
+                  <button
+                    onClick={handleDownload}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90"
+                  >
+                    Download .3mf
+                  </button>
+                ) : (
+                  <a
+                    href="/dashboard/billing"
+                    className="px-4 py-2 bg-muted text-muted-foreground rounded-md text-sm font-medium hover:opacity-90"
+                  >
+                    Upgrade to download
+                  </a>
+                )}
               </div>
               {result.lolSource && (
                 <details className="mt-2">
@@ -213,7 +224,7 @@ function ConsoleInner() {
         </div>
         <div className="p-4">
           <Suspense fallback={<div className="w-full h-64 border border-dashed border-border rounded-lg flex items-center justify-center text-sm text-muted-foreground">Loading viewer...</div>}>
-            <ModelPreview blob={previewBlob} />
+            <PreviewSwitcher blob={previewBlob} lolSource={result?.lolSource ?? null} />
           </Suspense>
         </div>
 

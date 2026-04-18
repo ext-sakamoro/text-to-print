@@ -1,8 +1,7 @@
-use alice_lol::print_export::{lol_to_3mf, PrintConfig, ExportError};
+use alice_lol::print_export::{lol_to_3mf, lol_to_fbx, PrintConfig};
 use axum::{
-    body::Body,
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{Json, Response},
     routing::{get, post},
@@ -108,6 +107,7 @@ struct AppState {
     start_time: Instant,
     llm_endpoint: String,
     system_prompt: String,
+    output_dir: String,
     cache: PromptCache,
 }
 
@@ -183,17 +183,33 @@ struct GenerateRequest {
     prompt: String,
     #[serde(default = "default_quality")]
     quality: String,
+    #[serde(default = "default_format")]
+    format: String,
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 struct DirectLolRequest {
     lol_source: String,
     #[serde(default = "default_quality")]
     quality: String,
+    #[serde(default = "default_format")]
+    format: String,
 }
 
 fn default_quality() -> String { "high".into() }
+fn default_format() -> String { "3mf".into() }
+
+fn can_download(plan: &str) -> bool {
+    matches!(plan, "General" | "Pro" | "Enterprise")
+}
+
+fn quality_to_config(quality: &str) -> PrintConfig {
+    match quality {
+        "preview" => PrintConfig::preview(),
+        "ultra" => PrintConfig::high_quality(),
+        _ => PrintConfig::default(),
+    }
+}
 
 #[derive(Serialize)]
 struct GenerateResponse {
@@ -241,6 +257,8 @@ async fn main() {
         )
         .init();
     let env = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.into());
+    let output_dir = env("OUTPUT_DIR", "/tmp/3dvbgaran");
+    std::fs::create_dir_all(&output_dir).expect("failed to create output dir");
     let cache_max: usize = env("CACHE_MAX_ENTRIES", "1000").parse().unwrap_or(1000);
     let cache_ttl: u64 = env("CACHE_TTL_SECS", "3600").parse().unwrap_or(3600);
     let state = Arc::new(AppState {
@@ -251,6 +269,7 @@ async fn main() {
         start_time: Instant::now(),
         llm_endpoint: env("LLM_ENDPOINT", "http://localhost:8000"),
         system_prompt: load_system_prompt(),
+        output_dir,
         cache: PromptCache::new(cache_max, cache_ttl),
     });
     let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
@@ -268,12 +287,24 @@ async fn main() {
         .layer(middleware::from_fn_with_state(state.clone(), auth_mw))
         .layer(middleware::from_fn_with_state(state.clone(), rate_mw));
 
+    let admin = Router::new()
+        .route("/api/v1/admin/stats", get(admin_stats))
+        .route("/api/v1/admin/users", get(admin_users))
+        .route("/api/v1/admin/users/{id}", axum::routing::patch(admin_update_user))
+        .route("/api/v1/admin/generations", get(admin_generations))
+        .route("/api/v1/admin/projects", get(admin_projects))
+        .route("/api/v1/admin/projects/{id}", axum::routing::patch(admin_update_project))
+        .route("/api/v1/admin/revenue", get(admin_revenue))
+        .layer(middleware::from_fn_with_state(state.clone(), admin_mw))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_mw));
+
     let frontend_proxy = Router::new()
         .fallback(move |req: Request| proxy_frontend(frontend_url.clone(), req));
 
     let app = Router::new()
         .merge(public)
         .merge(api)
+        .merge(admin)
         .merge(frontend_proxy)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -322,80 +353,43 @@ async fn license_handler() -> (HeaderMap, Json<LicenseInfo>) {
 
 async fn generate(
     State(s): State<Arc<AppState>>,
-    Json(req): Json<GenerateRequest>,
-) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
+    req: Request,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let claims = req.extensions().get::<Claims>().cloned();
+    let plan = claims.as_ref().and_then(|c| c.plan.as_deref()).unwrap_or("Free");
+
+    let body = axum::body::to_bytes(req.into_body(), 1024 * 1024)
+        .await
+        .map_err(|_| (StatusCode::BAD_REQUEST, Json(Err { error: "Bad request body".into(), details: None })))?;
+    let gen_req: GenerateRequest = serde_json::from_slice(&body)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(Err { error: format!("Invalid JSON: {e}"), details: None })))?;
+
     let job_id = uuid::Uuid::new_v4().to_string();
-    tracing::info!(job_id = %job_id, prompt = %req.prompt, "generate");
+    tracing::info!(job_id = %job_id, prompt = %gen_req.prompt, "generate");
 
-    let lol_source = cached_llm(&s, &req.prompt).await
-        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(err_resp(&job_id, &format!("LLM error: {e}")))))?;
+    let lol_source = cached_llm(&s, &gen_req.prompt).await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(Err { error: format!("LLM error: {e}"), details: None })))?;
 
-    let config = print_config_for_quality(&req.quality);
-    let out_dir = std::env::var("OUTPUT_DIR").unwrap_or_else(|_| "/tmp/3dvbgaran".into());
-    std::fs::create_dir_all(&out_dir).ok();
-    let out_path = format!("{out_dir}/{job_id}.3mf");
-
-    let lol = lol_source.clone();
-    let path = out_path.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        lol_to_3mf(&lol, &path, &config)
-    }).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task error: {e}")))))?;
-
-    match result {
-        Ok(stats) => {
-            tracing::info!(job_id = %job_id, vertices = stats.vertex_count, triangles = stats.triangle_count, "3mf generated");
-            let bytes = std::fs::read(&out_path).map_err(|e| {
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read error: {e}"))))
-            })?;
-            std::fs::remove_file(&out_path).ok();
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/vnd.ms-package.3dmanufacturing-3dmodel+xml")
-                .header("Content-Disposition", format!("attachment; filename=\"{job_id}.3mf\""))
-                .header("X-Job-Id", &job_id)
-                .header("X-LOL-Source", &lol_source)
-                .header("X-Vertex-Count", stats.vertex_count.to_string())
-                .header("X-Triangle-Count", stats.triangle_count.to_string())
-                .body(Body::from(bytes))
-                .unwrap())
-        }
-        Err(e) => {
-            let msg = match &e {
-                ExportError::Parse(pe) => format!("LOL parse error: {pe}"),
-                ExportError::EmptyMesh => "Empty mesh (SDF produced no geometry)".into(),
-                ExportError::Io(io) => format!("IO error: {io}"),
-            };
-            tracing::warn!(job_id = %job_id, error = %msg, "3mf generation failed");
-            Err((StatusCode::UNPROCESSABLE_ENTITY, Json(GenerateResponse {
-                job_id, status: "error".into(),
-                lol_source: Some(lol_source), error: Some(msg),
-            })))
-        }
+    if !can_download(plan) {
+        return Ok(Json(GenerateResponse {
+            job_id,
+            status: "preview".into(),
+            lol_source: Some(lol_source),
+            error: None,
+        }).into_response());
     }
-}
 
-fn print_config_for_quality(quality: &str) -> PrintConfig {
-    let resolution = match quality {
-        "preview" => 128,
-        "high" => 256,
-        _ => 128,
-    };
-    PrintConfig {
-        resolution,
-        bounds_min: glam::Vec3::splat(-20.0),
-        bounds_max: glam::Vec3::splat(20.0),
-        scale_mm: 1.0,
-    }
+    build_mesh_response(&s.output_dir, &job_id, &lol_source, &gen_req.quality, &gen_req.format).await
 }
 
 async fn generate_preview(
     State(s): State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
+) -> Result<Json<GenerateResponse>, (StatusCode, Json<Err>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
 
     let lol_source = cached_llm(&s, &req.prompt).await
-        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(err_resp(&job_id, &format!("LLM error: {e}")))))?;
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(Err { error: format!("LLM error: {e}"), details: None })))?;
 
     Ok(Json(GenerateResponse {
         job_id,
@@ -416,50 +410,74 @@ async fn cached_llm(state: &AppState, prompt: &str) -> Result<String, String> {
 }
 
 async fn generate_from_lol(
-    State(_s): State<Arc<AppState>>,
-    Json(req): Json<DirectLolRequest>,
-) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
+    State(s): State<Arc<AppState>>,
+    req: Request,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let claims = req.extensions().get::<Claims>().cloned();
+    let plan = claims.as_ref().and_then(|c| c.plan.as_deref()).unwrap_or("Free");
+
+    let body = axum::body::to_bytes(req.into_body(), 1024 * 1024)
+        .await
+        .map_err(|_| (StatusCode::BAD_REQUEST, Json(Err { error: "Bad request body".into(), details: None })))?;
+    let lol_req: DirectLolRequest = serde_json::from_slice(&body)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(Err { error: format!("Invalid JSON: {e}"), details: None })))?;
+
     let job_id = uuid::Uuid::new_v4().to_string();
-    let config = print_config_for_quality(&req.quality);
-    let out_dir = std::env::var("OUTPUT_DIR").unwrap_or_else(|_| "/tmp/3dvbgaran".into());
-    std::fs::create_dir_all(&out_dir).ok();
-    let out_path = format!("{out_dir}/{job_id}.3mf");
+    tracing::info!(job_id = %job_id, "generate_from_lol");
 
-    let lol = req.lol_source.clone();
-    let path = out_path.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        lol_to_3mf(&lol, &path, &config)
-    }).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task error: {e}")))))?;
-
-    match result {
-        Ok(stats) => {
-            let bytes = std::fs::read(&out_path).map_err(|e| {
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read error: {e}"))))
-            })?;
-            std::fs::remove_file(&out_path).ok();
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/vnd.ms-package.3dmanufacturing-3dmodel+xml")
-                .header("Content-Disposition", format!("attachment; filename=\"{job_id}.3mf\""))
-                .header("X-Job-Id", &job_id)
-                .header("X-LOL-Source", &req.lol_source)
-                .header("X-Vertex-Count", stats.vertex_count.to_string())
-                .header("X-Triangle-Count", stats.triangle_count.to_string())
-                .body(Body::from(bytes))
-                .unwrap())
-        }
-        Err(e) => {
-            let msg = match &e {
-                ExportError::Parse(pe) => format!("LOL parse error: {pe}"),
-                ExportError::EmptyMesh => "Empty mesh".into(),
-                ExportError::Io(io) => format!("IO error: {io}"),
-            };
-            Err((StatusCode::UNPROCESSABLE_ENTITY, Json(GenerateResponse {
-                job_id, status: "error".into(),
-                lol_source: Some(req.lol_source), error: Some(msg),
-            })))
-        }
+    if !can_download(plan) {
+        return Ok(Json(GenerateResponse {
+            job_id,
+            status: "preview".into(),
+            lol_source: Some(lol_req.lol_source),
+            error: None,
+        }).into_response());
     }
+
+    build_mesh_response(&s.output_dir, &job_id, &lol_req.lol_source, &lol_req.quality, &lol_req.format).await
+}
+
+async fn build_mesh_response(
+    output_dir: &str, job_id: &str, lol_source: &str, quality: &str, format: &str,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let config = quality_to_config(quality);
+    let ext = if format == "fbx" { "fbx" } else { "3mf" };
+    let out_path = format!("{output_dir}/{job_id}.{ext}");
+
+    let lol_clone = lol_source.to_string();
+    let path_clone = out_path.clone();
+    let use_fbx = ext == "fbx";
+    let stats = tokio::task::spawn_blocking(move || {
+        if use_fbx { lol_to_fbx(&lol_clone, &path_clone, &config) }
+        else { lol_to_3mf(&lol_clone, &path_clone, &config) }
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(Err { error: format!("task join: {e}"), details: None })))?
+    .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(Err { error: format!("LOL pipeline: {e}"), details: None })))?;
+
+    let bytes = tokio::fs::read(&out_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(Err { error: format!("read file: {e}"), details: None }))
+    })?;
+    let _ = tokio::fs::remove_file(&out_path).await;
+
+    let job_id_owned = job_id.to_string();
+    let lol_owned = lol_source.to_string();
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{job_id_owned}.{ext}\""))
+        .header("X-Job-Id", &job_id_owned)
+        .header("X-Triangle-Count", stats.triangle_count.to_string())
+        .header("X-Vertex-Count", stats.vertex_count.to_string())
+        .header("X-LOL-Source", lol_owned)
+        .body(axum::body::Body::from(bytes))
+        .unwrap())
+}
+
+use axum::response::IntoResponse;
+impl IntoResponse for GenerateResponse {
+    fn into_response(self) -> Response { Json(self).into_response() }
 }
 
 // ---------------------------------------------------------------------------
@@ -541,6 +559,7 @@ async fn rate_mw(
     let max_tokens = match plan {
         "Enterprise" => 100_000.0,
         "Pro" => 10_000.0,
+        "General" => 1_000.0,
         _ => 100.0,
     };
 
@@ -709,16 +728,215 @@ fn extract_lol_block(content: &str) -> String {
     content.trim().to_string()
 }
 
-fn err_resp(job_id: &str, error: &str) -> GenerateResponse {
-    GenerateResponse {
-        job_id: job_id.into(), status: "error".into(),
-        lol_source: None, error: Some(error.into()),
-    }
-}
 
 fn load_system_prompt() -> String {
     if let Ok(custom) = std::fs::read_to_string("system_prompt.md") { return custom; }
     include_str!("system_prompt.md").to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Admin middleware
+// ---------------------------------------------------------------------------
+
+async fn admin_mw(
+    State(s): State<Arc<AppState>>, req: Request, next: Next,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let claims = req.extensions().get::<Claims>().cloned();
+    let uid = claims.as_ref().map(|c| c.sub.clone()).unwrap_or_default();
+
+    if s.supabase_url.is_empty() || s.supabase_service_key.is_empty() {
+        return Ok(next.run(req).await);
+    }
+
+    let client = reqwest::Client::new();
+    let url = format!("{}/rest/v1/profiles?id=eq.{}&select=role", s.supabase_url, uid);
+
+    #[derive(Deserialize)]
+    struct RoleCheck { role: Option<String> }
+
+    let is_admin = match client.get(&url)
+        .header("apikey", &s.supabase_service_key)
+        .header("Authorization", format!("Bearer {}", s.supabase_service_key))
+        .send().await
+    {
+        Ok(resp) => resp.json::<Vec<RoleCheck>>().await.ok()
+            .and_then(|v| v.first().and_then(|p| p.role.as_deref().map(|r| r == "admin")))
+            .unwrap_or(false),
+        Err(_) => false,
+    };
+
+    if !is_admin {
+        return Err((StatusCode::FORBIDDEN, Json(Err { error: "Admin access required".into(), details: None })));
+    }
+    Ok(next.run(req).await)
+}
+
+// ---------------------------------------------------------------------------
+// Admin handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct AdminStats {
+    uptime_secs: u64,
+    llm_endpoint: String,
+    llm_online: bool,
+    total_users: i64,
+    total_generations: i64,
+    today_generations: i64,
+    active_rate_limiters: usize,
+    cache_hits: u64,
+    cache_misses: u64,
+    cache_entries: usize,
+}
+
+async fn admin_stats(State(s): State<Arc<AppState>>) -> Json<AdminStats> {
+    let client = reqwest::Client::new();
+    let total_users = supabase_count(&client, &s, "profiles", "").await;
+    let total_generations = supabase_count(&client, &s, "generations", "").await;
+    let today = chrono_today();
+    let today_generations = supabase_count(&client, &s, "generations", &format!("&created_at=gte.{today}T00:00:00Z")).await;
+
+    let llm_online = client.get(format!("{}/health", s.llm_endpoint))
+        .timeout(std::time::Duration::from_secs(3))
+        .send().await.map(|r| r.status().is_success()).unwrap_or(false);
+
+    let (hits, misses, entries) = s.cache.stats();
+
+    Json(AdminStats {
+        uptime_secs: s.start_time.elapsed().as_secs(),
+        llm_endpoint: s.llm_endpoint.clone(),
+        llm_online, total_users, total_generations, today_generations,
+        active_rate_limiters: s.rate_limiters.len(),
+        cache_hits: hits, cache_misses: misses, cache_entries: entries,
+    })
+}
+
+async fn admin_users(State(s): State<Arc<AppState>>) -> Result<Response, (StatusCode, Json<Err>)> {
+    supabase_get(&s, "profiles?select=id,email,full_name,plan,role,banned,created_at&order=created_at.desc&limit=200").await
+}
+
+async fn admin_update_user(
+    State(s): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let allowed = ["plan", "role", "banned"];
+    let filtered: serde_json::Map<String, serde_json::Value> = body.as_object()
+        .map(|o| o.iter().filter(|(k, _)| allowed.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    if filtered.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(Err { error: "No valid fields".into(), details: None })));
+    }
+    supabase_patch(&s, &format!("profiles?id=eq.{id}"), &serde_json::Value::Object(filtered)).await
+}
+
+async fn admin_generations(
+    State(s): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let limit = params.get("limit").and_then(|v| v.parse::<u32>().ok()).unwrap_or(50);
+    let offset = params.get("offset").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+    let search = params.get("search").cloned().unwrap_or_default();
+    let mut query = format!(
+        "generations?select=id,user_id,prompt,lol_source,triangle_count,quality,status,error,created_at&order=created_at.desc&limit={limit}&offset={offset}"
+    );
+    if !search.is_empty() { query.push_str(&format!("&prompt=ilike.*{}*", search)); }
+    supabase_get(&s, &query).await
+}
+
+async fn admin_projects(State(s): State<Arc<AppState>>) -> Result<Response, (StatusCode, Json<Err>)> {
+    supabase_get(&s, "projects?select=id,name,owner_id,is_public,hidden,created_at,updated_at&order=updated_at.desc&limit=200").await
+}
+
+async fn admin_update_project(
+    State(s): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Response, (StatusCode, Json<Err>)> {
+    let allowed = ["hidden", "is_public"];
+    let filtered: serde_json::Map<String, serde_json::Value> = body.as_object()
+        .map(|o| o.iter().filter(|(k, _)| allowed.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    if filtered.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(Err { error: "No valid fields".into(), details: None })));
+    }
+    supabase_patch(&s, &format!("projects?id=eq.{id}"), &serde_json::Value::Object(filtered)).await
+}
+
+async fn admin_revenue(State(s): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, (StatusCode, Json<Err>)> {
+    let client = reqwest::Client::new();
+    let general = supabase_count(&client, &s, "profiles", "&plan=eq.General").await;
+    let pro = supabase_count(&client, &s, "profiles", "&plan=eq.Pro").await;
+    let enterprise = supabase_count(&client, &s, "profiles", "&plan=eq.Enterprise").await;
+    let mrr = general * 1500 + pro * 5000;
+    Ok(Json(serde_json::json!({
+        "subscribers": { "general": general, "pro": pro, "enterprise": enterprise },
+        "mrr_jpy": mrr,
+        "note": "Enterprise revenue not included (custom pricing)"
+    })))
+}
+
+// ---------------------------------------------------------------------------
+// Supabase admin helpers
+// ---------------------------------------------------------------------------
+
+async fn supabase_count(client: &reqwest::Client, s: &AppState, table: &str, filter: &str) -> i64 {
+    if s.supabase_url.is_empty() { return 0; }
+    client.get(format!("{}/rest/v1/{table}?select=id{filter}", s.supabase_url))
+        .header("apikey", &s.supabase_service_key)
+        .header("Authorization", format!("Bearer {}", s.supabase_service_key))
+        .header("Prefer", "count=exact")
+        .header("Range-Unit", "items").header("Range", "0-0")
+        .send().await.ok()
+        .and_then(|r| r.headers().get("content-range").and_then(|v| v.to_str().ok().map(|s| s.to_string()))
+            .map(|cr| cr.split('/').next_back().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0)))
+        .unwrap_or(0)
+}
+
+async fn supabase_get(s: &AppState, path: &str) -> Result<Response, (StatusCode, Json<Err>)> {
+    if s.supabase_url.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(Err { error: "Supabase not configured".into(), details: None })));
+    }
+    let resp = reqwest::Client::new().get(format!("{}/rest/v1/{path}", s.supabase_url))
+        .header("apikey", &s.supabase_service_key)
+        .header("Authorization", format!("Bearer {}", s.supabase_service_key))
+        .send().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(Err { error: format!("supabase: {e}"), details: None })))?;
+    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let body = resp.bytes().await.unwrap_or_default();
+    Ok(Response::builder().status(status).header("content-type", "application/json")
+        .body(axum::body::Body::from(body)).unwrap())
+}
+
+async fn supabase_patch(s: &AppState, path: &str, body: &serde_json::Value) -> Result<Response, (StatusCode, Json<Err>)> {
+    if s.supabase_url.is_empty() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(Err { error: "Supabase not configured".into(), details: None })));
+    }
+    let resp = reqwest::Client::new().patch(format!("{}/rest/v1/{path}", s.supabase_url))
+        .header("apikey", &s.supabase_service_key)
+        .header("Authorization", format!("Bearer {}", s.supabase_service_key))
+        .header("Content-Type", "application/json").header("Prefer", "return=representation")
+        .json(body).send().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(Err { error: format!("supabase: {e}"), details: None })))?;
+    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let rb = resp.bytes().await.unwrap_or_default();
+    Ok(Response::builder().status(status).header("content-type", "application/json")
+        .body(axum::body::Body::from(rb)).unwrap())
+}
+
+fn chrono_today() -> String {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+    let days = secs.div_euclid(86400) + 719468;
+    let era = days.div_euclid(146097);
+    let doe = days.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 // ---------------------------------------------------------------------------
@@ -773,5 +991,13 @@ mod tests {
         cache.put("b", "2".into());
         cache.put("c", "3".into());
         assert_eq!(cache.entries.len(), 2);
+    }
+
+    #[test]
+    fn download_gate() {
+        assert!(!can_download("Free"));
+        assert!(can_download("General"));
+        assert!(can_download("Pro"));
+        assert!(can_download("Enterprise"));
     }
 }

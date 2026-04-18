@@ -1,0 +1,23 @@
+[package]
+name = "tdvbgaran-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+alice-lol = { workspace = true }
+rusqlite = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+directories = { workspace = true }
+tracing = { workspace = true }
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile = "3"

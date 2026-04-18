@@ -10,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { priceId } = await req.json();
+    const { priceId, plan } = await req.json();
     if (!priceId) {
       return NextResponse.json({ error: 'Price ID required' }, { status: 400 });
     }
@@ -20,6 +20,7 @@ export async function POST(req: Request) {
       userId: user.id,
       userEmail: user.email || '',
       priceId,
+      plan: plan || 'General',
       successUrl: `${origin}/dashboard/billing?success=true`,
       cancelUrl: `${origin}/dashboard/billing?cancelled=true`,
     });

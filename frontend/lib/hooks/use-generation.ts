@@ -10,6 +10,7 @@ import {
 
 const PLAN_LIMITS: Record<string, number> = {
   Free: 5,
+  General: 30,
   Pro: 100,
   Enterprise: -1,
 };

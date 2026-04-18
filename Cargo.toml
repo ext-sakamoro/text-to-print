@@ -1,0 +1,72 @@
+[workspace]
+members = [
+    "crates/app",
+    "crates/core",
+    "crates/llm",
+    "crates/network",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+# ALICE ecosystem
+alice-sdf = { path = "../ALICE-SDF" }
+alice-lol = { path = "../ALICE-LOL/alice-lol", features = ["wgsl"] }
+alice-view = { path = "../ALICE-View", default-features = false }
+
+# GUI
+eframe = { version = "0.31", features = ["wgpu"] }
+egui = "0.31"
+
+# async
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# crypto
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+
+# P2P
+libp2p = { version = "0.54", features = [
+    "gossipsub",
+    "kad",
+    "identify",
+    "noise",
+    "tcp",
+    "quic",
+    "yamux",
+    "tokio",
+    "macros",
+] }
+
+# logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# utils
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "2"
+directories = "6"
+
+# internal
+tdvbgaran-core = { path = "crates/core" }
+tdvbgaran-llm = { path = "crates/llm" }
+tdvbgaran-network = { path = "crates/network" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

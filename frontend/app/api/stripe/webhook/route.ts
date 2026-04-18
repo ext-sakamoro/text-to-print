@@ -40,11 +40,13 @@ export async function POST(req: Request) {
         : session.metadata?.userId;
       const subUserId = session.metadata?.userId || userId;
 
+      const plan = session.metadata?.plan || 'General';
+
       if (supabase && subUserId) {
         await supabase
           .from('profiles')
           .update({
-            plan: 'Pro',
+            plan,
             stripe_customer_id: session.customer as string,
             stripe_subscription_id: session.subscription as string,
           })
@@ -59,10 +61,19 @@ export async function POST(req: Request) {
       if (supabase && userId) {
         const status = subscription.status;
         if (status === 'active') {
-          await supabase
+          // Keep existing plan (General or Pro)
+          const { data: profile } = await supabase
             .from('profiles')
-            .update({ plan: 'Pro' })
-            .eq('id', userId);
+            .select('plan')
+            .eq('id', userId)
+            .single();
+          const currentPlan = profile?.plan;
+          if (currentPlan === 'Free') {
+            await supabase
+              .from('profiles')
+              .update({ plan: 'General' })
+              .eq('id', userId);
+          }
         }
       }
       break;

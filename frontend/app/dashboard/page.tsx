@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useGeneration } from '@/lib/hooks/use-generation';
+import { usePlan } from '@/lib/hooks/use-plan';
 
-const ModelPreview = lazy(() => import('./components/ModelPreview'));
+const PreviewSwitcher = lazy(() => import('./components/PreviewSwitcher'));
 
 type ServiceStatus = 'checking' | 'online' | 'offline';
 
@@ -15,6 +16,7 @@ export default function DashboardPage() {
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>('checking');
 
   const { loading, result, error, run } = useGeneration();
+  const { canDownload } = usePlan();
 
   useEffect(() => {
     (async () => {
@@ -139,7 +141,7 @@ export default function DashboardPage() {
         {/* Right: Preview */}
         <div className="space-y-4">
           <Suspense fallback={<div className="w-full h-80 border border-dashed border-border rounded-lg flex items-center justify-center text-sm text-muted-foreground">Loading 3D viewer...</div>}>
-            <ModelPreview blob={previewBlob} />
+            <PreviewSwitcher blob={previewBlob} lolSource={result?.lolSource ?? null} />
           </Suspense>
 
           {result && (
@@ -148,12 +150,21 @@ export default function DashboardPage() {
                 <span>{result.triangles.toLocaleString()} triangles</span>
                 <span>{result.vertices.toLocaleString()} vertices</span>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90"
-              >
-                Download .3mf
-              </button>
+              {canDownload ? (
+                <button
+                  onClick={handleDownload}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90"
+                >
+                  Download .3mf
+                </button>
+              ) : (
+                <a
+                  href="/dashboard/billing"
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-md text-sm font-medium hover:opacity-90"
+                >
+                  Upgrade to download
+                </a>
+              )}
             </div>
           )}
         </div>

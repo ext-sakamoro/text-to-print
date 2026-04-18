@@ -1,12 +1,13 @@
 //! 3dvbgaran Inference Worker
 //!
-//! テキスト -> LLM -> LOL DSL -> (将来: alice-lol lol_to_3mf -> .3mf)
+//! テキスト -> LLM -> LOL DSL -> alice-lol -> SDF -> .3mf
 
+use alice_lol::print_export::{lol_to_3mf, lol_to_fbx, PrintConfig};
 use axum::{
     body::Body,
     extract::State,
     http::{header, StatusCode},
-    response::{IntoResponse, Json, Response},
+    response::{Json, Response},
     routing::{get, post},
     Router,
 };
@@ -39,6 +40,8 @@ struct GenerateRequest {
     printer: String,
     #[serde(default = "default_quality")]
     quality: String,
+    #[serde(default = "default_format")]
+    format: String,
 }
 
 fn default_printer() -> String {
@@ -46,6 +49,9 @@ fn default_printer() -> String {
 }
 fn default_quality() -> String {
     "high".into()
+}
+fn default_format() -> String {
+    "3mf".into()
 }
 
 #[derive(Serialize)]
@@ -117,11 +123,11 @@ async fn health(State(s): State<Arc<WorkerState>>) -> Json<Health> {
     })
 }
 
-/// Natural language -> LLM -> LOL DSL -> (TODO: .3mf)
+/// Natural language -> LLM -> LOL DSL -> .3mf
 async fn generate(
     State(s): State<Arc<WorkerState>>,
     Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
+) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
     tracing::info!(job_id = %job_id, prompt = %req.prompt, "generate");
 
@@ -134,16 +140,37 @@ async fn generate(
             )
         })?;
 
-    // TODO: alice-lol pipeline (lol_to_3mf)
-    // Currently returns LOL source only
-    Ok(Json(GenerateResponse {
-        job_id,
-        status: "completed".into(),
-        lol_source: Some(lol_source),
-        mesh_info: None,
-        download_url: None,
-        error: None,
-    }))
+    let config = quality_to_config(&req.quality);
+    let ext = if req.format == "fbx" { "fbx" } else { "3mf" };
+    let out_path = format!("{}/{}.{}", s.output_dir, job_id, ext);
+
+    let lol_clone = lol_source.clone();
+    let path_clone = out_path.clone();
+    let use_fbx = ext == "fbx";
+    let stats = tokio::task::spawn_blocking(move || {
+        if use_fbx { lol_to_fbx(&lol_clone, &path_clone, &config) }
+        else { lol_to_3mf(&lol_clone, &path_clone, &config) }
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task join: {e}")))))?
+    .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(err_resp(&job_id, &format!("LOL pipeline: {e}")))))?;
+
+    let bytes = tokio::fs::read(&out_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read file: {e}"))))
+    })?;
+
+    let _ = tokio::fs::remove_file(&out_path).await;
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{job_id}.{ext}\""))
+        .header("X-Job-Id", &job_id)
+        .header("X-Triangle-Count", stats.triangle_count.to_string())
+        .header("X-Vertex-Count", stats.vertex_count.to_string())
+        .header("X-LOL-Source", &lol_source)
+        .body(Body::from(bytes))
+        .unwrap())
 }
 
 /// Preview (LOL generation + syntax check, no mesh)
@@ -172,22 +199,45 @@ async fn generate_preview(
     }))
 }
 
-/// LOL DSL direct input -> (TODO: .3mf)
+/// LOL DSL direct input -> .3mf/.fbx
 async fn generate_from_lol(
-    State(_s): State<Arc<WorkerState>>,
+    State(s): State<Arc<WorkerState>>,
     Json(req): Json<DirectLolRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<GenerateResponse>)> {
+) -> Result<Response, (StatusCode, Json<GenerateResponse>)> {
     let job_id = uuid::Uuid::new_v4().to_string();
+    tracing::info!(job_id = %job_id, "generate_from_lol");
 
-    // TODO: alice-lol pipeline (lol_to_3mf)
-    Ok(Json(GenerateResponse {
-        job_id,
-        status: "completed".into(),
-        lol_source: Some(req.lol_source),
-        mesh_info: None,
-        download_url: None,
-        error: None,
-    }))
+    let config = quality_to_config(&req.quality);
+    let ext = if req.format == "fbx" { "fbx" } else { "3mf" };
+    let out_path = format!("{}/{}.{}", s.output_dir, job_id, ext);
+
+    let lol_clone = req.lol_source.clone();
+    let path_clone = out_path.clone();
+    let use_fbx = ext == "fbx";
+    let stats = tokio::task::spawn_blocking(move || {
+        if use_fbx { lol_to_fbx(&lol_clone, &path_clone, &config) }
+        else { lol_to_3mf(&lol_clone, &path_clone, &config) }
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("task join: {e}")))))?
+    .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(err_resp(&job_id, &format!("LOL pipeline: {e}")))))?;
+
+    let bytes = tokio::fs::read(&out_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(err_resp(&job_id, &format!("read file: {e}"))))
+    })?;
+
+    let _ = tokio::fs::remove_file(&out_path).await;
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{job_id}.{ext}\""))
+        .header("X-Job-Id", &job_id)
+        .header("X-Triangle-Count", stats.triangle_count.to_string())
+        .header("X-Vertex-Count", stats.vertex_count.to_string())
+        .header("X-LOL-Source", &req.lol_source)
+        .body(Body::from(bytes))
+        .unwrap())
 }
 
 #[derive(Deserialize)]
@@ -195,6 +245,20 @@ struct DirectLolRequest {
     lol_source: String,
     #[serde(default = "default_quality")]
     quality: String,
+    #[serde(default = "default_format")]
+    format: String,
+}
+
+// ---------------------------------------------------------------------------
+// Quality -> PrintConfig
+// ---------------------------------------------------------------------------
+
+fn quality_to_config(quality: &str) -> PrintConfig {
+    match quality {
+        "preview" => PrintConfig::preview(),
+        "ultra" => PrintConfig::high_quality(),
+        _ => PrintConfig::default(),
+    }
 }
 
 // ---------------------------------------------------------------------------

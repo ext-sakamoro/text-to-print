@@ -1,0 +1,32 @@
+[package]
+name = "tdvbgaran"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "3dvbgaran"
+path = "src/main.rs"
+
+[dependencies]
+tdvbgaran-core = { workspace = true }
+tdvbgaran-llm = { workspace = true }
+tdvbgaran-network = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
+rfd = "0.15"
+directories = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+open = "5"
+alice-view = { workspace = true }
+wgpu = "24"
+egui-wgpu = "0.31"
+bytemuck = { version = "1", features = ["derive"] }
+glam = "0.29"

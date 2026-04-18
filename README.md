@@ -1,184 +1,364 @@
 # 3dvbgaran
 
-3Dバーチャルガランドウ — ALICE SaaS ベースの3Dサービス。
+Text-to-3D SaaS. Describe what you want, get a printable .3mf or .fbx file.
 
-## アーキテクチャ
+## Architecture
 
 ```
-┌──────────────────────────────────────┐
-│  Railway                             │
-│  ┌────────────────────────────────┐  │
-│  │  API Gateway (Rust/axum)       │  │
-│  │  - JWT/APIキー認証             │  │
-│  │  - Stripe課金                  │  │
-│  │  - レートリミット              │  │
-│  └──────────┬─────────────────────┘  │
-│  ┌──────────┴─────────────────────┐  │
-│  │  Frontend (Next.js)            │  │
-│  │  - Supabase Auth               │  │
-│  │  - Stripe Billing              │  │
-│  └────────────────────────────────┘  │
-│  ┌────────────────────────────────┐  │
-│  │  Core Engine (Rust)            │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────┐
-│  Supabase                            │
-│  - PostgreSQL                        │
-│  - Auth (Row Level Security)         │
-│  - Storage                           │
-└──────────────────────────────────────┘
+           Internet
+              |
+   Cloudflare Tunnel (free)
+              |
+       +----- Mac mini -----+
+       |                     |
+       |  API Gateway :8080  |
+       |  (Rust/axum)        |
+       |  - JWT / API key    |
+       |  - Rate limiting    |
+       |  - alice-lol        |
+       |    LOL -> SDF       |
+       |    -> .3mf / .fbx   |
+       |  - DL plan gate     |
+       |  - Admin API        |
+       |  - Frontend proxy   |
+       |                     |
+       |  Next.js :3000      |
+       |  - Supabase Auth    |
+       |  - Stripe Billing   |
+       |  - ALICE-View (WASM)|
+       |  - three.js fallback|
+       |  - Admin panel      |
+       |                     |
+       |  LLM Server :8000   |
+       +---------------------+
+              |
+       Supabase (external)
+       - PostgreSQL + Auth
+       - Row Level Security
 ```
 
-## 技術スタック
+All computation runs on a single Mac mini. Cloudflare Tunnel provides the public URL. No cloud GPU or VPS required.
 
-| レイヤー | 技術 |
-|---------|------|
-| API | Rust / axum |
-| フロントエンド | Next.js / React / Supabase / Stripe |
-| DB | Supabase PostgreSQL |
-| 認証 | Supabase Auth (RLS) |
-| 課金 | Stripe |
-| ホスティング | Railway |
+## Plans
 
-## セットアップ
+| Plan | Price | Daily Gen | Download | File Sharing | Rate/h |
+|------|-------|-----------|----------|-------------|--------|
+| Free | 0 | 5 | No | - | 100 |
+| General | 1,500/mo | 30 | .3mf .fbx | Public (forced) | 1,000 |
+| Pro | 5,000/mo | 100 | .3mf .fbx | Private (toggleable) | 10,000 |
+| Enterprise | Contact | Unlimited | .3mf .fbx | Private, no branding | 100,000 |
+
+- **Free**: Browser preview only. No download. Server-side enforced.
+- **General**: Downloads enabled. Projects are always public (DB trigger enforced) -> Gallery exposure -> LOL learning data.
+- **Pro**: Downloads enabled. Private by default, toggleable.
+- **Enterprise**: Commercial license. No ALICE branding. SLA.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API | Rust / axum + alice-lol + alice-sdf |
+| Frontend | Next.js 15 / React 19 |
+| 3D Preview | ALICE-View (WebGPU/WASM) + three.js fallback (switchable) |
+| DB / Auth | Supabase PostgreSQL + RLS |
+| Payments | Stripe (4-tier subscription) |
+| Hosting | Mac mini + Cloudflare Tunnel |
+| 3D Pipeline | LOL DSL -> SDF -> .3mf / .fbx (Rust, on-demand) |
+
+## Pages
+
+### User-facing
+
+| Path | Auth | Description |
+|------|------|-------------|
+| `/` | No | Redirect to login |
+| `/gallery` | No | Public project gallery |
+| `/auth/login` | No | Login / signup |
+| `/dashboard` | Yes | Main generation interface |
+| `/dashboard/console` | Yes | Per-project editor |
+| `/dashboard/projects` | Yes | Project list (public/private badges) |
+| `/dashboard/billing` | Yes | 4-tier plan selection |
+| `/dashboard/history` | Yes | Generation history |
+| `/dashboard/settings` | Yes | Profile, API key |
+
+### Admin (`/admin` — role=admin only)
+
+| Path | Description |
+|------|-------------|
+| `/admin` | Dashboard (uptime, LLM status, user/generation counts) |
+| `/admin/users` | User list, plan change, role change, ban/unban |
+| `/admin/generations` | Generation logs (search, pagination, LOL source view) |
+| `/admin/gallery` | Public project moderation (hide/unhide) |
+| `/admin/revenue` | MRR, subscriber counts by plan |
+
+## Setup
+
+### 1. Build
 
 ```bash
 # API Gateway
 cd services/api-gateway
 cargo build --release
 
+# Core Engine (standalone mode)
+cd services/core-engine
+cargo build --release
+
 # Frontend
 cd frontend
 npm install && npm run build
+
+# ALICE-View WASM (optional, for WebGPU preview)
+cd ~/ALICE-View
+wasm-pack build --target web --features wasm -- --no-default-features --features wasm,lol
+cp pkg/alice_view_wasm* ~/3dvbgaran/frontend/public/wasm/
 ```
 
-## ベンチマーク
+### 2. Environment Variables
 
-### 環境
+```bash
+export SUPABASE_URL="https://xxx.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="eyJ..."
+export JWT_SECRET="your-secret-32chars-minimum"
+export LLM_ENDPOINT="http://localhost:8000"
+export OUTPUT_DIR="/tmp/3dvbgaran"
+export FRONTEND_URL="http://127.0.0.1:3000"
+export STRIPE_SECRET_KEY="sk_..."
+export STRIPE_WEBHOOK_SECRET="whsec_..."
 
-| 項目 | スペック |
-|------|---------|
-| マシン | Mac Mini |
-| チップ | Apple M2 Pro |
-| メモリ | 32 GB |
-| LLM推論 | ollama (Metal GPU, VRAM 25GB) |
+# Frontend (build-time, baked into Next.js)
+export NEXT_PUBLIC_SUPABASE_URL="https://xxx.supabase.co"
+export NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJ..."
+export NEXT_PUBLIC_WORKER_URL="https://your-domain.com"
+export NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_..."
+```
 
-### モデル比較 (LOL DSL生成精度)
+### 3. Database Migrations
 
-テストプロンプト: Cube / Phone Stand / Vase の3パターン
+Run in Supabase SQL Editor, in order:
 
-| モデル | サイズ | Cube | Phone Stand | Vase | 平均応答 | 評価 |
+```sql
+-- 001-006: Initial schema (already applied)
+
+-- 007: Add General plan + download gating + public defaults
+alter table public.profiles drop constraint if exists profiles_plan_check;
+alter table public.profiles add constraint profiles_plan_check
+  check (plan in ('Free', 'General', 'Pro', 'Enterprise'));
+
+insert into public.plan_configs (plan_name, max_projects, max_api_calls_per_hour)
+  values ('General', 20, 1000)
+  on conflict (plan_name) do nothing;
+
+update public.plan_configs set max_projects = 5, max_api_calls_per_hour = 100
+  where plan_name = 'Free';
+update public.plan_configs set max_projects = 100, max_api_calls_per_hour = 10000
+  where plan_name = 'Pro';
+
+alter table public.plan_configs add column if not exists can_download boolean default false;
+update public.plan_configs set can_download = false where plan_name = 'Free';
+update public.plan_configs set can_download = true
+  where plan_name in ('General', 'Pro', 'Enterprise');
+
+alter table public.plan_configs add column if not exists default_public boolean default false;
+update public.plan_configs set default_public = false
+  where plan_name in ('Free', 'Pro', 'Enterprise');
+update public.plan_configs set default_public = true where plan_name = 'General';
+
+-- 008: General plan public enforcement (DB trigger)
+create or replace function public.enforce_general_public()
+  returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (
+    select 1 from public.profiles
+    where id = new.owner_id and plan = 'General'
+  ) then
+    new.is_public := true;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_general_public_trigger on public.projects;
+create trigger enforce_general_public_trigger
+  before insert or update on public.projects
+  for each row execute function public.enforce_general_public();
+
+-- 009: Admin role + moderation
+alter table public.profiles add column if not exists role text default 'user'
+  check (role in ('user', 'admin'));
+alter table public.profiles add column if not exists banned boolean default false;
+alter table public.projects add column if not exists hidden boolean default false;
+
+-- Admin RLS policies
+create policy "Admin can read all profiles" on public.profiles
+  for select using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+create policy "Admin can update all profiles" on public.profiles
+  for update using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+create policy "Admin can read all projects" on public.projects
+  for select using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+create policy "Admin can update all projects" on public.projects
+  for update using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+
+-- Update gallery visibility (hide hidden projects)
+drop policy if exists "Users can view own projects" on public.projects;
+create policy "Users can view own projects" on public.projects
+  for select using (
+    auth.uid() = owner_id
+    or (is_public = true and hidden = false)
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+
+-- Set initial admin
+update public.profiles set role = 'admin' where email = 'sakamoro@alicelaw.net';
+```
+
+### 4. Run
+
+```bash
+# Terminal 1: Frontend
+cd frontend && PORT=3000 npm start
+
+# Terminal 2: API Gateway
+cd services/api-gateway && cargo run --release
+
+# Terminal 3: LLM server (your setup)
+
+# Terminal 4: Cloudflare Tunnel
+cloudflared tunnel run 3dvbgaran
+```
+
+## Directory Structure
+
+```
+3dvbgaran/
+  services/
+    api-gateway/          Rust/axum unified server
+                          - auth, rate limit, admin API
+                          - alice-lol pipeline (.3mf + .fbx)
+                          - DL plan gate, frontend proxy
+    core-engine/          Rust/axum inference worker (standalone)
+  frontend/
+    app/
+      dashboard/          User app
+        components/       ModelPreview, AliceViewPreview, PreviewSwitcher
+      admin/              Admin panel (dashboard, users, generations, gallery, revenue)
+      gallery/            Public project viewer
+      auth/               Login / signup
+      api/stripe/         Checkout + webhook
+    lib/
+      hooks/              use-generation, use-usage, use-plan, use-projects, use-admin
+      stripe/             Stripe server helpers
+      supabase/           Supabase client/server helpers
+  database/migrations/    SQL migrations (001-009)
+  docker/                 Dockerfile + entrypoint (Railway legacy)
+```
+
+## Remaining Tasks
+
+### Required for launch
+
+| # | Task | Type | Details |
+|---|------|------|---------|
+| 1 | **Stripe Product/Price** | Manual | Create `price_general` (1,500/mo) and `price_pro` (5,000/mo) in Stripe Dashboard, update billing page |
+| 2 | **DB migrations** | Manual | Run 007-009 SQL in Supabase SQL Editor (see above) |
+| 3 | **Cloudflare Tunnel** | Infra | `cloudflared tunnel create 3dvbgaran` + DNS record |
+| 4 | **Mac mini startup** | Infra | launchd plist for API Gateway + Next.js + LLM auto-start |
+| 5 | **LLM server** | Infra | Replace ollama with llama.cpp server (llama-server) for native perf |
+| 6 | **Cargo.toml path** | Deploy | Change alice-lol absolute path to Mac mini path |
+
+### Optional improvements
+
+| # | Task | Type | Details |
+|---|------|------|---------|
+| 7 | **ALICE-View WASM build** | Build | `wasm-pack build` + copy to `frontend/public/wasm/` |
+| 8 | **Banned user enforcement** | Backend | Check `banned` flag in auth middleware, reject requests |
+| 9 | **Admin generation stats** | Frontend | Daily/weekly chart on admin dashboard |
+| 10 | **Stripe webhook plan sync** | Backend | Handle plan downgrades (Pro -> General -> Free) |
+| 11 | **Email notifications** | Feature | Welcome email, plan change, generation limit warning |
+| 12 | **Landing page** | Frontend | Public marketing page at `/` instead of redirect |
+| 13 | **OGP / favicon** | Frontend | Social media preview, browser icon |
+| 14 | **E2E tests** | Test | Update smoke tests for new admin/gallery pages |
+
+## Benchmark
+
+### Environment
+
+| Item | Spec |
+|------|------|
+| Machine | Mac Mini |
+| Chip | Apple M2 Pro |
+| Memory | 32 GB |
+| LLM | ollama (Metal GPU, VRAM 25GB) |
+
+### Model Comparison (LOL DSL generation)
+
+Test prompts: Cube / Phone Stand / Vase
+
+| Model | Size | Cube | Phone Stand | Vase | Avg Latency | Verdict |
 |---|---|---|---|---|---|---|
-| Qwen2.5 1.5B | 986MB | OK | 構文不正確 | 存在しない属性 | ~1s | 不可 |
-| Qwen2.5 3B | 1.9GB | OK | 構造理解 | 構文不正確 | ~1.2s | 実用下限 |
-| **Qwen2.5 7B** | **4.7GB** | **OK** | **構造理解** | **subtractで薄壁** | **~2.6s** | **推奨** |
-| Qwen3.5 9B | 6.6GB | OK | thinking消化で未完了 | thinking消化で未完了 | ~45s | 不適 |
+| Qwen2.5 1.5B | 986MB | OK | Bad syntax | Invalid attrs | ~1s | Unusable |
+| Qwen2.5 3B | 1.9GB | OK | Understands structure | Bad syntax | ~1.2s | Minimum |
+| **Qwen2.5 7B** | **4.7GB** | **OK** | **Understands structure** | **subtract thin wall** | **~2.6s** | **Recommended** |
+| Qwen3.5 9B | 6.6GB | OK | Thinking overflow | Thinking overflow | ~45s | Unsuitable |
 
-**結論**: Qwen2.5 7B が精度・速度のバランスで最適。Qwen3.5 9Bはthinkingモードで時間を浪費し、複雑なプロンプトでmax_tokensを超過する。
+**Conclusion**: Qwen2.5 7B is the best balance of accuracy and speed. Qwen3.5 9B wastes time in thinking mode and overflows max_tokens on complex prompts.
 
-### Qwen2.5 7B 段階的負荷テスト (ollama)
+### Qwen2.5 7B Load Test (ollama)
 
-同一プロンプト (短い LOL DSL 生成) を N 並列で同時発行し、レイテンシとスループットを計測。
+Same prompt (short LOL DSL), N concurrent requests.
 
-| 並列数 | wall時間 | min | p50 | p95 | max | avg | throughput |
+| N | wall | min | p50 | p95 | max | avg | throughput |
 |---|---|---|---|---|---|---|---|
 | 1 | 0.84s | 0.81s | 0.81s | 0.81s | 0.81s | 0.81s | 1.2 req/s |
-| 2 | 1.41s | 0.72s | 1.38s | 1.38s | 1.38s | 1.05s | 1.4 req/s |
-| 3 | 2.08s | 0.73s | 1.38s | 2.05s | 2.05s | 1.38s | 1.4 req/s |
 | 5 | 3.39s | 0.73s | 2.04s | 3.36s | 3.36s | 2.04s | 1.5 req/s |
-| 8 | 5.39s | 0.75s | 3.37s | 5.35s | 5.35s | 3.05s | 1.5 req/s |
 | 10 | 6.82s | 0.84s | 4.13s | 6.78s | 6.78s | 3.81s | 1.5 req/s |
-| 15 | 10.71s | 0.78s | 5.70s | 10.67s | 10.67s | 5.70s | 1.4 req/s |
 | 20 | 14.48s | 0.73s | 7.79s | 14.42s | 14.42s | 7.47s | 1.4 req/s |
-| 30 | 22.11s | 0.89s | 11.71s | 21.23s | 22.05s | 11.36s | 1.4 req/s |
-| 40 | 30.20s | 0.88s | 15.72s | 29.35s | 30.14s | 15.37s | 1.3 req/s |
 | 50 | 38.11s | 1.03s | 19.74s | 36.53s | 37.99s | 19.40s | 1.3 req/s |
 
-### Qwen2.5 7B 段階的負荷テスト (llama.cpp server, continuous batching, parallel=4)
+### Qwen2.5 7B Load Test (llama.cpp server, parallel=8)
 
-ollama を llama.cpp server に置き換え、continuous batching + 4スロット並列で同一テストを実施。
+KV cache 448MB (1.7% of 25GB VRAM).
 
-| 並列数 | wall時間 | min | p50 | p95 | max | avg | throughput |
-|---|---|---|---|---|---|---|---|
-| 1 | 0.91s | 0.88s | 0.88s | 0.88s | 0.88s | 0.88s | 1.1 req/s |
-| 2 | 1.24s | 1.20s | 1.21s | 1.21s | 1.21s | 1.20s | 1.6 req/s |
-| 3 | 1.86s | 1.80s | 1.80s | 1.83s | 1.83s | 1.81s | 1.6 req/s |
-| 5 | 2.48s | 1.76s | 1.76s | 2.45s | 2.45s | 1.93s | 2.0 req/s |
-| 8 | 3.59s | 1.64s | 3.43s | 3.55s | 3.55s | 2.64s | 2.2 req/s |
-| 10 | 4.68s | 1.59s | 3.46s | 4.64s | 4.64s | 2.98s | 2.1 req/s |
-| 15 | 7.70s | 1.74s | 4.17s | 7.65s | 7.65s | 4.60s | 1.9 req/s |
-| 20 | 9.95s | 1.59s | 5.73s | 9.89s | 9.89s | 5.67s | 2.0 req/s |
-| 30 | 15.74s | 1.59s | 8.30s | 15.64s | 15.67s | 8.39s | 1.9 req/s |
-| 40 | 18.90s | 1.67s | 10.81s | 18.81s | 18.81s | 10.19s | 2.1 req/s |
-| 50 | 23.91s | 1.60s | 13.03s | 22.63s | 23.80s | 12.47s | 2.1 req/s |
-
-### Qwen2.5 7B 段階的負荷テスト (llama.cpp server, continuous batching, parallel=8)
-
-parallel=4 → 8 に増やした結果。KVキャッシュ 448MB (VRAM 25GB中 1.7%)。
-
-| 並列数 | wall時間 | min | p50 | p95 | max | avg | throughput |
+| N | wall | min | p50 | p95 | max | avg | throughput |
 |---|---|---|---|---|---|---|---|
 | 1 | 0.78s | 0.74s | 0.74s | 0.74s | 0.74s | 0.74s | 1.3 req/s |
-| 2 | 1.33s | 1.26s | 1.29s | 1.29s | 1.29s | 1.28s | 1.5 req/s |
-| 3 | 1.71s | 1.61s | 1.67s | 1.67s | 1.67s | 1.65s | 1.8 req/s |
 | 5 | 2.32s | 2.14s | 2.22s | 2.28s | 2.28s | 2.22s | 2.2 req/s |
 | 8 | 3.19s | 3.03s | 3.14s | 3.15s | 3.15s | 3.09s | **2.5 req/s** |
 | 10 | 3.82s | 2.47s | 2.76s | 3.78s | 3.78s | 2.90s | **2.6 req/s** |
-| 15 | 6.45s | 2.86s | 3.98s | 6.40s | 6.40s | 4.65s | 2.3 req/s |
 | 20 | 8.37s | 2.87s | 6.52s | 8.32s | 8.32s | 5.46s | 2.4 req/s |
-| 30 | 12.58s | 2.86s | 6.53s | 12.50s | 12.50s | 7.68s | 2.4 req/s |
-| 40 | 18.50s | 3.00s | 10.89s | 18.32s | 18.41s | 10.81s | 2.2 req/s |
 | 50 | 21.29s | 2.87s | 13.23s | 20.01s | 21.18s | 11.88s | **2.3 req/s** |
 
-### 全構成比較
+### Comparison
 
-| 並列数 | ollama | llama.cpp p=4 | llama.cpp p=8 | p=8 vs ollama |
-|---|---|---|---|---|
-| 1 | 0.84s / 1.2 req/s | 0.91s / 1.1 req/s | 0.78s / 1.3 req/s | +8% |
-| 5 | 3.39s / 1.5 req/s | 2.48s / 2.0 req/s | 2.32s / 2.2 req/s | **+47%** |
-| 10 | 6.82s / 1.5 req/s | 4.68s / 2.1 req/s | 3.82s / 2.6 req/s | **+73%** |
-| 20 | 14.48s / 1.4 req/s | 9.95s / 2.0 req/s | 8.37s / 2.4 req/s | **+71%** |
-| 50 | 38.11s / 1.3 req/s | 23.91s / 2.1 req/s | 21.29s / 2.3 req/s | **+77%** |
-
-### ボトルネック分析
-
-**ollama (throughput ~1.4 req/s で頭打ち):**
-
-1. **推論直列化 (`num_parallel=1`)** — 並列リクエストを内部キューで逐次処理。wall時間が N に比例（N=50 → 38s ≒ 0.81s × 47）
-2. **Go HTTP → llama.cpp FFI のオーバーヘッド** — リクエストごとにGo/CGo境界を跨ぐ
-3. **GPU演算は遊んでいる** — 直列処理のため、1リクエスト完了→次リクエスト開始の間にGPUがidle
-
-**llama.cpp server parallel=4 (throughput ~2.1 req/s, ollamaから+50%):**
-
-1. **continuous batching** — 4リクエストのトークンを1回のGPU演算にバッチ化。GPU idle時間を削減
-2. **C++直接** — Go/Python層なし。HTTP → 推論が最短パス
-3. **ボトルネック**: GPU演算能力。4スロットでもGPU使用率が飽和しきらない
-
-**llama.cpp server parallel=8 (throughput ~2.5 req/s, ollamaから+77%):**
-
-1. **8スロット同時バッチ** — GPU演算のバッチサイズ倍増。matmulの効率が向上
-2. **N=8で最高効率 2.5 req/s** — 8スロットが全て埋まった状態が最適
-3. **N>8でも2.2-2.4 req/s維持** — キュー待ちは増えるがスループットは安定
-4. **KVキャッシュ 448MB** — VRAM 25GB中 1.7%。parallel=16以上も余裕あり
-5. **最終ボトルネック**: M2 Pro GPU 19コアの演算能力上限。これ以上はハード増設が必要
-
-### 同時ユーザー数の目安
-
-| 体感 | ollama | llama.cpp p=4 | llama.cpp p=8 (推奨) |
+| N | ollama | llama.cpp p=8 | improvement |
 |---|---|---|---|
-| 快適 (< 1s) | 1人 | 1人 | **1〜2人** |
-| 良好 (< 3s) | 3〜5人 | 5〜8人 | **8〜10人** |
-| 許容 (< 5s) | 5〜8人 | 8〜10人 | **10〜15人** |
-| 実用限界 (< 10s) | 10〜15人 | 15〜20人 | **20〜30人** |
-| 劣化 (> 15s) | 20人以上 | 30人以上 | **40人以上** |
+| 1 | 0.84s / 1.2 req/s | 0.78s / 1.3 req/s | +8% |
+| 5 | 3.39s / 1.5 req/s | 2.32s / 2.2 req/s | **+47%** |
+| 10 | 6.82s / 1.5 req/s | 3.82s / 2.6 req/s | **+73%** |
+| 50 | 38.11s / 1.3 req/s | 21.29s / 2.3 req/s | **+77%** |
 
-### 起動コマンド
+### Concurrent User Estimate
+
+| Experience | ollama | llama.cpp p=8 |
+|---|---|---|
+| Comfortable (< 1s) | 1 | **1-2** |
+| Good (< 3s) | 3-5 | **8-10** |
+| Acceptable (< 5s) | 5-8 | **10-15** |
+| Limit (< 10s) | 10-15 | **20-30** |
+
+### Bottleneck: M2 Pro GPU 19-core is the ceiling at ~2.5 req/s. Beyond this requires hardware scaling.
+
+### LLM Server Command
 
 ```bash
-# llama.cpp server (推奨構成)
 llama-server \
   --model ~/.3dvbgaran/models/qwen2.5-7b-instruct-q4_k_m.gguf \
   --port 8000 \
@@ -189,6 +369,6 @@ llama-server \
   --flash-attn on
 ```
 
-## ライセンス
+## License
 
 MIT

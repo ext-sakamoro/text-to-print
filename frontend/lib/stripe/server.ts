@@ -7,9 +7,9 @@ export const stripe = stripeSecretKey
   : (null as unknown as Stripe);
 
 export async function createCheckoutSession({
-  userId, userEmail, priceId, successUrl, cancelUrl,
+  userId, userEmail, priceId, plan, successUrl, cancelUrl,
 }: {
-  userId: string; userEmail: string; priceId: string;
+  userId: string; userEmail: string; priceId: string; plan?: string;
   successUrl: string; cancelUrl: string;
 }) {
   if (!stripe) throw new Error('Stripe is not configured');
@@ -27,7 +27,8 @@ export async function createCheckoutSession({
     mode: 'subscription',
     success_url: successUrl,
     cancel_url: cancelUrl,
-    subscription_data: { metadata: { userId } },
+    metadata: { userId, plan: plan || 'General' },
+    subscription_data: { metadata: { userId, plan: plan || 'General' } },
   });
 }
 

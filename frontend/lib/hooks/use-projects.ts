@@ -34,7 +34,7 @@ export function useProjects() {
     fetch_();
   }, [fetch_]);
 
-  const create = useCallback(async (name: string) => {
+  const create = useCallback(async (name: string, isPublic?: boolean) => {
     const supabase = createClient();
     const {
       data: { user },
@@ -42,12 +42,40 @@ export function useProjects() {
     if (!user) throw new Error('Not authenticated');
     const { data, error } = await supabase
       .from('projects')
-      .insert({ name: name.trim(), owner_id: user.id, config: {} })
+      .insert({
+        name: name.trim(),
+        owner_id: user.id,
+        config: {},
+        is_public: isPublic ?? false,
+      })
       .select()
       .single();
     if (error) throw error;
     setProjects((prev) => [data, ...prev]);
     return data as Project;
+  }, []);
+
+  const togglePublic = useCallback(async (id: string, isPublic: boolean) => {
+    // General plan: is_public is always true (enforced)
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('plan')
+        .eq('id', user.id)
+        .single();
+      if (profile?.plan === 'General' && !isPublic) {
+        return; // General plan cannot set private
+      }
+    }
+    await supabase
+      .from('projects')
+      .update({ is_public: isPublic })
+      .eq('id', id);
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, is_public: isPublic } : p)),
+    );
   }, []);
 
   const remove = useCallback(async (id: string) => {
@@ -67,5 +95,5 @@ export function useProjects() {
     );
   }, []);
 
-  return { projects, loading, create, remove, rename, refresh: fetch_ };
+  return { projects, loading, create, remove, rename, togglePublic, refresh: fetch_ };
 }
