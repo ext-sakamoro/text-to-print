@@ -1,10 +1,13 @@
+pub mod i18n;
 mod sdf;
 mod state;
 mod ui;
+mod updater;
 
 use anyhow::Result;
 use eframe::egui;
 use state::AppState;
+use i18n::Lang;
 use ui::gallery::GalleryState;
 use ui::settings::SettingsState;
 use ui::viewer::SdfViewer;
@@ -100,6 +103,8 @@ struct App {
     settings: SettingsState,
     gallery: GalleryState,
     node: tdvbgaran_network::node::AliceNode,
+    lang: Lang,
+    update_checker: updater::UpdateChecker,
     current_tab: Tab,
     render_state: Option<egui_wgpu::RenderState>,
 }
@@ -110,12 +115,16 @@ impl App {
         render_state: Option<egui_wgpu::RenderState>,
         node: tdvbgaran_network::node::AliceNode,
     ) -> Self {
+        let state = AppState::new(data_dir);
+        let update_checker = updater::UpdateChecker::start(&state.runtime);
         Self {
-            state: AppState::new(data_dir),
+            state,
             viewer: SdfViewer::default(),
             settings: SettingsState::default(),
             gallery: GalleryState::default(),
             node,
+            lang: Lang::detect(),
+            update_checker,
             current_tab: Tab::Generate,
             render_state,
         }
@@ -124,6 +133,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_checker.poll();
+
         if matches!(
             self.state.generation_status,
             state::GenerationStatus::Generating
@@ -158,16 +169,37 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.current_tab, Tab::Generate, "Generate");
-                ui.selectable_value(&mut self.current_tab, Tab::Gallery, "Gallery");
-                ui.selectable_value(&mut self.current_tab, Tab::History, "History");
-                ui.selectable_value(&mut self.current_tab, Tab::Settings, "Settings");
+                let l = self.lang;
+                ui.selectable_value(&mut self.current_tab, Tab::Generate, i18n::T::generate(l));
+                ui.selectable_value(&mut self.current_tab, Tab::Gallery, i18n::T::gallery(l));
+                ui.selectable_value(&mut self.current_tab, Tab::History, i18n::T::history(l));
+                ui.selectable_value(&mut self.current_tab, Tab::Settings, i18n::T::settings(l));
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let usage = self.state.daily_usage();
                     let limit = self.state.tier.limits().daily_generations;
                     ui.label(format!("{:?} | {}/{}", self.state.tier, usage, limit));
                 });
+            });
+        });
+
+        // ステータスバー（下部）
+        egui::TopBottomPanel::bottom("statusbar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+
+                if let Some(info) = &self.update_checker.result
+                    && info.has_update
+                {
+                    ui.separator();
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        format!("v{} available", info.latest),
+                    );
+                    if ui.small_button("Download").clicked() {
+                        let _ = open::that(&info.download_url);
+                    }
+                }
             });
         });
 

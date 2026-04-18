@@ -27,6 +27,8 @@ chrono = { workspace = true }
 open = "5"
 alice-view = { workspace = true }
 alice-lol = { workspace = true }
+sys-locale = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
 wgpu = "24"
 egui-wgpu = "0.31"
 bytemuck = { version = "1", features = ["derive"] }
