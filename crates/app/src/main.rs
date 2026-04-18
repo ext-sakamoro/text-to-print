@@ -5,6 +5,7 @@ mod ui;
 use anyhow::Result;
 use eframe::egui;
 use state::AppState;
+use ui::gallery::GalleryState;
 use ui::settings::SettingsState;
 use ui::viewer::SdfViewer;
 
@@ -97,6 +98,7 @@ struct App {
     state: AppState,
     viewer: SdfViewer,
     settings: SettingsState,
+    gallery: GalleryState,
     node: tdvbgaran_network::node::AliceNode,
     current_tab: Tab,
     render_state: Option<egui_wgpu::RenderState>,
@@ -112,6 +114,7 @@ impl App {
             state: AppState::new(data_dir),
             viewer: SdfViewer::default(),
             settings: SettingsState::default(),
+            gallery: GalleryState::default(),
             node,
             current_tab: Tab::Generate,
             render_state,
@@ -182,7 +185,7 @@ impl eframe::App for App {
             }
             Tab::Gallery => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::gallery::show(ui, &self.node);
+                    ui::gallery::show(ui, &mut self.node, &mut self.viewer, &mut self.gallery);
                 });
             }
             Tab::History => {

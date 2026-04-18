@@ -26,6 +26,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 open = "5"
 alice-view = { workspace = true }
+alice-lol = { workspace = true }
 wgpu = "24"
 egui-wgpu = "0.31"
 bytemuck = { version = "1", features = ["derive"] }

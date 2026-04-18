@@ -84,12 +84,27 @@ impl AliceNode {
         }
     }
 
+    /// SDF をフォーク（リミックス）して P2P に伝播
+    pub fn fork_sdf(&mut self, original_hash: &str, new_lol: &str) {
+        let did = self.identity.did.id.clone();
+        if let Some((_node, diff)) = self.dag.fork(original_hash, new_lol, &did)
+            && let Some(tx) = &self.publish_tx
+        {
+            let _ = tx.try_send(SyncEvent::SdfForked { diff });
+        }
+    }
+
     /// Cache の SDF 一覧を取得
     pub fn list_cached_sdfs(&self) -> Vec<CachedSdf> {
         self.cache
             .lock()
             .map(|c| c.list_public().into_iter().cloned().collect())
             .unwrap_or_default()
+    }
+
+    /// DAG のノード数
+    pub fn dag_node_count(&self) -> usize {
+        self.dag.node_count()
     }
 }
 
@@ -212,8 +227,28 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
 
             let _ = prompt; // 将来のメタデータ検索用
         }
-        SyncEvent::SdfForked { .. } => {
-            // Phase 3 で実装
+        SyncEvent::SdfForked { diff } => {
+            // フォークされた SDF を Cache に保存
+            if alice_lol::runtime_parser::parse_lol(&diff.forked_lol).is_err() {
+                tracing::warn!(hash = %diff.fork_hash, "received invalid forked LOL, dropping");
+                return;
+            }
+
+            let sdf = CachedSdf {
+                id: diff.fork_hash.clone(),
+                lol_source: diff.forked_lol.clone(),
+                author_did: diff.author_did.clone(),
+                created_at: diff.timestamp.clone(),
+            };
+
+            if let Ok(mut c) = cache.lock() {
+                let _ = c.put(sdf);
+                tracing::debug!(
+                    fork = %diff.fork_hash,
+                    parent = %diff.original_hash,
+                    "forked SDF cached from P2P"
+                );
+            }
         }
     }
 }
