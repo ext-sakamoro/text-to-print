@@ -69,17 +69,17 @@ impl AppState {
         // モデルチェック + バックグラウンドダウンロード
         let models_dir = data_dir.join("models");
         let model_ready = tdvbgaran_llm::downloader::model_exists(&models_dir);
-        let (progress_tx, progress_rx) = tokio::sync::watch::channel(
-            tdvbgaran_llm::downloader::DownloadProgress {
+        let initial_status = if model_ready {
+            tdvbgaran_llm::downloader::DownloadStatus::Complete
+        } else {
+            tdvbgaran_llm::downloader::DownloadStatus::Pending
+        };
+        let (progress_tx, progress_rx) =
+            tokio::sync::watch::channel(tdvbgaran_llm::downloader::DownloadProgress {
                 downloaded_bytes: 0,
                 total_bytes: None,
-                status: if model_ready {
-                    tdvbgaran_llm::downloader::DownloadStatus::Complete
-                } else {
-                    tdvbgaran_llm::downloader::DownloadStatus::Pending
-                },
-            },
-        );
+                status: initial_status,
+            });
 
         if !model_ready {
             let md = models_dir.clone();
