@@ -131,6 +131,9 @@ mod tests {
         cache.put(make_sdf("myid", "torus(2.0, 0.5)")).unwrap();
         let lol_path = dir.path().join("cache").join("myid.lol");
         assert!(lol_path.exists());
-        assert_eq!(std::fs::read_to_string(lol_path).unwrap(), "torus(2.0, 0.5)");
+        assert_eq!(
+            std::fs::read_to_string(lol_path).unwrap(),
+            "torus(2.0, 0.5)"
+        );
     }
 }

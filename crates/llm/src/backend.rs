@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -50,7 +50,11 @@ struct ResponseMessage {
     content: String,
 }
 
-pub async fn generate(config: &LlmConfig, system_prompt: &str, user_prompt: &str) -> Result<String> {
+pub async fn generate(
+    config: &LlmConfig,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String> {
     info!(model = %config.model, "LLM inference");
 
     let client = reqwest::Client::new();
@@ -70,11 +74,7 @@ pub async fn generate(config: &LlmConfig, system_prompt: &str, user_prompt: &str
         temperature: config.temperature,
     };
 
-    let response = client
-        .post(&config.endpoint)
-        .json(&request)
-        .send()
-        .await?;
+    let response = client.post(&config.endpoint).json(&request).send().await?;
 
     if !response.status().is_success() {
         let status = response.status();

@@ -22,6 +22,8 @@ pub struct AppState {
     pub runtime: tokio::runtime::Runtime,
     pub result_rx: mpsc::Receiver<GenerationMessage>,
     pub result_tx: mpsc::Sender<GenerationMessage>,
+    pub model_progress: tokio::sync::watch::Receiver<tdvbgaran_llm::downloader::DownloadProgress>,
+    pub model_ready: bool,
 }
 
 pub enum GenerationStatus {
@@ -64,6 +66,30 @@ impl AppState {
 
         let (result_tx, result_rx) = mpsc::channel();
 
+        // モデルチェック + バックグラウンドダウンロード
+        let models_dir = data_dir.join("models");
+        let model_ready = tdvbgaran_llm::downloader::model_exists(&models_dir);
+        let (progress_tx, progress_rx) = tokio::sync::watch::channel(
+            tdvbgaran_llm::downloader::DownloadProgress {
+                downloaded_bytes: 0,
+                total_bytes: None,
+                status: if model_ready {
+                    tdvbgaran_llm::downloader::DownloadStatus::Complete
+                } else {
+                    tdvbgaran_llm::downloader::DownloadStatus::Pending
+                },
+            },
+        );
+
+        if !model_ready {
+            let md = models_dir.clone();
+            runtime.spawn(async move {
+                if let Err(e) = tdvbgaran_llm::downloader::download_model(&md, progress_tx).await {
+                    tracing::error!(error = %e, "model download failed");
+                }
+            });
+        }
+
         Self {
             data_dir,
             tier,
@@ -78,6 +104,8 @@ impl AppState {
             runtime,
             result_rx,
             result_tx,
+            model_progress: progress_rx,
+            model_ready,
         }
     }
 

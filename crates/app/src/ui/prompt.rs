@@ -11,6 +11,38 @@ pub fn show(ui: &mut Ui, state: &mut AppState) {
     ui.heading("Text to 3D");
     ui.separator();
 
+    // モデルダウンロード進捗
+    if !state.model_ready {
+        let progress = state.model_progress.borrow().clone();
+        match progress.status {
+            tdvbgaran_llm::downloader::DownloadStatus::Downloading => {
+                ui.colored_label(egui::Color32::YELLOW, "LLM モデルをダウンロード中...");
+                if let Some(total) = progress.total_bytes {
+                    let pct = progress.downloaded_bytes as f32 / total as f32;
+                    ui.add(egui::ProgressBar::new(pct).text(format!(
+                        "{:.0} / {:.0} MB",
+                        progress.downloaded_bytes as f64 / 1_048_576.0,
+                        total as f64 / 1_048_576.0,
+                    )));
+                } else {
+                    ui.spinner();
+                }
+                ui.ctx().request_repaint();
+            }
+            tdvbgaran_llm::downloader::DownloadStatus::Complete => {
+                state.model_ready = true;
+            }
+            tdvbgaran_llm::downloader::DownloadStatus::Error(ref e) => {
+                ui.colored_label(egui::Color32::RED, format!("モデルDLエラー: {e}"));
+            }
+            tdvbgaran_llm::downloader::DownloadStatus::Pending => {
+                ui.label("モデル準備中...");
+                ui.ctx().request_repaint();
+            }
+        }
+        ui.add_space(4.0);
+    }
+
     let limits = state.tier.limits();
     let usage = state.daily_usage();
     ui.label(format!(
@@ -151,7 +183,13 @@ fn start_generation(state: &mut AppState) {
                 // メッシュ生成（DL可能な場合）
                 let mesh_stats = if can_download {
                     let _ = std::fs::create_dir_all(&output_dir);
-                    pipeline::export_mesh(&lol, &output_dir, ExportFormat::ThreeMf, Quality::Preview).ok()
+                    pipeline::export_mesh(
+                        &lol,
+                        &output_dir,
+                        ExportFormat::ThreeMf,
+                        Quality::Preview,
+                    )
+                    .ok()
                 } else {
                     None
                 };
@@ -180,21 +218,15 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 lol_source,
                 mesh_stats,
             } => {
-                let _ = state.db.update_generation_status(
-                    &id,
-                    "complete",
-                    Some(&lol_source),
-                    None,
-                );
+                let _ = state
+                    .db
+                    .update_generation_status(&id, "complete", Some(&lol_source), None);
                 state.current_lol = Some(lol_source.clone());
 
                 // General tier: SDF 公開義務 → P2P に自動公開
                 if state.tier.limits().force_public {
-                    state.pending_publish = Some((
-                        id.clone(),
-                        lol_source.clone(),
-                        state.prompt_input.clone(),
-                    ));
+                    state.pending_publish =
+                        Some((id.clone(), lol_source.clone(), state.prompt_input.clone()));
                 }
 
                 state.generation_status = GenerationStatus::Done {
@@ -205,10 +237,9 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 ui.ctx().request_repaint();
             }
             GenerationMessage::Failure { id, error } => {
-                let _ =
-                    state
-                        .db
-                        .update_generation_status(&id, "error", None, Some(&error));
+                let _ = state
+                    .db
+                    .update_generation_status(&id, "error", None, Some(&error));
                 state.generation_status = GenerationStatus::Error(error);
                 state.refresh_history();
                 ui.ctx().request_repaint();

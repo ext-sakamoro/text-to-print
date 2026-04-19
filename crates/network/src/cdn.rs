@@ -92,22 +92,42 @@ mod tests {
 
     #[test]
     fn vivaldi_distance() {
-        let a = VivaldiCoord { x: 0.0, y: 0.0, height: 1.0 };
-        let b = VivaldiCoord { x: 3.0, y: 4.0, height: 2.0 };
+        let a = VivaldiCoord {
+            x: 0.0,
+            y: 0.0,
+            height: 1.0,
+        };
+        let b = VivaldiCoord {
+            x: 3.0,
+            y: 4.0,
+            height: 2.0,
+        };
         let dist = a.distance(&b);
         assert!((dist - 8.0).abs() < 1e-10);
     }
 
     #[test]
     fn vivaldi_distance_symmetric() {
-        let a = VivaldiCoord { x: 1.0, y: 2.0, height: 0.5 };
-        let b = VivaldiCoord { x: 4.0, y: 6.0, height: 1.0 };
+        let a = VivaldiCoord {
+            x: 1.0,
+            y: 2.0,
+            height: 0.5,
+        };
+        let b = VivaldiCoord {
+            x: 4.0,
+            y: 6.0,
+            height: 1.0,
+        };
         assert!((a.distance(&b) - b.distance(&a)).abs() < 1e-10);
     }
 
     #[test]
     fn vivaldi_self_distance_is_height_sum() {
-        let a = VivaldiCoord { x: 5.0, y: 3.0, height: 2.0 };
+        let a = VivaldiCoord {
+            x: 5.0,
+            y: 3.0,
+            height: 2.0,
+        };
         assert!((a.distance(&a) - 4.0).abs() < 1e-10);
     }
 
@@ -122,7 +142,11 @@ mod tests {
     #[test]
     fn vivaldi_update_converges() {
         let mut a = VivaldiCoord::origin();
-        let b = VivaldiCoord { x: 10.0, y: 0.0, height: 0.0 };
+        let b = VivaldiCoord {
+            x: 10.0,
+            y: 0.0,
+            height: 0.0,
+        };
         let target_rtt = 10.0;
 
         for _ in 0..100 {
@@ -138,7 +162,11 @@ mod tests {
 
     #[test]
     fn vivaldi_height_non_negative() {
-        let mut a = VivaldiCoord { x: 0.0, y: 0.0, height: 5.0 };
+        let mut a = VivaldiCoord {
+            x: 0.0,
+            y: 0.0,
+            height: 5.0,
+        };
         let b = VivaldiCoord::origin();
         for _ in 0..100 {
             a.update(&b, 0.1, 0.5);
@@ -156,9 +184,30 @@ mod tests {
     #[test]
     fn peer_coord_map_nearest() {
         let mut map = PeerCoordMap::new();
-        map.update_peer("peer-a", VivaldiCoord { x: 1.0, y: 0.0, height: 0.0 });
-        map.update_peer("peer-b", VivaldiCoord { x: 10.0, y: 0.0, height: 0.0 });
-        map.update_peer("peer-c", VivaldiCoord { x: 3.0, y: 0.0, height: 0.0 });
+        map.update_peer(
+            "peer-a",
+            VivaldiCoord {
+                x: 1.0,
+                y: 0.0,
+                height: 0.0,
+            },
+        );
+        map.update_peer(
+            "peer-b",
+            VivaldiCoord {
+                x: 10.0,
+                y: 0.0,
+                height: 0.0,
+            },
+        );
+        map.update_peer(
+            "peer-c",
+            VivaldiCoord {
+                x: 3.0,
+                y: 0.0,
+                height: 0.0,
+            },
+        );
 
         let me = VivaldiCoord::origin();
         let nearest = map.nearest(&me, 2);
@@ -170,8 +219,22 @@ mod tests {
     #[test]
     fn peer_coord_map_update_overwrites() {
         let mut map = PeerCoordMap::new();
-        map.update_peer("peer-a", VivaldiCoord { x: 1.0, y: 0.0, height: 0.0 });
-        map.update_peer("peer-a", VivaldiCoord { x: 5.0, y: 0.0, height: 0.0 });
+        map.update_peer(
+            "peer-a",
+            VivaldiCoord {
+                x: 1.0,
+                y: 0.0,
+                height: 0.0,
+            },
+        );
+        map.update_peer(
+            "peer-a",
+            VivaldiCoord {
+                x: 5.0,
+                y: 0.0,
+                height: 0.0,
+            },
+        );
 
         assert_eq!(map.len(), 1);
         let me = VivaldiCoord::origin();
@@ -181,7 +244,11 @@ mod tests {
 
     #[test]
     fn coord_serialization_roundtrip() {
-        let coord = VivaldiCoord { x: 1.5, y: -2.3, height: 0.8 };
+        let coord = VivaldiCoord {
+            x: 1.5,
+            y: -2.3,
+            height: 0.8,
+        };
         let json = serde_json::to_string(&coord).unwrap();
         let deserialized: VivaldiCoord = serde_json::from_str(&json).unwrap();
         assert!((coord.x - deserialized.x).abs() < 1e-10);

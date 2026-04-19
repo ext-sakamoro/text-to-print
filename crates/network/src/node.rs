@@ -1,9 +1,7 @@
 use anyhow::Result;
 use libp2p::{
-    futures::StreamExt,
-    gossipsub, identify, kad, noise,
-    swarm::SwarmEvent,
-    tcp, yamux, Multiaddr, SwarmBuilder,
+    Multiaddr, SwarmBuilder, futures::StreamExt, gossipsub, identify, kad, noise,
+    swarm::SwarmEvent, tcp, yamux,
 };
 use std::path::Path;
 use std::sync::{Arc, Mutex};

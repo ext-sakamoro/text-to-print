@@ -210,7 +210,9 @@ mod tests {
     fn fork_creates_parent_link() {
         let mut dag = SdfDag::new();
         let original = dag.commit_new("sphere(1.0)", "did:key:a");
-        let (forked, diff) = dag.fork(&original.hash, "sphere(2.0)", "did:key:b").unwrap();
+        let (forked, diff) = dag
+            .fork(&original.hash, "sphere(2.0)", "did:key:b")
+            .unwrap();
 
         assert_eq!(forked.parent.as_deref(), Some(original.hash.as_str()));
         assert_eq!(diff.original_lol, "sphere(1.0)");
@@ -222,7 +224,9 @@ mod tests {
     fn fork_updates_heads() {
         let mut dag = SdfDag::new();
         let original = dag.commit_new("sphere(1.0)", "did:key:a");
-        let (forked, _) = dag.fork(&original.hash, "sphere(2.0)", "did:key:b").unwrap();
+        let (forked, _) = dag
+            .fork(&original.hash, "sphere(2.0)", "did:key:b")
+            .unwrap();
 
         // original is no longer a head, forked is
         assert!(!dag.heads().contains(&original.hash));
@@ -232,7 +236,10 @@ mod tests {
     #[test]
     fn fork_nonexistent_returns_none() {
         let mut dag = SdfDag::new();
-        assert!(dag.fork("nonexistent", "sphere(1.0)", "did:key:a").is_none());
+        assert!(
+            dag.fork("nonexistent", "sphere(1.0)", "did:key:a")
+                .is_none()
+        );
     }
 
     #[test]

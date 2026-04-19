@@ -13,9 +13,7 @@ pub enum SyncEvent {
         prompt: String,
     },
     /// SDF がフォーク/リミックスされた
-    SdfForked {
-        diff: SdfDiff,
-    },
+    SdfForked { diff: SdfDiff },
 }
 
 /// gossipsub トピック

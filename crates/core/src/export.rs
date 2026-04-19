@@ -3,7 +3,11 @@ use std::path::Path;
 
 use crate::pipeline::ExportFormat;
 
-pub fn save_mesh(data: &[u8], format: ExportFormat, output_dir: &Path) -> Result<std::path::PathBuf> {
+pub fn save_mesh(
+    data: &[u8],
+    format: ExportFormat,
+    output_dir: &Path,
+) -> Result<std::path::PathBuf> {
     let filename = format!("{}.{}", uuid::Uuid::new_v4(), format.extension());
     let path = output_dir.join(filename);
     std::fs::write(&path, data)?;

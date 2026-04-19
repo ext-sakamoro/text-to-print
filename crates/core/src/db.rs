@@ -89,15 +89,13 @@ impl Database {
     }
 
     pub fn get_or_create_profile(&self, id: &str) -> Result<Tier> {
-        self.conn.execute(
-            "INSERT OR IGNORE INTO profiles (id) VALUES (?1)",
-            [id],
-        )?;
-        let tier: String = self.conn.query_row(
-            "SELECT tier FROM profiles WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )?;
+        self.conn
+            .execute("INSERT OR IGNORE INTO profiles (id) VALUES (?1)", [id])?;
+        let tier: String =
+            self.conn
+                .query_row("SELECT tier FROM profiles WHERE id = ?1", [id], |row| {
+                    row.get(0)
+                })?;
         match tier.as_str() {
             "General" => Ok(Tier::General),
             "Pro" => Ok(Tier::Pro),

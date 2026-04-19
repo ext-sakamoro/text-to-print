@@ -24,7 +24,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         ui.label("ライセンスキー:");
         ui.text_edit_multiline(&mut settings.license_input);
 
-        if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty() {
+        if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty()
+        {
             apply_license(state, settings);
         }
 
@@ -48,7 +49,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         ui.text_edit_singleline(&mut state.llm_config.model);
         ui.add_space(4.0);
         ui.label(format!("Temperature: {:.1}", state.llm_config.temperature));
-        ui.add(egui::Slider::new(&mut state.llm_config.temperature, 0.0..=2.0));
+        ui.add(egui::Slider::new(
+            &mut state.llm_config.temperature,
+            0.0..=2.0,
+        ));
     });
 
     ui.add_space(8.0);
@@ -93,13 +97,12 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
             let tier_str = format!("{tier:?}");
 
             // DB に保存
-            let _ = state.db.update_profile_tier(&state.profile_id, &tier_str, input);
+            let _ = state
+                .db
+                .update_profile_tier(&state.profile_id, &tier_str, input);
             state.tier = tier;
 
-            settings.license_message = Some((
-                format!("{tier:?} プランに更新しました"),
-                true,
-            ));
+            settings.license_message = Some((format!("{tier:?} プランに更新しました"), true));
             tracing::info!(tier = ?tier, "license applied");
         }
         Err(e) => {

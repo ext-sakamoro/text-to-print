@@ -6,16 +6,14 @@ mod updater;
 
 use anyhow::Result;
 use eframe::egui;
-use state::AppState;
 use i18n::Lang;
+use state::AppState;
 use ui::gallery::GalleryState;
 use ui::settings::SettingsState;
 use ui::viewer::SdfViewer;
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     let data_dir = directories::ProjectDirs::from("net", "alicelaw", "3dvbgaran")
         .map(|d: directories::ProjectDirs| d.data_dir().to_path_buf())
@@ -150,7 +148,11 @@ impl eframe::App for App {
         // pending WGSL があれば SDF パイプラインを再構築
         if let Some(wgsl) = self.viewer.pending_wgsl.take()
             && let Some(rs) = &self.render_state
-            && let Some(res) = rs.renderer.write().callback_resources.get_mut::<sdf::SdfResources>()
+            && let Some(res) = rs
+                .renderer
+                .write()
+                .callback_resources
+                .get_mut::<sdf::SdfResources>()
         {
             res.rebuild_with_wgsl(&rs.device, &wgsl);
         }
@@ -158,7 +160,11 @@ impl eframe::App for App {
         // カメラ情報を SdfResources に反映
         if self.viewer.has_sdf
             && let Some(rs) = &self.render_state
-            && let Some(res) = rs.renderer.write().callback_resources.get_mut::<sdf::SdfResources>()
+            && let Some(res) = rs
+                .renderer
+                .write()
+                .callback_resources
+                .get_mut::<sdf::SdfResources>()
         {
             let cam = &self.viewer.camera;
             res.camera_pos = cam.position.into();
@@ -192,10 +198,7 @@ impl eframe::App for App {
                     && info.has_update
                 {
                     ui.separator();
-                    ui.colored_label(
-                        egui::Color32::YELLOW,
-                        format!("v{} available", info.latest),
-                    );
+                    ui.colored_label(egui::Color32::YELLOW, format!("v{} available", info.latest));
                     if ui.small_button("Download").clicked() {
                         let _ = open::that(&info.download_url);
                     }

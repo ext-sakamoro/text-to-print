@@ -88,7 +88,8 @@ pub fn show(ui: &mut Ui, state: &AppState, viewer: &mut SdfViewer) {
         }
     } else {
         // プレースホルダー
-        ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgb(24, 24, 32));
+        ui.painter()
+            .rect_filled(rect, 4.0, egui::Color32::from_rgb(24, 24, 32));
 
         let msg = match &state.generation_status {
             GenerationStatus::Generating => "生成中...",

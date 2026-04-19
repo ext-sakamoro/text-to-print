@@ -1,6 +1,6 @@
 use alice_lol::print_export::{ExportStats, PrintConfig};
 use alice_lol::runtime_parser;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::Path;
 use tracing::info;
 
