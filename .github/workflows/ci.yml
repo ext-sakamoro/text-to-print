@@ -11,8 +11,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: rustfmt }
       - name: Check formatting
-        run: |
-          cargo fmt --manifest-path crates/app/Cargo.toml -- --check
-          cargo fmt --manifest-path crates/core/Cargo.toml -- --check
-          cargo fmt --manifest-path crates/llm/Cargo.toml -- --check
-          cargo fmt --manifest-path crates/network/Cargo.toml -- --check
+        run: find crates -name "*.rs" | xargs rustfmt --check --edition 2024
