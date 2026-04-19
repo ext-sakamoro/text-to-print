@@ -10,10 +10,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with: { components: rustfmt }
-      # workspace の path 依存 (ALICE-xxx) が CI 上にないため
-      # fmt は各クレート個別にチェック
-      - run: |
-          for dir in crates/app crates/core crates/llm crates/network; do
-            echo "=== $dir ==="
-            cd $dir && cargo fmt -- --check && cd ../..
-          done
+      - name: Check formatting
+        run: |
+          cargo fmt --manifest-path crates/app/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/core/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/llm/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/network/Cargo.toml -- --check
