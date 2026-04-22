@@ -8,6 +8,7 @@ use crate::ui::viewer::SdfViewer;
 pub struct GalleryState {
     pub selected_id: Option<String>,
     pub fork_input: String,
+    pub switch_to_viewer: bool,
 }
 
 pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: &mut GalleryState) {
@@ -55,7 +56,6 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
 
                         if ui.selectable_label(is_selected, &label).clicked() {
                             gallery.selected_id = Some(sdf.id.clone());
-                            // Viewer にプレビュー設定
                             viewer.set_lol(&sdf.lol_source);
                         }
                     }
@@ -85,6 +85,12 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
                             .code_editor()
                             .desired_rows(8),
                     );
+
+                    ui.add_space(4.0);
+                    if ui.button("3D プレビューで表示").clicked() {
+                        viewer.set_lol(&sdf.lol_source);
+                        gallery.switch_to_viewer = true;
+                    }
 
                     ui.add_space(8.0);
 

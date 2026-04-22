@@ -42,6 +42,11 @@ impl LicenseIssuer {
         }
     }
 
+    /// 秘密鍵バイト
+    pub fn secret_bytes(&self) -> [u8; 32] {
+        self.signing_key.to_bytes()
+    }
+
     /// 公開鍵バイト（バイナリに埋め込み用）
     pub fn public_key_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.signing_key.verifying_key().to_bytes()

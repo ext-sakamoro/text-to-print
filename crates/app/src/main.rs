@@ -222,6 +222,10 @@ impl eframe::App for App {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui::gallery::show(ui, &mut self.node, &mut self.viewer, &mut self.gallery);
                 });
+                if self.gallery.switch_to_viewer {
+                    self.gallery.switch_to_viewer = false;
+                    self.current_tab = Tab::Generate;
+                }
             }
             Tab::History => {
                 egui::CentralPanel::default().show(ctx, |ui| {

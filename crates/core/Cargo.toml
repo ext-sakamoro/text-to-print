@@ -18,6 +18,11 @@ thiserror = { workspace = true }
 directories = { workspace = true }
 tracing = { workspace = true }
 base64 = "0.22"
+hex = "0.4"
+
+[[bin]]
+name = "gen-license-key"
+path = "src/bin/gen_license_key.rs"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use libp2p::{
-    Multiaddr, SwarmBuilder, futures::StreamExt, gossipsub, identify, kad, noise,
+    Multiaddr, SwarmBuilder, futures::StreamExt, gossipsub, identify, kad, mdns, noise,
     swarm::SwarmEvent, tcp, yamux,
 };
 use std::path::Path;
@@ -22,11 +22,12 @@ pub struct AliceNode {
     pub dag: SdfDag,
     pub coord: VivaldiCoord,
     publish_tx: Option<mpsc::Sender<SyncEvent>>,
+    #[allow(dead_code)]
     shutdown_tx: Option<mpsc::Sender<()>>,
+    data_dir: std::path::PathBuf,
 }
 
 impl AliceNode {
-    /// ノードを初期化（P2P 接続はまだ開始しない）
     pub fn init(data_dir: &Path) -> Result<Self> {
         info!("initializing ALICE node");
 
@@ -36,7 +37,10 @@ impl AliceNode {
         let cache = SdfCache::open(data_dir)?;
         info!(cached = cache.len(), "cache loaded");
 
-        let dag = SdfDag::new();
+        let dag_path = data_dir.join("dag.json");
+        let dag = SdfDag::load_or_new(&dag_path);
+        info!(nodes = dag.node_count(), "DAG loaded");
+
         let coord = VivaldiCoord::origin();
 
         Ok(Self {
@@ -46,10 +50,10 @@ impl AliceNode {
             coord,
             publish_tx: None,
             shutdown_tx: None,
+            data_dir: data_dir.to_path_buf(),
         })
     }
 
-    /// バックグラウンドで P2P ネットワークに参加
     pub fn start_background(&mut self, runtime: &tokio::runtime::Runtime) -> Result<()> {
         let did = self.identity.did.id.clone();
         let cache = Arc::clone(&self.cache);
@@ -69,7 +73,6 @@ impl AliceNode {
         Ok(())
     }
 
-    /// SDF を P2P ネットワークに公開（General tier）
     pub fn publish_sdf(&self, id: &str, lol_source: &str, prompt: &str) {
         if let Some(tx) = &self.publish_tx {
             let event = SyncEvent::SdfPublished {
@@ -82,7 +85,6 @@ impl AliceNode {
         }
     }
 
-    /// SDF をフォーク（リミックス）して P2P に伝播
     pub fn fork_sdf(&mut self, original_hash: &str, new_lol: &str) {
         let did = self.identity.did.id.clone();
         if let Some((_node, diff)) = self.dag.fork(original_hash, new_lol, &did)
@@ -90,9 +92,9 @@ impl AliceNode {
         {
             let _ = tx.try_send(SyncEvent::SdfForked { diff });
         }
+        self.save_dag();
     }
 
-    /// Cache の SDF 一覧を取得
     pub fn list_cached_sdfs(&self) -> Vec<CachedSdf> {
         self.cache
             .lock()
@@ -100,9 +102,15 @@ impl AliceNode {
             .unwrap_or_default()
     }
 
-    /// DAG のノード数
     pub fn dag_node_count(&self) -> usize {
         self.dag.node_count()
+    }
+
+    fn save_dag(&self) {
+        let path = self.data_dir.join("dag.json");
+        if let Err(e) = self.dag.save(&path) {
+            tracing::warn!(error = %e, "failed to save DAG");
+        }
     }
 }
 
@@ -142,10 +150,15 @@ async fn run_swarm(
                 kad::store::MemoryStore::new(key.public().to_peer_id()),
             );
 
+            let mdns =
+                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
+                    .expect("mDNS behaviour");
+
             AliceBehaviour {
                 gossipsub,
                 identify,
                 kademlia,
+                mdns,
             }
         })?
         .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -166,10 +179,28 @@ async fn run_swarm(
                     SwarmEvent::NewListenAddr { address, .. } => {
                         info!(%address, "P2P listening on");
                     }
+                    // mDNS: LAN 内ノード自動検出
+                    SwarmEvent::Behaviour(AliceBehaviourEvent::Mdns(
+                        mdns::Event::Discovered(peers)
+                    )) => {
+                        for (peer_id, addr) in peers {
+                            info!(%peer_id, %addr, "mDNS discovered peer");
+                            swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                            swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
+                        }
+                    }
+                    SwarmEvent::Behaviour(AliceBehaviourEvent::Mdns(
+                        mdns::Event::Expired(peers)
+                    )) => {
+                        for (peer_id, _addr) in peers {
+                            tracing::debug!(%peer_id, "mDNS peer expired");
+                            swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
+                        }
+                    }
+                    // gossipsub メッセージ受信
                     SwarmEvent::Behaviour(AliceBehaviourEvent::Gossipsub(
                         gossipsub::Event::Message { message, .. }
                     )) => {
-                        // 受信した SDF を Cache に保存
                         if let Ok(sync_event) = serde_json::from_slice::<SyncEvent>(&message.data) {
                             handle_sync_event(sync_event, &cache);
                         }
@@ -177,13 +208,10 @@ async fn run_swarm(
                     _ => {}
                 }
             }
-            // 公開リクエストを gossipsub に送信
             Some(event) = publish_rx.recv() => {
                 if let Ok(data) = serde_json::to_vec(&event) {
                     let _ = swarm.behaviour_mut().gossipsub.publish(topic.clone(), data);
                     tracing::debug!("published SDF event to P2P network");
-
-                    // 自分の Cache にも保存
                     handle_sync_event(event, &cache);
                 }
             }
@@ -205,7 +233,6 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
             author_did,
             prompt,
         } => {
-            // alice_lol で LOL ソースを検証
             if alice_lol::runtime_parser::parse_lol(&lol_source).is_err() {
                 tracing::warn!(id, "received invalid LOL source, dropping");
                 return;
@@ -223,10 +250,9 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
                 tracing::debug!(cached = c.len(), "SDF cached from P2P");
             }
 
-            let _ = prompt; // 将来のメタデータ検索用
+            let _ = prompt;
         }
         SyncEvent::SdfForked { diff } => {
-            // フォークされた SDF を Cache に保存
             if alice_lol::runtime_parser::parse_lol(&diff.forked_lol).is_err() {
                 tracing::warn!(hash = %diff.fork_hash, "received invalid forked LOL, dropping");
                 return;
@@ -258,4 +284,5 @@ struct AliceBehaviour {
     gossipsub: gossipsub::Behaviour,
     identify: identify::Behaviour,
     kademlia: kad::Behaviour<kad::store::MemoryStore>,
+    mdns: mdns::tokio::Behaviour,
 }

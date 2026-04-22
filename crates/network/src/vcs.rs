@@ -156,6 +156,42 @@ impl SdfDag {
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
+
+    /// DAG をファイルに保存
+    pub fn save(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        let data = DagSnapshot {
+            nodes: self.nodes.values().cloned().collect(),
+            heads: self.heads.clone(),
+        };
+        let json = serde_json::to_string_pretty(&data)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// ファイルから DAG を読み込み、なければ空の DAG を返す
+    pub fn load_or_new(path: &std::path::Path) -> Self {
+        if path.exists()
+            && let Ok(json) = std::fs::read_to_string(path)
+            && let Ok(snapshot) = serde_json::from_str::<DagSnapshot>(&json)
+        {
+            let nodes: HashMap<String, MerkleNode> = snapshot
+                .nodes
+                .into_iter()
+                .map(|n| (n.hash.clone(), n))
+                .collect();
+            return Self {
+                nodes,
+                heads: snapshot.heads,
+            };
+        }
+        Self::new()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct DagSnapshot {
+    nodes: Vec<MerkleNode>,
+    heads: Vec<String>,
 }
 
 impl Default for SdfDag {
@@ -321,5 +357,43 @@ mod tests {
         let json = serde_json::to_string(&diff).unwrap();
         let deserialized: SdfDiff = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.fork_hash, "h2");
+    }
+
+    #[test]
+    fn dag_save_and_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dag.json");
+
+        let mut dag = SdfDag::new();
+        dag.commit_new("sphere(1.0)", "did:key:a");
+        dag.commit_new("box3d(1.0, 1.0, 1.0)", "did:key:b");
+        dag.save(&path).unwrap();
+
+        let loaded = SdfDag::load_or_new(&path);
+        assert_eq!(loaded.node_count(), 2);
+        assert_eq!(loaded.heads().len(), 2);
+    }
+
+    #[test]
+    fn dag_load_missing_file_returns_empty() {
+        let dag = SdfDag::load_or_new(std::path::Path::new("/nonexistent/dag.json"));
+        assert_eq!(dag.node_count(), 0);
+    }
+
+    #[test]
+    fn dag_save_preserves_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dag.json");
+
+        let mut dag = SdfDag::new();
+        let n1 = dag.commit_new("v1", "did:key:a");
+        let (n2, _) = dag.fork(&n1.hash, "v2", "did:key:a").unwrap();
+        dag.save(&path).unwrap();
+
+        let loaded = SdfDag::load_or_new(&path);
+        let hist = loaded.history(&n2.hash);
+        assert_eq!(hist.len(), 2);
+        assert_eq!(hist[0].lol_source, "v2");
+        assert_eq!(hist[1].lol_source, "v1");
     }
 }
