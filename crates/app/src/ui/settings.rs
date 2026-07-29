@@ -79,7 +79,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         if ui
             .checkbox(&mut share, "LoRA 学習データ提供に協力する")
             .on_hover_text(
-                "オフにすると生成した LOL DSL と品質シグナルは共有 LoRA 学習セットに送信されません Free tier では既定でオン Paid tier は完全 offline",
+                "オンにすると生成した LOL DSL + 品質シグナル (prompt / LOL 原文 / mesh SHA-256 / retry_count / safety_violations 等) が ALICE-LOL LoRA 学習セットに送信対象化されます Free tier default オン、Paid tier は完全 offline\n\n送信されないもの: Apple/Google/Microsoft アカウント ID / machine ID / file path / license key / crash report / P2P share pending キュー\n\n詳細: docs/SHARE.md",
             )
             .changed()
         {
@@ -102,6 +102,11 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         ui.label(format!(
             "アップロード待ち (dry-run キュー): {queued} 件",
         ));
+        ui.add_space(4.0);
+        ui.hyperlink_to(
+            "詳細な送信内容と opt-out 手順 (docs/SHARE.md)",
+            "https://github.com/ext-sakamoro/text-to-print/blob/main/docs/SHARE.md",
+        );
     });
 
     ui.add_space(8.0);
