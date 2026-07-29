@@ -244,6 +244,42 @@ pub struct MetadataInputs<'a> {
     pub safety_violations: Vec<String>,
 }
 
+/// Fast safety check for LLM retry loop
+///
+/// Parses the given LOL source into an SDF tree, runs
+/// [`alice_bamboo::safety::safety_validate`] against a default `"PLA"`
+/// material, and returns the raw safety violation messages Meant to be
+/// used as the `safety_check` closure passed to
+/// [`text_to_print_llm::backend::generate_with_retry`]
+///
+/// Behavior:
+/// - **LOL parse error** returns a single-message violation vector so the
+///   retry loop can request a syntactically valid LOL DSL
+/// - **`safety_validate.is_safe == true`** returns an empty vector — the
+///   caller is expected to interpret `[]` as "no retry needed"
+/// - **`safety_validate.is_safe == false`** returns
+///   `safety_validate.messages` verbatim The messages already come from
+///   `alice_bamboo::safety::SafetyReport` so
+///   [`text_to_print_llm::fix_prompt::SafetyViolationKind::from_message`]
+///   can classify them into `fix_directive` instructions
+///
+/// This helper deliberately skips the mesh build (marching cubes) so it
+/// stays cheap enough to be invoked between LLM retries — the actual
+/// mesh gets built later during the final `export_mesh` call
+#[must_use]
+pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
+    let sdf = match alice_bamboo::lol_to_sdf(lol_source) {
+        Ok(sdf) => sdf,
+        Err(e) => return vec![format!("LOL parse error: {e}")],
+    };
+    let report = alice_bamboo::safety::safety_validate(&sdf, "PLA", None);
+    if report.is_safe {
+        Vec::new()
+    } else {
+        report.messages
+    }
+}
+
 /// caller 由来 violations に、pipeline 内 `safety_validate` の messages を
 /// unsafe 判定時のみ merge (重複除外)
 ///
@@ -390,6 +426,23 @@ pub fn lol_to_wgsl(lol_source: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safety_check_lol_returns_empty_for_small_pla_sphere() {
+        // small sphere with PLA material → safety_validate.is_safe == true
+        let violations = safety_check_lol("sphere(10.0)");
+        assert!(
+            violations.is_empty(),
+            "expected no violations for sphere(10), got {violations:?}"
+        );
+    }
+
+    #[test]
+    fn safety_check_lol_returns_parse_error_for_invalid_source() {
+        let violations = safety_check_lol("not_a_primitive(1.0)");
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].contains("parse error"));
+    }
 
     #[test]
     fn test_extract_lol() {
