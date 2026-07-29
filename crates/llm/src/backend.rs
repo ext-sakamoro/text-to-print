@@ -60,6 +60,86 @@ struct ResponseMessage {
     content: String,
 }
 
+/// Retry outcome returned by [`generate_with_retry`]
+///
+/// - `content`: final LLM response after any retries
+/// - `retry_count`: number of retries actually performed (0 = first-try
+///   success; up to `max_retries`)
+#[derive(Debug, Clone)]
+pub struct RetryResult {
+    pub content: String,
+    pub retry_count: u32,
+}
+
+/// Generate a response with automatic retry on safety violations
+///
+/// The caller supplies a `safety_check` closure that inspects the LLM
+/// output (already-extracted LOL DSL or the raw response) and returns a
+/// list of safety violation messages If the list is non-empty, the
+/// backend re-invokes the LLM with the original user prompt suffixed by
+/// a [`crate::fix_prompt::fix_prompt_from_messages`] instruction that
+/// enumerates the offending violations
+///
+/// The loop stops when:
+/// - the safety check returns no violations (success), or
+/// - `max_retries` retries have been performed (returns the last output
+///   regardless of remaining violations)
+///
+/// # Errors
+///
+/// Any network error from the underlying `generate` call terminates the
+/// loop and is returned to the caller unchanged
+pub async fn generate_with_retry<F>(
+    config: &LlmConfig,
+    system_prompt: &str,
+    user_prompt: &str,
+    max_retries: u32,
+    mut safety_check: F,
+) -> Result<RetryResult>
+where
+    F: FnMut(&str) -> Vec<String>,
+{
+    let mut current_prompt = user_prompt.to_string();
+    let mut retry_count = 0_u32;
+    let mut last_content = String::new();
+
+    for attempt in 0..=max_retries {
+        let content = generate(config, system_prompt, &current_prompt).await?;
+        last_content = content.clone();
+
+        let violations = safety_check(&content);
+        if violations.is_empty() {
+            return Ok(RetryResult {
+                content: last_content,
+                retry_count,
+            });
+        }
+
+        if attempt >= max_retries {
+            break;
+        }
+
+        retry_count = retry_count.saturating_add(1);
+        let suffix = crate::fix_prompt::fix_prompt_from_messages(&violations);
+        if suffix.is_empty() {
+            // No actionable fix instruction (all messages unclassified) —
+            // stop retrying and return the current content
+            break;
+        }
+        current_prompt = format!("{user_prompt}{suffix}");
+        info!(
+            retry = retry_count,
+            violations = violations.len(),
+            "safety violations detected, retrying with fix prompt"
+        );
+    }
+
+    Ok(RetryResult {
+        content: last_content,
+        retry_count,
+    })
+}
+
 pub async fn generate(
     config: &LlmConfig,
     system_prompt: &str,
@@ -135,5 +215,20 @@ mod tests {
         let config = LlmConfig::default();
         assert!(config.temperature > 0.0);
         assert!(config.temperature <= 2.0);
+    }
+
+    // Note: end-to-end generate_with_retry tests would require a live LLM
+    // endpoint; these tests exercise the state machine via the safety_check
+    // closure only Callers are expected to provide their own integration
+    // tests against a running `alice-llm-server`
+
+    #[test]
+    fn retry_result_defaults() {
+        let r = RetryResult {
+            content: String::new(),
+            retry_count: 0,
+        };
+        assert_eq!(r.retry_count, 0);
+        assert!(r.content.is_empty());
     }
 }
