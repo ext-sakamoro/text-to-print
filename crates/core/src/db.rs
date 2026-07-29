@@ -42,12 +42,13 @@ impl Database {
         self.conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS profiles (
-                id         TEXT PRIMARY KEY,
-                email      TEXT,
-                license_key TEXT,
-                tier       TEXT NOT NULL DEFAULT 'Free',
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                id             TEXT PRIMARY KEY,
+                email          TEXT,
+                license_key    TEXT,
+                tier           TEXT NOT NULL DEFAULT 'Free',
+                share_lol_dsl  INTEGER NOT NULL DEFAULT 1,
+                created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
             CREATE TABLE IF NOT EXISTS generations (
@@ -85,6 +86,13 @@ impl Database {
             );
             ",
         )?;
+        // Idempotent addition for pre-existing DBs that predate share_lol_dsl.
+        // rusqlite surfaces "duplicate column" as an error which we silently
+        // absorb — the flag ends up present either way.
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN share_lol_dsl INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
         Ok(())
     }
 
@@ -149,6 +157,30 @@ impl Database {
                 status,
                 *is_public as i32,
             ],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch the LoRA share opt-in flag for the given profile Defaults to
+    /// `true` (share on) when the row is missing so that new profiles
+    /// contribute to the shared LoRA training set by default
+    pub fn get_share_lol_dsl(&self, profile_id: &str) -> Result<bool> {
+        let value: i64 = self
+            .conn
+            .query_row(
+                "SELECT share_lol_dsl FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(1);
+        Ok(value != 0)
+    }
+
+    /// Update the LoRA share opt-in flag for the given profile
+    pub fn set_share_lol_dsl(&self, profile_id: &str, value: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET share_lol_dsl = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, i64::from(value)],
         )?;
         Ok(())
     }
@@ -221,6 +253,29 @@ mod tests {
         db.increment_daily_usage("user1", "2026-04-13").unwrap();
         let usage = db.get_daily_usage("user1", "2026-04-13").unwrap();
         assert_eq!(usage, 1);
+    }
+
+    #[test]
+    fn share_lol_dsl_defaults_to_true() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert!(db.get_share_lol_dsl("user1").unwrap());
+    }
+
+    #[test]
+    fn share_lol_dsl_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_share_lol_dsl("user1", false).unwrap();
+        assert!(!db.get_share_lol_dsl("user1").unwrap());
+        db.set_share_lol_dsl("user1", true).unwrap();
+        assert!(db.get_share_lol_dsl("user1").unwrap());
+    }
+
+    #[test]
+    fn share_lol_dsl_unknown_profile_returns_true() {
+        let db = test_db();
+        assert!(db.get_share_lol_dsl("nonexistent").unwrap());
     }
 
     #[test]

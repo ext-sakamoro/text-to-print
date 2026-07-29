@@ -73,6 +73,31 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
     ui.add_space(8.0);
 
+    // LoRA share opt-out (Stage 5 T5.2)
+    ui.collapsing("LoRA share", |ui| {
+        let mut share = state.share_lol_dsl;
+        if ui
+            .checkbox(&mut share, "LoRA 学習データ提供に協力する")
+            .on_hover_text(
+                "オフにすると生成した LOL DSL と品質シグナルは共有 LoRA 学習セットに送信されません Free tier では既定でオン Paid tier は完全 offline",
+            )
+            .changed()
+        {
+            state.share_lol_dsl = share;
+            if let Err(e) = state.db.set_share_lol_dsl(&state.profile_id, share) {
+                tracing::warn!(error = %e, "failed to persist share_lol_dsl toggle");
+            }
+        }
+        ui.add_space(4.0);
+        ui.label(if state.share_lol_dsl {
+            "現在: 共有中 (LoRA 品質向上に貢献)"
+        } else {
+            "現在: opt-out (アップロードしません)"
+        });
+    });
+
+    ui.add_space(8.0);
+
     // ネットワーク情報
     ui.collapsing("Network", |ui| {
         ui.label(format!("Profile ID: {}", &state.profile_id[..8]));

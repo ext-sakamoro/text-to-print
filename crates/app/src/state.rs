@@ -6,6 +6,7 @@ use text_to_print_core::db::{Database, GenerationRow};
 use text_to_print_core::pipeline::MeshStats;
 use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend::LlmConfig;
+use text_to_print_llm::sidecar::SidecarStatus;
 
 /// Ordered pipeline phases surfaced to the UI progress indicator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,11 +82,27 @@ pub struct AppState {
     pub runtime: tokio::runtime::Runtime,
     pub result_rx: mpsc::Receiver<GenerationMessage>,
     pub result_tx: mpsc::Sender<GenerationMessage>,
-    pub model_progress: tokio::sync::watch::Receiver<text_to_print_llm::downloader::DownloadProgress>,
+    pub model_progress:
+        tokio::sync::watch::Receiver<text_to_print_llm::downloader::DownloadProgress>,
     pub model_ready: bool,
     pub phase_progress: PhaseProgress,
     /// Set true once egui focus has been requested for the prompt field.
     pub prompt_focused_once: bool,
+    /// `alice-llm-server` sidecar プロセスの状態
+    ///
+    /// - `Waiting`: model DL 完了待ち
+    /// - `Starting`: `alice-llm-server` を spawn 発行済、`/health` 応答待ち
+    /// - `Running`: 推論 request 受付可
+    /// - `Error(msg)`: バイナリ不在 / model 不在 / health timeout 等
+    ///
+    /// spawn task 本体は `AppState::new` の runtime 上で動作し、
+    /// `SidecarProcess` を task スコープに保持することで runtime drop 時に
+    /// 自動 kill される
+    pub sidecar_status: tokio::sync::watch::Receiver<SidecarStatus>,
+    /// LoRA share opt-in flag (Stage 5 T5.2) When `true` (default) the
+    /// LOL DSL + quality signals are queued for upload to the shared LoRA
+    /// training set; when `false` the user has opted out
+    pub share_lol_dsl: bool,
 }
 
 pub enum GenerationStatus {
@@ -119,6 +136,7 @@ impl AppState {
 
         let profile_id = load_or_create_profile_id(&data_dir);
         let tier = db.get_or_create_profile(&profile_id).unwrap_or(Tier::Free);
+        let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
 
@@ -148,9 +166,34 @@ impl AppState {
         if !model_ready {
             let md = models_dir.clone();
             runtime.spawn(async move {
-                if let Err(e) = text_to_print_llm::downloader::download_model(&md, progress_tx).await {
+                if let Err(e) =
+                    text_to_print_llm::downloader::download_model(&md, progress_tx).await
+                {
                     tracing::error!(error = %e, "model download failed");
                 }
+            });
+        }
+
+        // sidecar auto-spawn: model DL 完了を待ってから `alice-llm-server` を起動
+        let (sidecar_tx, sidecar_rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
+        {
+            let models_dir_for_sidecar = models_dir.clone();
+            let mut model_progress_rx = progress_rx.clone();
+            let sidecar_port = default_sidecar_port(&LlmConfig::default().endpoint);
+            runtime.spawn(async move {
+                // model DL の完了を待つ (model_ready なら DownloadStatus::Complete で初期化済)
+                while !matches!(
+                    model_progress_rx.borrow().status,
+                    text_to_print_llm::downloader::DownloadStatus::Complete
+                ) {
+                    if model_progress_rx.changed().await.is_err() {
+                        // sender drop = AppState 破棄、task 終了
+                        return;
+                    }
+                }
+                let model_path = text_to_print_llm::downloader::model_path(&models_dir_for_sidecar);
+                text_to_print_llm::sidecar::run_auto_spawn(model_path, sidecar_port, sidecar_tx)
+                    .await;
             });
         }
 
@@ -172,6 +215,8 @@ impl AppState {
             model_ready,
             phase_progress: PhaseProgress::default(),
             prompt_focused_once: false,
+            sidecar_status: sidecar_rx,
+            share_lol_dsl,
         }
     }
 
@@ -197,6 +242,17 @@ impl AppState {
     }
 }
 
+/// `http://host:PORT/...` の PORT を抽出、失敗時は 8000
+fn default_sidecar_port(endpoint: &str) -> u16 {
+    endpoint
+        .split("://")
+        .nth(1)
+        .and_then(|s| s.split('/').next())
+        .and_then(|host_port| host_port.rsplit(':').next())
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8000)
+}
+
 fn load_or_create_profile_id(data_dir: &std::path::Path) -> String {
     let id_path = data_dir.join("profile_id");
     if let Ok(id) = std::fs::read_to_string(&id_path) {
@@ -208,4 +264,28 @@ fn load_or_create_profile_id(data_dir: &std::path::Path) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     let _ = std::fs::write(&id_path, &id);
     id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_sidecar_port;
+
+    #[test]
+    fn port_from_localhost_endpoint() {
+        assert_eq!(
+            default_sidecar_port("http://localhost:8000/v1/chat/completions"),
+            8000
+        );
+        assert_eq!(
+            default_sidecar_port("http://127.0.0.1:12345/v1/chat/completions"),
+            12345
+        );
+    }
+
+    #[test]
+    fn port_defaults_when_missing() {
+        assert_eq!(default_sidecar_port("http://localhost/v1/x"), 8000);
+        assert_eq!(default_sidecar_port(""), 8000);
+        assert_eq!(default_sidecar_port("garbage"), 8000);
+    }
 }
