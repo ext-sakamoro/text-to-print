@@ -1,72 +1,237 @@
 name: Release
+
+# Stage 10 T10.2 + T10.3 GitHub Actions release workflow with macOS
+# code signing + notarization Tag-triggered on `v*` (SemVer); manual
+# dispatch also supported for dry runs
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Skip GitHub Release upload (build/sign/notarize only)"
+        required: false
+        default: "false"
 
-permissions:
-  contents: write
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
+    name: build (${{ matrix.target }})
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: text-to-print-macos-arm64
+            archive_ext: tar.gz
+            bin_name: text-to-print
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: text-to-print-macos-x64
+            archive_ext: tar.gz
+            bin_name: text-to-print
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: text-to-print-linux-x64
+            archive_ext: tar.gz
+            bin_name: text-to-print
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: text-to-print-windows-x64
-
+            archive_ext: zip
+            bin_name: text-to-print.exe
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout text-to-print
+        uses: actions/checkout@v4
+        with:
+          path: text-to-print
+
+      # Public ALICE ecosystem repos
+      - name: Checkout ALICE-SDF
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-SDF
+          path: ALICE-SDF
+      - name: Checkout ALICE-LOL
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-LOL
+          path: ALICE-LOL
+      - name: Checkout ALICE-View
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-View
+          path: ALICE-View
+      - name: Checkout ALICE-LLM
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-LLM
+          path: ALICE-LLM
+
+      # Private ALICE ecosystem repos (require ALICE_ECO_TOKEN secret)
+      - name: Checkout ALICE-Bamboo (private)
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - name: Checkout ALICE-Physics (private)
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
 
-      - name: Install Linux deps
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxdo-dev libssl-dev
+      - name: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }} --bin text-to-print
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
+      - name: Stage binary artifact
+        shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/text-to-print dist/
-          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz text-to-print
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
+      # === macOS code signing + notarize (T10.3) ===
+      # Requires the following secrets to be set at the repository level:
+      #   DEVELOPER_ID_APPLICATION_CERT_B64  – base64 of the `.p12`
+      #   DEVELOPER_ID_APPLICATION_CERT_PASSWORD  – password for the `.p12`
+      #   APPLE_P8_B64  – base64 of the App Store Connect `.p8`
+      #   APPLE_KEY_ID  – e.g. `4P2YQS5RAT`
+      #   APPLE_ISSUER_ID  – UUID
+      # When any secret is missing the sign / notarize steps abort with a
+      # descriptive error This is the intentional signal that the workflow
+      # needs one-time DevOps setup (see `docs/RELEASE.md`)
+      - name: Import Developer ID Application certificate (macOS)
+        if: startsWith(matrix.os, 'macos')
+        env:
+          CERT_B64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_B64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
+        shell: bash
         run: |
-          mkdir dist
-          copy target\${{ matrix.target }}\release\text-to-print.exe dist\
-          cd dist && 7z a ..\${{ matrix.artifact }}.zip text-to-print.exe
+          if [ -z "$CERT_B64" ] || [ -z "$CERT_PASSWORD" ]; then
+            echo "ERROR: DEVELOPER_ID_APPLICATION_CERT_B64 or _PASSWORD not set" >&2
+            echo "See docs/RELEASE.md §Secrets" >&2
+            exit 1
+          fi
+          echo "$CERT_B64" | base64 --decode > /tmp/developer-id.p12
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import /tmp/developer-id.p12 \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          # shellcheck disable=SC2046 disable=SC2016
+          # Appending existing user keychains to the search list requires
+          # word-splitting on the substituted output; each entry is a
+          # quoted path that we strip and pass as separate args
+          EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | xargs)
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          rm -f /tmp/developer-id.p12
 
-      - uses: actions/upload-artifact@v4
+      - name: codesign binary (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain-db" \
+            | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+          if [ -z "$IDENTITY" ]; then
+            echo "ERROR: Developer ID Application identity not found in keychain" >&2
+            exit 1
+          fi
+          codesign --force --deep --timestamp --options runtime \
+            --sign "$IDENTITY" \
+            dist/${{ matrix.bin_name }}
+          codesign --verify --verbose dist/${{ matrix.bin_name }}
+
+      - name: Package archive (macOS/Linux)
+        if: matrix.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          cd dist
+          tar czf ../text-to-print-${{ matrix.target }}.tar.gz ${{ matrix.bin_name }}
+
+      - name: Package archive (Windows)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/${{ matrix.bin_name }} -DestinationPath text-to-print-${{ matrix.target }}.zip
+
+      # === macOS notarize archive + staple binary (T10.3) ===
+      - name: notarize archive (macOS)
+        if: startsWith(matrix.os, 'macos')
+        env:
+          APPLE_P8_B64: ${{ secrets.APPLE_P8_B64 }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+        shell: bash
+        run: |
+          if [ -z "$APPLE_P8_B64" ] || [ -z "$APPLE_KEY_ID" ] || [ -z "$APPLE_ISSUER_ID" ]; then
+            echo "ERROR: APPLE_P8_B64 / APPLE_KEY_ID / APPLE_ISSUER_ID missing" >&2
+            echo "See docs/RELEASE.md §Secrets" >&2
+            exit 1
+          fi
+          echo "$APPLE_P8_B64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool submit \
+            "text-to-print-${{ matrix.target }}.tar.gz" \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$APPLE_KEY_ID" \
+            --issuer "$APPLE_ISSUER_ID" \
+            --wait
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          # notarytool cannot staple .tar.gz directly Staple the individual
+          # binary for offline verification, then repack for distribution
+          xcrun stapler staple dist/${{ matrix.bin_name }} || true
+          rm -f "text-to-print-${{ matrix.target }}.tar.gz"
+          cd dist
+          tar czf "../text-to-print-${{ matrix.target }}.tar.gz" ${{ matrix.bin_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.*
+          name: text-to-print-${{ matrix.target }}
+          path: text-to-print/text-to-print-${{ matrix.target }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
 
   release:
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != 'true'
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
-        with: { path: artifacts }
-
-      - name: Create Release
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifact directory
+        run: |
+          mkdir -p release-assets
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release-assets/ \;
+          ls -la release-assets
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: release-assets/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
