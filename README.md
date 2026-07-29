@@ -41,6 +41,39 @@ All computation runs on a single machine No cloud GPU required LLM inference
 uses [ALICE-LLM](https://github.com/ext-sakamoro/ALICE-LLM) with hybrid
 CPU/GPU DeltaNet+Attention and wgpu compute shaders
 
+## Screenshots
+
+<!--
+  Screenshots are stored under `docs/images/` and referenced from this
+  section For submission guidelines see below
+-->
+
+| | |
+|--|--|
+| ![Generate tab — 20mm sphere prompt](docs/images/screenshot-generate.png) | ![Settings tab — LoRA share opt-out toggle + dry-run queue count](docs/images/screenshot-settings.png) |
+| Generate tab (prompt → LOL → 3MF preview) | Settings tab (LoRA share opt-out + queue status) |
+
+![Demo — text prompt to 3MF in ~10 seconds](docs/images/demo.gif)
+
+### Screenshot submission
+
+Screenshots and the demo GIF are placeholders until submitted from a live
+build Use the following capture settings for consistency:
+
+- Window size **1600 × 1200** (retina 2x is fine — image gets downscaled)
+- macOS system appearance: **Dark** (matches the app default)
+- Include the top tab bar and status bar
+- PNG for stills, GIF for the demo (max 5 MB, ~15 fps, ~10 s loop)
+
+Submission workflow:
+
+1. Capture PNG stills of the Generate / Settings tabs at the sizes above
+2. Record a 10-second demo GIF of `sphere(20)` prompt → generation → 3MF
+   export (use e.g. `xcap` on Linux, macOS built-in screen recording +
+   `ffmpeg` for GIF encoding, or `LICEcap` cross-platform)
+3. Save into `docs/images/` with the exact names referenced above
+4. Open a PR: `feat(docs): README screenshots + demo GIF`
+
 ## Freemium tier
 
 | Tier | Price | Sharing behavior |
