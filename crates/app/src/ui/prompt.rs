@@ -5,6 +5,7 @@ use crate::i18n::Lang;
 use crate::state::{AppState, GenerationMessage, GenerationPhase, GenerationStatus, PhaseProgress};
 use text_to_print_core::db::GenerationRecord;
 use text_to_print_core::pipeline::{self, ExportFormat, Quality};
+use text_to_print_llm::sidecar::SidecarStatus;
 use text_to_print_llm::{backend, prompt};
 
 /// Format offered by the export dropdown. Some entries map to a supported
@@ -87,6 +88,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
         ui.add_space(4.0);
     }
 
+    show_sidecar_status(ui, state);
+
     let limits = state.tier.limits();
     let usage = state.daily_usage();
     ui.label(format!(
@@ -98,7 +101,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
     ui.label("3D モデルの説明を入力 (Enter で生成 / Shift+Enter で改行):");
 
     let is_generating = matches!(state.generation_status, GenerationStatus::Generating);
-    let can_gen = state.can_generate() && !state.prompt_input.trim().is_empty();
+    let sidecar_running = state.sidecar_status.borrow().is_running();
+    let can_gen = state.can_generate() && !state.prompt_input.trim().is_empty() && sidecar_running;
 
     let prompt_id = egui::Id::new("prompt_input");
     let prompt_widget = egui::TextEdit::multiline(&mut state.prompt_input)
@@ -257,6 +261,44 @@ fn show_model_download(ui: &mut Ui, state: &AppState) {
         text_to_print_llm::downloader::DownloadStatus::Pending => {
             ui.label("モデル準備中...");
             ui.ctx().request_repaint();
+        }
+    }
+}
+
+/// `alice-llm-server` sidecar プロセスの状態を表示
+///
+/// Running 時は何も出さない (通常運用時の視覚ノイズを避ける)
+/// Waiting/Starting は spinner、Error はメッセージ + 起動 hint を表示
+fn show_sidecar_status(ui: &mut Ui, state: &AppState) {
+    let status = state.sidecar_status.borrow().clone();
+    match status {
+        SidecarStatus::Waiting => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("LLM 起動待機中 (モデル準備完了後に自動起動)");
+            });
+            ui.ctx().request_repaint();
+            ui.add_space(4.0);
+        }
+        SidecarStatus::Starting => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("LLM sidecar を起動中...");
+            });
+            ui.ctx().request_repaint();
+            ui.add_space(4.0);
+        }
+        SidecarStatus::Running => {
+            // 通常運用時は非表示
+        }
+        SidecarStatus::Error(msg) => {
+            ui.colored_label(egui::Color32::RED, format!("LLM sidecar 起動失敗: {msg}"));
+            ui.label(
+                "対処: `cargo install --path ~/ALICE-LLM --features server` で \
+                 alice-llm-server を PATH に配置、または Settings の Endpoint に \
+                 既存の OpenAI 互換 endpoint (例: Ollama) を指定してください",
+            );
+            ui.add_space(4.0);
         }
     }
 }

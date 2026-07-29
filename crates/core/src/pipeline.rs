@@ -244,6 +244,28 @@ pub struct MetadataInputs<'a> {
     pub safety_violations: Vec<String>,
 }
 
+/// caller 由来 violations に、pipeline 内 `safety_validate` の messages を
+/// unsafe 判定時のみ merge (重複除外)
+///
+/// - `caller` は UI / LLM retry 由来の追加 violation
+/// - `summary.is_safe == true` の場合は追加なし
+/// - `summary == None` (FBX/STL path、safety_validate なし) の場合も追加なし
+fn merge_safety_violations(
+    mut caller: Vec<String>,
+    summary: Option<&SafetySummary>,
+) -> Vec<String> {
+    if let Some(sum) = summary
+        && !sum.is_safe
+    {
+        for msg in &sum.messages {
+            if !caller.contains(msg) {
+                caller.push(msg.clone());
+            }
+        }
+    }
+    caller
+}
+
 /// Export mesh and — for 3MF — embed `alice_manifest.json` + XML metadata tags.
 ///
 /// Non-3MF formats are exported unchanged and still return a manifest computed
@@ -261,6 +283,11 @@ pub fn export_mesh_with_metadata(
     let path = Path::new(&stats.path);
     let mesh_bytes = std::fs::read(path)?;
 
+    // GAP-2: 3MF path で計算された safety_summary の messages を
+    // manifest.safety_violations に流し込む
+    let safety_violations =
+        merge_safety_violations(meta.safety_violations, stats.safety_summary.as_ref());
+
     let manifest = ManifestBuilder {
         prompt: meta.prompt,
         prompt_lang: meta.prompt_lang,
@@ -273,7 +300,7 @@ pub fn export_mesh_with_metadata(
         export_format: format.extension(),
         retry_count: meta.retry_count,
         time_to_file_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-        safety_violations: meta.safety_violations,
+        safety_violations,
         success: true,
     }
     .build();
@@ -397,6 +424,65 @@ mod tests {
         assert_eq!(ExportFormat::ThreeMf.extension(), "3mf");
         assert_eq!(ExportFormat::Fbx.extension(), "fbx");
         assert_eq!(ExportFormat::Stl.extension(), "stl");
+    }
+
+    fn safety_summary(is_safe: bool, messages: Vec<String>) -> SafetySummary {
+        SafetySummary {
+            material_name: "PLA".to_string(),
+            is_safe,
+            warp_category: "Low".to_string(),
+            messages,
+        }
+    }
+
+    #[test]
+    fn merge_safety_violations_none_summary_passthrough() {
+        let caller = vec!["llm_retry_over_65deg".to_string()];
+        let merged = merge_safety_violations(caller.clone(), None);
+        assert_eq!(merged, caller);
+    }
+
+    #[test]
+    fn merge_safety_violations_safe_summary_passthrough() {
+        let caller = vec!["llm_retry_over_65deg".to_string()];
+        let sum = safety_summary(true, vec!["ignored_because_safe".to_string()]);
+        let merged = merge_safety_violations(caller.clone(), Some(&sum));
+        assert_eq!(merged, caller, "is_safe=true 時は messages を merge しない");
+    }
+
+    #[test]
+    fn merge_safety_violations_unsafe_summary_appends() {
+        let caller = vec!["llm_retry_over_65deg".to_string()];
+        let sum = safety_summary(
+            false,
+            vec![
+                "warp_high_risk".to_string(),
+                "thin_wall_below_0.8mm".to_string(),
+            ],
+        );
+        let merged = merge_safety_violations(caller, Some(&sum));
+        assert_eq!(merged.len(), 3);
+        assert!(merged.contains(&"llm_retry_over_65deg".to_string()));
+        assert!(merged.contains(&"warp_high_risk".to_string()));
+        assert!(merged.contains(&"thin_wall_below_0.8mm".to_string()));
+    }
+
+    #[test]
+    fn merge_safety_violations_dedup() {
+        let caller = vec!["warp_high_risk".to_string()];
+        let sum = safety_summary(
+            false,
+            vec![
+                "warp_high_risk".to_string(),
+                "thin_wall_below_0.8mm".to_string(),
+            ],
+        );
+        let merged = merge_safety_violations(caller, Some(&sum));
+        assert_eq!(
+            merged.len(),
+            2,
+            "caller に既存の violation は重複追加しない"
+        );
     }
 
     #[test]

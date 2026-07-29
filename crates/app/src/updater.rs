@@ -2,7 +2,8 @@ use serde::Deserialize;
 use std::sync::mpsc;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const RELEASES_URL: &str = "https://api.github.com/repos/ext-sakamoro/text-to-print/releases/latest";
+const RELEASES_URL: &str =
+    "https://api.github.com/repos/ext-sakamoro/text-to-print/releases/latest";
 
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {

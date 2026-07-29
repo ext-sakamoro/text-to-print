@@ -12,6 +12,13 @@
 //!   - `sidecar_bin_path` を明示指定 (絶対 path 推奨)
 //!   - 未指定時は PATH から `alice-llm-server` を解決
 //!   - `cargo install --path ~/ALICE-LLM --features server` でインストール可能
+//!
+//! app 統合:
+//!   - [`SidecarStatus`] を `tokio::sync::watch` channel に流し、GUI で
+//!     "起動中 / Running / Error" を可視化する
+//!   - app 側は起動時に background task を spawn し、model DL 完了待ち →
+//!     [`SidecarProcess::spawn`] → 完了後 `std::future::pending()` で park
+//!     runtime drop 時に task cancel → SidecarProcess Drop で `kill_on_drop`
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -19,6 +26,26 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tracing::{info, warn};
+
+/// GUI に露出する sidecar プロセス状態
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SidecarStatus {
+    /// model 未 DL 等で起動待ち
+    Waiting,
+    /// spawn 発行済、`/health` 応答待ち
+    Starting,
+    /// `/health` 200 応答済、推論 request 受付可
+    Running,
+    /// spawn 失敗 (バイナリ不在 / model 不在 / health timeout 等)
+    Error(String),
+}
+
+impl SidecarStatus {
+    #[must_use]
+    pub const fn is_running(&self) -> bool {
+        matches!(self, Self::Running)
+    }
+}
 
 /// Sidecar 起動設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,6 +184,50 @@ impl SidecarProcess {
     }
 }
 
+/// GUI 統合用の auto-spawn task
+///
+/// app 起動時に background task として spawn する典型的な使い方:
+///
+/// ```ignore
+/// let (tx, rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
+/// runtime.spawn(async move {
+///     run_auto_spawn(model_path, 8000, tx).await;
+/// });
+/// ```
+///
+/// 動作:
+///   1. `Starting` 送信
+///   2. [`SidecarProcess::spawn`] 実行
+///   3. 成功 → `Running` 送信 → `std::future::pending()` で park
+///      (runtime drop 時に task cancel、SidecarProcess Drop で `kill_on_drop`)
+///   4. 失敗 → `Error(msg)` 送信 → task return
+pub async fn run_auto_spawn(
+    model_path: PathBuf,
+    port: u16,
+    status_tx: tokio::sync::watch::Sender<SidecarStatus>,
+) {
+    let _ = status_tx.send(SidecarStatus::Starting);
+    let cfg = SidecarConfig {
+        model_path,
+        port,
+        ..Default::default()
+    };
+    match SidecarProcess::spawn(cfg).await {
+        Ok(_sidecar) => {
+            let _ = status_tx.send(SidecarStatus::Running);
+            // SidecarProcess を task スコープに保持して drop を遅らせる
+            // runtime 停止時に task が cancel され、`_sidecar` の Drop で
+            // `kill_on_drop` 経由で子プロセス kill
+            std::future::pending::<()>().await;
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            warn!(error = %msg, "sidecar auto-spawn failed");
+            let _ = status_tx.send(SidecarStatus::Error(msg));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +266,31 @@ mod tests {
         };
         let err = SidecarProcess::spawn(cfg).await.unwrap_err();
         assert!(err.to_string().contains("model file not found"));
+    }
+
+    #[test]
+    fn status_is_running_only_for_running() {
+        assert!(!SidecarStatus::Waiting.is_running());
+        assert!(!SidecarStatus::Starting.is_running());
+        assert!(SidecarStatus::Running.is_running());
+        assert!(!SidecarStatus::Error("nope".into()).is_running());
+    }
+
+    #[tokio::test]
+    async fn auto_spawn_reports_error_when_model_missing() {
+        let (tx, mut rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
+        run_auto_spawn(PathBuf::from("/nonexistent/model.gguf"), 18080, tx).await;
+        // 最終状態は Error
+        rx.borrow_and_update();
+        let status = rx.borrow().clone();
+        match status {
+            SidecarStatus::Error(msg) => {
+                assert!(
+                    msg.contains("model file not found"),
+                    "unexpected error: {msg}"
+                );
+            }
+            other => panic!("expected Error, got {other:?}"),
+        }
     }
 }
