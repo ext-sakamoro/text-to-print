@@ -1,9 +1,9 @@
 use egui::Ui;
 
 use crate::state::{AppState, GenerationMessage, GenerationStatus};
-use tdvbgaran_core::db::GenerationRecord;
-use tdvbgaran_core::pipeline::{self, ExportFormat, Quality};
-use tdvbgaran_llm::{backend, prompt};
+use text_to_print_core::db::GenerationRecord;
+use text_to_print_core::pipeline::{self, ExportFormat, Quality};
+use text_to_print_llm::{backend, prompt};
 
 pub fn show(ui: &mut Ui, state: &mut AppState) {
     poll_results(ui, state);
@@ -15,7 +15,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState) {
     if !state.model_ready {
         let progress = state.model_progress.borrow().clone();
         match progress.status {
-            tdvbgaran_llm::downloader::DownloadStatus::Downloading => {
+            text_to_print_llm::downloader::DownloadStatus::Downloading => {
                 ui.colored_label(egui::Color32::YELLOW, "LLM モデルをダウンロード中...");
                 if let Some(total) = progress.total_bytes {
                     let pct = progress.downloaded_bytes as f32 / total as f32;
@@ -29,13 +29,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState) {
                 }
                 ui.ctx().request_repaint();
             }
-            tdvbgaran_llm::downloader::DownloadStatus::Complete => {
+            text_to_print_llm::downloader::DownloadStatus::Complete => {
                 state.model_ready = true;
             }
-            tdvbgaran_llm::downloader::DownloadStatus::Error(ref e) => {
+            text_to_print_llm::downloader::DownloadStatus::Error(ref e) => {
                 ui.colored_label(egui::Color32::RED, format!("モデルDLエラー: {e}"));
             }
-            tdvbgaran_llm::downloader::DownloadStatus::Pending => {
+            text_to_print_llm::downloader::DownloadStatus::Pending => {
                 ui.label("モデル準備中...");
                 ui.ctx().request_repaint();
             }

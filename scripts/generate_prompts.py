@@ -15,8 +15,8 @@ import urllib.request
 from pathlib import Path
 
 HOME = Path.home()
-SEEDS_FILE = HOME / "3dvbgaran" / "datasets" / "lol_seeds.jsonl"
-OUT_FILE = HOME / "3dvbgaran" / "datasets" / "lol_train.jsonl"
+SEEDS_FILE = HOME / "text-to-print" / "datasets" / "lol_seeds.jsonl"
+OUT_FILE = HOME / "text-to-print" / "datasets" / "lol_train.jsonl"
 LLM_URL = "http://localhost:8000/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are a dataset generator. Given a LOL DSL code snippet for 3D modeling, generate a natural language prompt that a user would type to create this 3D object.

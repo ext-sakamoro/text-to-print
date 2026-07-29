@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 HOME = Path.home()
-OUT_DIR = HOME / "3dvbgaran" / "datasets"
+OUT_DIR = HOME / "text-to-print" / "datasets"
 OUT_FILE = OUT_DIR / "lol_seeds.jsonl"
 
 seeds = []

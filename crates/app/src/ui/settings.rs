@@ -1,7 +1,7 @@
 use egui::Ui;
 
 use crate::state::AppState;
-use tdvbgaran_core::license::{LicenseKey, LicenseVerifier};
+use text_to_print_core::license::{LicenseKey, LicenseVerifier};
 
 const LICENSE_PUBLIC_KEY: [u8; 32] = [
     0x05, 0x7f, 0x9c, 0x5f, 0xdb, 0x3f, 0x6f, 0x93, 0x69, 0x11, 0xd9, 0x16, 0x85, 0xb1, 0x82, 0x5b,

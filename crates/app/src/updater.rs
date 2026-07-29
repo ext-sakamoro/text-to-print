@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::sync::mpsc;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const RELEASES_URL: &str = "https://api.github.com/repos/ext-sakamoro/3dvbgaran/releases/latest";
+const RELEASES_URL: &str = "https://api.github.com/repos/ext-sakamoro/text-to-print/releases/latest";
 
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
@@ -44,7 +44,7 @@ impl UpdateChecker {
 
 async fn check_latest() -> anyhow::Result<UpdateInfo> {
     let client = reqwest::Client::builder()
-        .user_agent("3dvbgaran-updater")
+        .user_agent("text-to-print-updater")
         .build()?;
 
     let release: GhRelease = client.get(RELEASES_URL).send().await?.json().await?;

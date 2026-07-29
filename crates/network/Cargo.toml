@@ -1,5 +1,5 @@
 [package]
-name = "tdvbgaran-network"
+name = "text-to-print-network"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

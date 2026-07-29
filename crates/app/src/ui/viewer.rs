@@ -13,7 +13,7 @@ pub struct SdfViewer {
 
 impl SdfViewer {
     pub fn set_lol(&mut self, lol_source: &str) {
-        match tdvbgaran_core::pipeline::lol_to_wgsl(lol_source) {
+        match text_to_print_core::pipeline::lol_to_wgsl(lol_source) {
             Ok(wgsl) => {
                 self.pending_wgsl = Some(wgsl);
                 self.has_sdf = true;

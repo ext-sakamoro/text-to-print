@@ -1,5 +1,5 @@
 use egui::Ui;
-use tdvbgaran_network::node::AliceNode;
+use text_to_print_network::node::AliceNode;
 
 use crate::ui::viewer::SdfViewer;
 

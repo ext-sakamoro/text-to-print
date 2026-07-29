@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""3dvbgaran QLoRA 学習スクリプト
+"""text-to-print QLoRA 学習スクリプト
 
 Qwen2.5-7B-Instruct に LOL DSL 生成能力を LoRA で追加学習する。
 Paperspace A6000 (48GB) / A100 (80GB) 対応。
@@ -25,7 +25,7 @@ from trl import SFTTrainer, SFTConfig
 # ─── 設定 ───
 
 MODEL_NAME = "unsloth/Qwen2.5-7B-Instruct"
-DATASET_PATH = os.environ.get("DATASET_PATH", "/notebooks/3dvbgaran/datasets/lol_train.jsonl")
+DATASET_PATH = os.environ.get("DATASET_PATH", "/notebooks/text-to-print/datasets/lol_train.jsonl")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./lora_output")
 MAX_SEQ_LEN = 512
 LORA_RANK = 32
@@ -62,7 +62,7 @@ def load_dataset():
 
 
 def main():
-    print("=== 3dvbgaran LoRA Training ===\n")
+    print("=== text-to-print LoRA Training ===\n")
 
     # 1. モデルロード (4-bit量子化)
     print("Loading model...")
@@ -137,7 +137,7 @@ def main():
     print("\n=== Done ===")
     print(f"  LoRA adapter: {OUTPUT_DIR}/")
     print(f"  GGUF: {OUTPUT_DIR}_gguf/")
-    print(f"  Copy GGUF to Mac Mini: scp <paperspace>:{OUTPUT_DIR}_gguf/*.gguf ~/.3dvbgaran/models/")
+    print(f"  Copy GGUF to Mac Mini: scp <paperspace>:{OUTPUT_DIR}_gguf/*.gguf ~/.text-to-print/models/")
 
 
 if __name__ == "__main__":

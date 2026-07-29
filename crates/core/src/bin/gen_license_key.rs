@@ -2,7 +2,7 @@
 //! 秘密鍵は標準出力、公開鍵は Rust ソース形式で出力
 
 fn main() {
-    let issuer = tdvbgaran_core::license::LicenseIssuer::generate();
+    let issuer = text_to_print_core::license::LicenseIssuer::generate();
     let pub_bytes = issuer.public_key_bytes();
 
     eprintln!("=== License Key Pair Generated ===");

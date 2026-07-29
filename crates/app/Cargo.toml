@@ -1,17 +1,17 @@
 [package]
-name = "tdvbgaran"
+name = "text-to-print"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "3dvbgaran"
+name = "text-to-print"
 path = "src/main.rs"
 
 [dependencies]
-tdvbgaran-core = { workspace = true }
-tdvbgaran-llm = { workspace = true }
-tdvbgaran-network = { workspace = true }
+text-to-print-core = { workspace = true }
+text-to-print-llm = { workspace = true }
+text-to-print-network = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 serde = { workspace = true }

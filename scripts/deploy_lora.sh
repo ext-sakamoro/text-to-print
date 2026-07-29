@@ -8,7 +8,7 @@ set -e
 
 FQDN="${1:?Usage: deploy_lora.sh <fqdn> <token>}"
 TOKEN="${2:?Usage: deploy_lora.sh <fqdn> <token>}"
-MODEL_DIR="$HOME/.3dvbgaran/models"
+MODEL_DIR="$HOME/.text-to-print/models"
 MODEL_NAME="qwen2.5-7b-lol-lora-q4_k_m.gguf"
 
 echo "=== Deploy LoRA GGUF ==="
@@ -17,7 +17,7 @@ echo "=== Deploy LoRA GGUF ==="
 echo "Downloading GGUF from Paperspace..."
 # Jupyterのファイル取得API
 curl -sL \
-  "https://${FQDN}/files/3dvbgaran/lora_output_gguf/unsloth.Q4_K_M.gguf?token=${TOKEN}" \
+  "https://${FQDN}/files/text-to-print/lora_output_gguf/unsloth.Q4_K_M.gguf?token=${TOKEN}" \
   -o "${MODEL_DIR}/${MODEL_NAME}"
 
 ls -lh "${MODEL_DIR}/${MODEL_NAME}"

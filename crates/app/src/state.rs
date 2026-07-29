@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::sync::mpsc;
 
-use tdvbgaran_core::db::{Database, GenerationRow};
-use tdvbgaran_core::pipeline::MeshStats;
-use tdvbgaran_core::tier::Tier;
-use tdvbgaran_llm::backend::LlmConfig;
+use text_to_print_core::db::{Database, GenerationRow};
+use text_to_print_core::pipeline::MeshStats;
+use text_to_print_core::tier::Tier;
+use text_to_print_llm::backend::LlmConfig;
 
 pub struct AppState {
     #[allow(dead_code)]
@@ -22,7 +22,7 @@ pub struct AppState {
     pub runtime: tokio::runtime::Runtime,
     pub result_rx: mpsc::Receiver<GenerationMessage>,
     pub result_tx: mpsc::Sender<GenerationMessage>,
-    pub model_progress: tokio::sync::watch::Receiver<tdvbgaran_llm::downloader::DownloadProgress>,
+    pub model_progress: tokio::sync::watch::Receiver<text_to_print_llm::downloader::DownloadProgress>,
     pub model_ready: bool,
 }
 
@@ -50,7 +50,7 @@ pub enum GenerationMessage {
 
 impl AppState {
     pub fn new(data_dir: PathBuf) -> Self {
-        let db_path = data_dir.join("3dvbgaran.db");
+        let db_path = data_dir.join("text-to-print.db");
         let db = Database::open(&db_path).expect("failed to open database");
 
         let profile_id = load_or_create_profile_id(&data_dir);
@@ -68,14 +68,14 @@ impl AppState {
 
         // モデルチェック + バックグラウンドダウンロード
         let models_dir = data_dir.join("models");
-        let model_ready = tdvbgaran_llm::downloader::model_exists(&models_dir);
+        let model_ready = text_to_print_llm::downloader::model_exists(&models_dir);
         let initial_status = if model_ready {
-            tdvbgaran_llm::downloader::DownloadStatus::Complete
+            text_to_print_llm::downloader::DownloadStatus::Complete
         } else {
-            tdvbgaran_llm::downloader::DownloadStatus::Pending
+            text_to_print_llm::downloader::DownloadStatus::Pending
         };
         let (progress_tx, progress_rx) =
-            tokio::sync::watch::channel(tdvbgaran_llm::downloader::DownloadProgress {
+            tokio::sync::watch::channel(text_to_print_llm::downloader::DownloadProgress {
                 downloaded_bytes: 0,
                 total_bytes: None,
                 status: initial_status,
@@ -84,7 +84,7 @@ impl AppState {
         if !model_ready {
             let md = models_dir.clone();
             runtime.spawn(async move {
-                if let Err(e) = tdvbgaran_llm::downloader::download_model(&md, progress_tx).await {
+                if let Err(e) = text_to_print_llm::downloader::download_model(&md, progress_tx).await {
                     tracing::error!(error = %e, "model download failed");
                 }
             });

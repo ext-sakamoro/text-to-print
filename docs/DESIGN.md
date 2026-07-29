@@ -1,8 +1,8 @@
-# 3dvbgaran Desktop App 設計書
+# text-to-print Desktop App 設計書
 
 ## 1. 概要
 
-3dvbgaran（3Dバーチャルガランドウ）を SaaS からデスクトップアプリへ転換する。
+text-to-print（3Dバーチャルガランドウ）を SaaS からデスクトップアプリへ転換する。
 
 ### 転換の理由
 
@@ -110,7 +110,7 @@ Text-to-CAD が 3D プリンター界隈でバズり、1 万人、10 万人の�
 ### クレート構成
 
 ```
-3dvbgaran/
+text-to-print/
 ├── Cargo.toml                 # workspace root
 ├── crates/
 │   ├── app/                   # エントリポイント + GUI (egui/eframe)
@@ -183,7 +183,7 @@ ALICE-View (v0.3.0) は egui 0.27 + wgpu 0.19 で SDF リアルタイムレン�
 
 ```
 ┌─────────────────────────────────────────────┐
-│  3dvbgaran App (eframe)                     │
+│  text-to-print App (eframe)                     │
 │  ┌──────────┐  ┌──────────────────────────┐ │
 │  │ Prompt   │  │  ALICE-View Panel        │ │
 │  │ Input    │  │  (SDF Raymarching)       │ │
@@ -360,7 +360,7 @@ impl TierLimits {
 ### モデル配布
 
 - 初回起動時に Hugging Face からモデルをダウンロード（約 4GB）
-- `~/.3dvbgaran/models/` に配置
+- `~/.text-to-print/models/` に配置
 - ダウンロード進捗を UI に表示
 
 ---
@@ -396,7 +396,7 @@ crates/
 
 - 閲覧した SDF データをローカルにキャッシュ
 - 他ノードからの要求に応じてキャッシュを提供（CDN ノードとして機能）
-- `~/.3dvbgaran/cache/` に SDF を保持（数式なので容量は微小）
+- `~/.text-to-print/cache/` に SDF を保持（数式なので容量は微小）
 - 実装: `crates/network/src/cache.rs`
 
 ### ALICE-CDN (Vivaldi 座標ルーティング)

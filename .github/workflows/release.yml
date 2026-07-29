@@ -13,16 +13,16 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: 3dvbgaran-macos-arm64
+            artifact: text-to-print-macos-arm64
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: 3dvbgaran-macos-x64
+            artifact: text-to-print-macos-x64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: 3dvbgaran-linux-x64
+            artifact: text-to-print-linux-x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact: 3dvbgaran-windows-x64
+            artifact: text-to-print-windows-x64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -43,15 +43,15 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/3dvbgaran dist/
-          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz 3dvbgaran
+          cp target/${{ matrix.target }}/release/text-to-print dist/
+          cd dist && tar czf ../${{ matrix.artifact }}.tar.gz text-to-print
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: |
           mkdir dist
-          copy target\${{ matrix.target }}\release\3dvbgaran.exe dist\
-          cd dist && 7z a ..\${{ matrix.artifact }}.zip 3dvbgaran.exe
+          copy target\${{ matrix.target }}\release\text-to-print.exe dist\
+          cd dist && 7z a ..\${{ matrix.artifact }}.zip text-to-print.exe
 
       - uses: actions/upload-artifact@v4
         with:

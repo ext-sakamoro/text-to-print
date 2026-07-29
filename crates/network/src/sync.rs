@@ -17,7 +17,7 @@ pub enum SyncEvent {
 }
 
 /// gossipsub トピック
-pub const TOPIC_SDF_EVENTS: &str = "3dvbgaran/sdf/v1";
+pub const TOPIC_SDF_EVENTS: &str = "text-to-print/sdf/v1";
 
 #[cfg(test)]
 mod tests {

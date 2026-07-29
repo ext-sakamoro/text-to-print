@@ -41,6 +41,7 @@ libp2p = { version = "0.54", features = [
     "gossipsub",
     "kad",
     "identify",
+    "mdns",
     "noise",
     "tcp",
     "quic",
@@ -61,9 +62,9 @@ thiserror = "2"
 directories = "6"
 
 # internal
-tdvbgaran-core = { path = "crates/core" }
-tdvbgaran-llm = { path = "crates/llm" }
-tdvbgaran-network = { path = "crates/network" }
+text-to-print-core = { path = "crates/core" }
+text-to-print-llm = { path = "crates/llm" }
+text-to-print-network = { path = "crates/network" }
 
 [profile.release]
 opt-level = 3

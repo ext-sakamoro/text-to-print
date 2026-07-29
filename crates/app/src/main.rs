@@ -15,14 +15,14 @@ use ui::viewer::SdfViewer;
 fn main() -> Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    let data_dir = directories::ProjectDirs::from("net", "alicelaw", "3dvbgaran")
+    let data_dir = directories::ProjectDirs::from("net", "alicelaw", "text-to-print")
         .map(|d: directories::ProjectDirs| d.data_dir().to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from(".3dvbgaran"));
+        .unwrap_or_else(|| std::path::PathBuf::from(".text-to-print"));
 
     std::fs::create_dir_all(&data_dir)?;
 
     // ALICE ノード初期化 + P2P バックグラウンド起動
-    let mut node = tdvbgaran_network::node::AliceNode::init(&data_dir)?;
+    let mut node = text_to_print_network::node::AliceNode::init(&data_dir)?;
     let p2p_runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
@@ -33,13 +33,13 @@ fn main() -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_title("3dvbgaran — Text to 3D"),
+            .with_title("text-to-print — Text to 3D"),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
 
     eframe::run_native(
-        "3dvbgaran",
+        "text-to-print",
         options,
         Box::new(move |cc| {
             configure_fonts(&cc.egui_ctx);
@@ -100,7 +100,7 @@ struct App {
     viewer: SdfViewer,
     settings: SettingsState,
     gallery: GalleryState,
-    node: tdvbgaran_network::node::AliceNode,
+    node: text_to_print_network::node::AliceNode,
     lang: Lang,
     update_checker: updater::UpdateChecker,
     current_tab: Tab,
@@ -111,7 +111,7 @@ impl App {
     fn new(
         data_dir: std::path::PathBuf,
         render_state: Option<egui_wgpu::RenderState>,
-        node: tdvbgaran_network::node::AliceNode,
+        node: text_to_print_network::node::AliceNode,
     ) -> Self {
         let state = AppState::new(data_dir);
         let update_checker = updater::UpdateChecker::start(&state.runtime);
