@@ -27,6 +27,8 @@ chrono = { workspace = true }
 open = "5"
 alice-view = { workspace = true }
 alice-lol = { workspace = true }
+alice-bamboo = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 sys-locale = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
 wgpu = "24"

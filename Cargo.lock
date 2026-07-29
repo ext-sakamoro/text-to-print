@@ -6115,6 +6115,7 @@ dependencies = [
 name = "text-to-print"
 version = "0.1.0"
 dependencies = [
+ "alice-bamboo",
  "alice-lol",
  "alice-view",
  "anyhow",
@@ -6125,6 +6126,7 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "glam",
+ "image",
  "open",
  "reqwest",
  "rfd",

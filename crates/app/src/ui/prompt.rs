@@ -66,6 +66,8 @@ impl UiExportFormat {
 pub struct PromptUiState {
     pub export_format: UiExportFormat,
     pub last_export_error: Option<String>,
+    /// GAP-B: 4-color export (Bambu AMS) config
+    pub color4: Color4UiState,
 }
 
 impl Default for PromptUiState {
@@ -73,7 +75,43 @@ impl Default for PromptUiState {
         Self {
             export_format: UiExportFormat::ThreeMf,
             last_export_error: None,
+            color4: Color4UiState::default(),
         }
+    }
+}
+
+/// 4-color export UI state (GAP-B) Backing store for the collapsible
+/// "4-color multi-filament" panel wiring `pipeline::export_mesh_color4`
+/// to the Bambu AMS workflow
+pub struct Color4UiState {
+    pub n_colors: u8,
+    pub projection: alice_bamboo::color4::ProjectionAxis,
+    pub image_path: Option<std::path::PathBuf>,
+    pub last_error: Option<String>,
+    pub last_generated: Vec<std::path::PathBuf>,
+}
+
+impl Default for Color4UiState {
+    fn default() -> Self {
+        Self {
+            n_colors: 4,
+            projection: alice_bamboo::color4::ProjectionAxis::PositiveZ,
+            image_path: None,
+            last_error: None,
+            last_generated: Vec::new(),
+        }
+    }
+}
+
+fn projection_label(p: alice_bamboo::color4::ProjectionAxis) -> &'static str {
+    use alice_bamboo::color4::ProjectionAxis;
+    match p {
+        ProjectionAxis::PositiveZ => "+Z 正面 (front)",
+        ProjectionAxis::NegativeZ => "-Z 背面 (back)",
+        ProjectionAxis::PositiveY => "+Y 上面 (top)",
+        ProjectionAxis::NegativeY => "-Y 底面 (bottom)",
+        ProjectionAxis::PositiveX => "+X 右側面 (right)",
+        ProjectionAxis::NegativeX => "-X 左側面 (left)",
     }
 }
 
@@ -216,6 +254,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
                 ui.add_space(4.0);
                 let lol = lol_source.clone();
                 show_export_dropdown(ui, state, ui_state, &lol, lang);
+                ui.add_space(4.0);
+                show_color4_export(ui, state, ui_state, &lol);
             } else {
                 ui.colored_label(
                     egui::Color32::GRAY,
@@ -380,6 +420,155 @@ fn show_export_dropdown(
             );
         }
     });
+}
+
+/// 4-color multi-filament export panel (GAP-B, Stage 4 T4.5 UI 完結)
+///
+/// Bambu Lab AMS / Prusa MMU 対応の 4 色分割エクスポート
+/// LOL DSL + 正面 image → SDF → mesh → k-means 色量子化 → palette 色ごと
+/// 3MF ファイル (`{uuid}_color{N}.3mf`) を生成する
+///
+/// UI:
+/// - n_colors slider (2-4)
+/// - projection axis dropdown (6 方向)
+/// - 正面画像ピック button (rfd file dialog、PNG/JPG)
+/// - Export button
+/// - 生成された 3MF path 一覧 + Finder open
+fn show_color4_export(
+    ui: &mut Ui,
+    state: &AppState,
+    ui_state: &mut PromptUiState,
+    lol_source: &str,
+) {
+    ui.collapsing("4色 export (Bambu AMS 対応)", |ui| {
+        ui.label("正面画像を palette 化して色ごとに 3MF 分割 (Bambu Lab AMS / Prusa MMU)");
+
+        // n_colors slider (2-4)
+        ui.horizontal(|ui| {
+            ui.label("色数:");
+            ui.add(egui::Slider::new(&mut ui_state.color4.n_colors, 2..=4));
+        });
+
+        // Projection axis dropdown
+        ui.horizontal(|ui| {
+            ui.label("投影軸:");
+            egui::ComboBox::from_id_salt("color4_projection")
+                .selected_text(projection_label(ui_state.color4.projection))
+                .show_ui(ui, |ui| {
+                    use alice_bamboo::color4::ProjectionAxis;
+                    for axis in [
+                        ProjectionAxis::PositiveZ,
+                        ProjectionAxis::NegativeZ,
+                        ProjectionAxis::PositiveY,
+                        ProjectionAxis::NegativeY,
+                        ProjectionAxis::PositiveX,
+                        ProjectionAxis::NegativeX,
+                    ] {
+                        ui.selectable_value(
+                            &mut ui_state.color4.projection,
+                            axis,
+                            projection_label(axis),
+                        );
+                    }
+                });
+        });
+
+        // Image picker
+        ui.horizontal(|ui| {
+            if ui.button("正面画像を選択...").clicked() {
+                let picked = rfd::FileDialog::new()
+                    .add_filter("PNG / JPEG", &["png", "jpg", "jpeg"])
+                    .pick_file();
+                if let Some(p) = picked {
+                    ui_state.color4.image_path = Some(p);
+                    ui_state.color4.last_error = None;
+                }
+            }
+            if let Some(p) = &ui_state.color4.image_path {
+                ui.monospace(p.file_name().and_then(|n| n.to_str()).unwrap_or("(image)"));
+            } else {
+                ui.colored_label(egui::Color32::GRAY, "(未選択)");
+            }
+        });
+
+        // Export button
+        let can_export = ui_state.color4.image_path.is_some();
+        if ui
+            .add_enabled(can_export, egui::Button::new("4色 3MF を生成"))
+            .clicked()
+            && let Some(image_path) = ui_state.color4.image_path.clone()
+        {
+            run_color4_export(state, ui_state, lol_source, &image_path);
+        }
+
+        if let Some(err) = &ui_state.color4.last_error {
+            ui.add_space(4.0);
+            ui.colored_label(egui::Color32::RED, format!("4色エクスポート失敗: {err}"));
+        }
+        if !ui_state.color4.last_generated.is_empty() {
+            ui.add_space(4.0);
+            ui.label(format!(
+                "生成完了: {} 色 / {} ファイル",
+                ui_state.color4.last_generated.len(),
+                ui_state.color4.last_generated.len(),
+            ));
+            for p in &ui_state.color4.last_generated {
+                ui.monospace(p.display().to_string());
+            }
+            if let Some(first) = ui_state.color4.last_generated.first()
+                && let Some(parent) = first.parent()
+                && ui.button("フォルダを開く").clicked()
+            {
+                let _ = open::that(parent);
+            }
+        }
+    });
+}
+
+/// 4-color export executor Loads the picked image, builds a
+/// `Color4Config`, then delegates to `pipeline::export_mesh_color4` The
+/// resulting palette-split 3MF paths (`{uuid}_color{N}.3mf`) are stored
+/// in `ui_state.color4.last_generated` so the UI can show them
+fn run_color4_export(
+    state: &AppState,
+    ui_state: &mut PromptUiState,
+    lol_source: &str,
+    image_path: &std::path::Path,
+) {
+    ui_state.color4.last_error = None;
+    ui_state.color4.last_generated.clear();
+
+    let image = match image::open(image_path) {
+        Ok(img) => img.to_rgb8(),
+        Err(e) => {
+            ui_state.color4.last_error = Some(format!("画像読み込み失敗: {e}"));
+            return;
+        }
+    };
+
+    let output_dir = state.data_dir.join("exports").join("color4");
+    let _ = std::fs::create_dir_all(&output_dir);
+
+    let cfg = alice_bamboo::color4::Color4Config {
+        n_colors: ui_state.color4.n_colors,
+        projection: ui_state.color4.projection,
+        ..Default::default()
+    };
+
+    match pipeline::export_mesh_color4(lol_source, &output_dir, &image, Quality::High, cfg) {
+        Ok(paths) => {
+            tracing::info!(
+                count = paths.len(),
+                dir = %output_dir.display(),
+                "4-color export succeeded"
+            );
+            ui_state.color4.last_generated = paths;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "4-color export failed");
+            ui_state.color4.last_error = Some(e.to_string());
+        }
+    }
 }
 
 fn display_label(fmt: UiExportFormat) -> String {
