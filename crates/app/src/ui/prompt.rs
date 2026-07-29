@@ -484,11 +484,35 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     let id = gen_id;
     let output_dir = state.data_dir.join("exports");
     let can_download = state.tier.limits().can_download;
+    // GAP-12: capture the opt-in flag + dry-run dir so the async task can
+    // decide whether to write a `SharePayload` snapshot after export.
+    let share_enabled = state.share_lol_dsl;
+    let share_dry_run_dir = state.share_dry_run_dir();
+    let model_id = state.llm_config.model_choice.model_id().to_string();
+    let prompt_lang = _lang.as_bcp47().to_string();
 
     state.runtime.spawn(async move {
         let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
         let llm_start = Instant::now();
-        let result = backend::generate(&config, prompt::SYSTEM_PROMPT, &prompt_text).await;
+        // GAP-11: replace `backend::generate` with `generate_with_retry` so the
+        // Stage 8 fix-prompt loop actually engages when the LOL DSL raises
+        // safety violations. Each retry re-sends `PhaseStart(Llm)` so the UI
+        // progress indicator visualises the retries instead of pretending the
+        // very first attempt succeeded.
+        let tx_retry = tx.clone();
+        let result = backend::generate_with_retry(
+            &config,
+            prompt::SYSTEM_PROMPT,
+            &prompt_text,
+            3,
+            |response| {
+                let _ = tx_retry.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
+                let lol = pipeline::extract_lol(response).unwrap_or_else(|| response.to_string());
+                pipeline::safety_check_lol(&lol)
+            },
+        )
+        .await
+        .map(|r| (r.content, r.retry_count));
         let llm_elapsed = llm_start.elapsed();
         let _ = tx.send(GenerationMessage::PhaseDone(
             GenerationPhase::Llm,
@@ -496,7 +520,7 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
         ));
 
         match result {
-            Ok(response) => {
+            Ok((response, retry_count)) => {
                 let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Parse));
                 let parse_start = Instant::now();
                 let lol = pipeline::extract_lol(&response).unwrap_or_else(|| response.clone());
@@ -550,10 +574,53 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     None
                 };
 
+                // GAP-12: gate the dry-run share dump on opt-in + successful
+                // 3MF export. The Cloudflare Workers backend (Epic-Infra #35)
+                // will consume the same payload once online.
+                let share_dry_run = if share_enabled
+                    && let Some(stats) = mesh_stats.as_ref()
+                    && let Ok(mesh_bytes) = std::fs::read(&stats.path)
+                {
+                    let payload = text_to_print_network::share::SharePayload::from_inputs(
+                        text_to_print_network::share::ShareInputs {
+                            uuid: &id,
+                            schema_version: "1",
+                            prompt: &prompt_text,
+                            prompt_lang: &prompt_lang,
+                            llm_model: &model_id,
+                            lol_source: &lol,
+                            lol_sha256: &text_to_print_core::manifest::sha256_hex(lol.as_bytes()),
+                            mesh_sha256: &text_to_print_core::manifest::sha256_hex(&mesh_bytes),
+                            success: true,
+                            retry_count,
+                            time_to_file_ms: 0,
+                            safety_violations: stats
+                                .safety_summary
+                                .as_ref()
+                                .map(|s| s.messages.clone())
+                                .unwrap_or_default(),
+                            export_format: "3mf",
+                            user_kept: true,
+                            user_edited: false,
+                        },
+                    );
+                    match text_to_print_network::share::dump_dry_run(&payload, &share_dry_run_dir) {
+                        Ok(p) => Some(p),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "share dry-run dump failed");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
                 let _ = tx.send(GenerationMessage::Success {
                     id,
                     lol_source: lol,
                     mesh_stats,
+                    retry_count,
+                    share_dry_run,
                 });
             }
             Err(e) => {
@@ -584,11 +651,15 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 id,
                 lol_source,
                 mesh_stats,
+                retry_count,
+                share_dry_run,
             } => {
                 let _ = state
                     .db
                     .update_generation_status(&id, "complete", Some(&lol_source), None);
                 state.current_lol = Some(lol_source.clone());
+                state.phase_progress.retry_count = retry_count;
+                state.pending_share_dry_run = share_dry_run;
 
                 if state.tier.limits().force_public {
                     state.pending_publish =

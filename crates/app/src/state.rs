@@ -103,6 +103,12 @@ pub struct AppState {
     /// LOL DSL + quality signals are queued for upload to the shared LoRA
     /// training set; when `false` the user has opted out
     pub share_lol_dsl: bool,
+    /// Most recent share-payload dry-run path (GAP-12) Populated when the
+    /// generation success path serialises a `SharePayload` to
+    /// `data_dir/share_dry_run/{uuid}.json` The real Cloudflare Workers
+    /// upload (Epic-Infra #35) will consume the same payload; the dry-run
+    /// path keeps the opt-in gate honest even when the backend is offline
+    pub pending_share_dry_run: Option<std::path::PathBuf>,
 }
 
 pub enum GenerationStatus {
@@ -122,6 +128,15 @@ pub enum GenerationMessage {
         id: String,
         lol_source: String,
         mesh_stats: Option<MeshStats>,
+        /// Number of LLM retries performed during this generation Non-zero
+        /// values mean the initial LOL DSL raised safety violations and the
+        /// [`text_to_print_llm::backend::generate_with_retry`] loop
+        /// requested a revised DSL via `fix_prompt` (Stage 8 T8.2)
+        retry_count: u32,
+        /// Path to the dry-run share payload JSON (GAP-12) Populated when
+        /// `share_lol_dsl` is on and the generation produced a 3MF export;
+        /// otherwise `None`
+        share_dry_run: Option<std::path::PathBuf>,
     },
     Failure {
         id: String,
@@ -217,6 +232,7 @@ impl AppState {
             prompt_focused_once: false,
             sidecar_status: sidecar_rx,
             share_lol_dsl,
+            pending_share_dry_run: None,
         }
     }
 
@@ -239,6 +255,14 @@ impl AppState {
 
     pub fn can_generate(&self) -> bool {
         self.daily_usage() < self.tier.limits().daily_generations
+    }
+
+    /// Directory used by the share dry-run gate (GAP-12) The generation
+    /// success path writes `SharePayload` JSON blobs here whenever the
+    /// user has opted in and produced a mesh; the Cloudflare Workers
+    /// backend (Epic-Infra #35) will drain the queue later
+    pub fn share_dry_run_dir(&self) -> std::path::PathBuf {
+        self.data_dir.join("share_dry_run")
     }
 }
 

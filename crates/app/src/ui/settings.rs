@@ -94,6 +94,14 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         } else {
             "現在: opt-out (アップロードしません)"
         });
+        ui.add_space(4.0);
+        // GAP-12: surface the dry-run queue count so users can verify the
+        // opt-in actually persists something even before the Cloudflare
+        // Workers backend (Epic-Infra #35) is online
+        let queued = text_to_print_network::share::count_dry_run_queued(&state.share_dry_run_dir());
+        ui.label(format!(
+            "アップロード待ち (dry-run キュー): {queued} 件",
+        ));
     });
 
     ui.add_space(8.0);
