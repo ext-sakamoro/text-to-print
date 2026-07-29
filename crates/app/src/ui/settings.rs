@@ -106,6 +106,34 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
     ui.add_space(8.0);
 
+    // Crash reports opt-in (#36)
+    ui.collapsing("クラッシュレポート", |ui| {
+        let mut enabled = text_to_print_core::crash_report::is_optin(&state.data_dir);
+        if ui
+            .checkbox(&mut enabled, "クラッシュ発生時にローカル report を保存する")
+            .on_hover_text(
+                "オンにするとクラッシュ発生時に crash_reports/{uuid}.json が data_dir に保存されます (現状 upload なし、backend #36 実装後に opt-in で送信予定) オフにするとログのみ",
+            )
+            .changed()
+            && let Err(e) =
+                text_to_print_core::crash_report::set_optin(&state.data_dir, enabled)
+        {
+            tracing::warn!(error = %e, "failed to persist crash report opt-in");
+        }
+        ui.add_space(4.0);
+        let pending = text_to_print_core::crash_report::count_pending(&state.data_dir);
+        ui.label(format!("保存済 report: {pending} 件"));
+        if pending > 0
+            && ui.button("フォルダを開く").clicked()
+        {
+            let _ = open::that(
+                text_to_print_core::crash_report::crash_reports_dir(&state.data_dir),
+            );
+        }
+    });
+
+    ui.add_space(8.0);
+
     // ネットワーク情報
     ui.collapsing("Network", |ui| {
         ui.label(format!("Profile ID: {}", &state.profile_id[..8]));

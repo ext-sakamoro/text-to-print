@@ -1,3 +1,4 @@
+pub mod crash_report;
 pub mod db;
 pub mod export;
 pub mod license;

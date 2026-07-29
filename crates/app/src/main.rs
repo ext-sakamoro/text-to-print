@@ -22,6 +22,15 @@ fn main() -> Result<()> {
 
     std::fs::create_dir_all(&data_dir)?;
 
+    // Opt-in crash reporter (#36) Panic hook writes to
+    // `{data_dir}/crash_reports/{uuid}.json` when the opt-in sentinel
+    // (`{data_dir}/.crash_reports_enabled`) is present at panic time
+    // Users can toggle from the Settings tab
+    text_to_print_core::crash_report::install_panic_hook(
+        data_dir.clone(),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     // ALICE ノード初期化 + P2P バックグラウンド起動
     let mut node = text_to_print_network::node::AliceNode::init(&data_dir)?;
     let p2p_runtime = tokio::runtime::Builder::new_multi_thread()
