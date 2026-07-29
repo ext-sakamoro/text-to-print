@@ -1,14 +1,106 @@
 name: CI
+
 on:
-  push: { branches: [main] }
-  pull_request: { branches: [main] }
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
+  # Formatting is safe on any OS because it runs on source alone and does
+  # not need the path-dependency ALICE-* sibling checkout dance
   fmt:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with: { components: rustfmt }
-      - name: Check formatting
-        run: find crates -name "*.rs" | xargs rustfmt --check --edition 2024
+        with:
+          components: rustfmt
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+  # clippy / test / doc need the six ALICE-* sibling repos side-by-side
+  # (matches the workspace path deps) Public Project-ALICE repos are
+  # cloned unauthenticated; private ext-sakamoro repos require a PAT with
+  # `contents: read` on the private repos to be set as the
+  # `ALICE_ECO_TOKEN` secret Without the token the private-repo checkout
+  # steps fail and the job as a whole surfaces as red — that is the
+  # intentional signal that the workflow needs one-time DevOps setup
+  clippy-test-doc:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      - name: Checkout text-to-print
+        uses: actions/checkout@v4
+        with:
+          path: text-to-print
+
+      # Public ALICE ecosystem repos (Project-ALICE org)
+      - name: Checkout ALICE-SDF
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-SDF
+          path: ALICE-SDF
+      - name: Checkout ALICE-LOL
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-LOL
+          path: ALICE-LOL
+      - name: Checkout ALICE-View
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-View
+          path: ALICE-View
+      - name: Checkout ALICE-LLM
+        uses: actions/checkout@v4
+        with:
+          repository: Project-ALICE/ALICE-LLM
+          path: ALICE-LLM
+
+      # Private ALICE ecosystem repos (ext-sakamoro org) — require
+      # `ALICE_ECO_TOKEN` secret with `contents: read`
+      - name: Checkout ALICE-Bamboo (private)
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - name: Checkout ALICE-Physics (private)
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      - name: cargo clippy (workspace, all targets)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test (workspace lib)
+        run: cargo test --workspace --lib
+
+      - name: cargo doc (no deps)
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
