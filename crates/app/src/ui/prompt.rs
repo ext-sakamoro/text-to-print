@@ -58,7 +58,9 @@ impl UiExportFormat {
             Self::ThreeMf => Some(ExportFormat::ThreeMf),
             Self::Stl => Some(ExportFormat::Stl),
             Self::Fbx => Some(ExportFormat::Fbx),
-            Self::Obj | Self::Step | Self::Gcode => None,
+            Self::Step => Some(ExportFormat::Step),
+            Self::Gcode => Some(ExportFormat::Gcode),
+            Self::Obj => None,
         }
     }
 }
@@ -223,6 +225,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
                         overhang.overhang_face_count,
                         overhang.total_face_count,
                         overhang.max_wall_angle_deg,
+                    ));
+                }
+                if let Some(slice) = &stats.slice_summary {
+                    let mins = (slice.print_time_seconds / 60.0).round() as u32;
+                    ui.label(format!(
+                        "G-code: {} 層 / 推定 {} 分 / フィラメント {:.2} m",
+                        slice.layer_count, mins, slice.filament_meters,
                     ));
                 }
                 if let Some(safety) = &stats.safety_summary {
@@ -808,7 +817,7 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                 let _ = tx.send(GenerationMessage::Success {
                     id,
                     lol_source: lol,
-                    mesh_stats,
+                    mesh_stats: mesh_stats.map(Box::new),
                     retry_count,
                     share_dry_run,
                 });

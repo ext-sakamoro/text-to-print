@@ -116,7 +116,9 @@ pub enum GenerationStatus {
     Generating,
     Done {
         lol_source: String,
-        mesh_stats: Option<MeshStats>,
+        // Boxed because `MeshStats` is ~200 B and this variant is the largest
+        // enum arm by an order of magnitude (`clippy::large_enum_variant`)
+        mesh_stats: Option<Box<MeshStats>>,
     },
     Error(String),
 }
@@ -127,7 +129,8 @@ pub enum GenerationMessage {
     Success {
         id: String,
         lol_source: String,
-        mesh_stats: Option<MeshStats>,
+        /// Boxed for the same reason as [`GenerationStatus::Done::mesh_stats`]
+        mesh_stats: Option<Box<MeshStats>>,
         /// Number of LLM retries performed during this generation Non-zero
         /// values mean the initial LOL DSL raised safety violations and the
         /// [`text_to_print_llm::backend::generate_with_retry`] loop
