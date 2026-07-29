@@ -6,6 +6,11 @@ license.workspace = true
 
 [dependencies]
 alice-lol = { workspace = true }
+alice-sdf = { workspace = true }
+alice-bamboo = { workspace = true }
+alice-physics = { workspace = true }
+glam = "0.29"
+image = { version = "0.25", default-features = false, features = ["png"] }
 rusqlite = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
@@ -19,6 +24,8 @@ directories = { workspace = true }
 tracing = { workspace = true }
 base64 = "0.22"
 hex = "0.4"
+sha2 = { workspace = true }
+zip = { workspace = true }
 
 [[bin]]
 name = "gen-license-key"
