@@ -31,6 +31,19 @@ pub struct MeshStats {
     /// Safety validation summary from `alice_bamboo::safety` (populated
     /// only for 3MF exports).
     pub safety_summary: Option<SafetySummary>,
+    /// G-code slicer summary (populated only for `ExportFormat::Gcode`
+    /// exports via `alice_print::slice_sdf`)
+    pub slice_summary: Option<SliceSummary>,
+}
+
+/// Compact G-code slicer summary kept in `MeshStats` for UI display
+/// (Stage 7 #5) Mirrors the subset of `alice_print::SliceResult` the UI
+/// actually renders — full result stays inside the pipeline
+#[derive(Debug, Clone, Copy)]
+pub struct SliceSummary {
+    pub layer_count: usize,
+    pub filament_meters: f32,
+    pub print_time_seconds: f32,
 }
 
 /// Compact overhang report kept in `MeshStats` for UI display.
@@ -80,6 +93,15 @@ pub enum ExportFormat {
     ThreeMf,
     Fbx,
     Stl,
+    /// STEP AP203 (ISO 10303-21) — CAD kernel neutral format used by
+    /// Fusion 360 / FreeCAD / SolidWorks for import Backed by
+    /// `alice_sdf::io::step::export_step` which tessellates the SDF
+    /// then writes a valid STEP faceted BREP
+    Step,
+    /// G-code direct output — bypasses Bambu Studio Backed by
+    /// `alice_print::slice_sdf` with Bambu Lab preset The output is
+    /// Marlin flavor by default
+    Gcode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -149,6 +171,8 @@ pub fn export_mesh(
             let stats = alice_lol::print_export::lol_to_stl(lol_source, &output_path, &config)?;
             Ok(to_mesh_stats(&stats))
         }
+        ExportFormat::Step => export_step_via_alice_sdf(lol_source, &output_path, quality),
+        ExportFormat::Gcode => export_gcode_via_alice_print(lol_source, &output_path),
     }
 }
 
@@ -211,6 +235,7 @@ fn export_3mf_via_bamboo(
         path: output_path.to_string_lossy().into_owned(),
         overhang_summary: Some(overhang_summary),
         safety_summary: Some(safety_summary),
+        slice_summary: None,
     })
 }
 
@@ -221,7 +246,94 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
         path: stats.path.clone(),
         overhang_summary: None,
         safety_summary: None,
+        slice_summary: None,
     }
+}
+
+/// LOL → STEP (ISO 10303-21 AP203) via `alice_sdf::io::step::export_step`
+///
+/// The SDF is tessellated internally by `export_step` using its own
+/// marching-cubes pass then written as a Faceted BREP entity We rebuild
+/// the mesh separately to surface a vertex / triangle count in
+/// `MeshStats` for the UI That path is small (order of megabytes) so
+/// the duplicate work is acceptable
+fn export_step_via_alice_sdf(
+    lol_source: &str,
+    output_path: &Path,
+    quality: Quality,
+) -> Result<MeshStats> {
+    let sdf = alice_bamboo::lol_to_sdf(lol_source)
+        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+
+    // Vertex / triangle counts via a preview-quality mesh — the exported
+    // STEP file uses its own internal tessellation but this at least
+    // gives the UI a rough size estimate
+    let aabb_config = TightAabbConfig {
+        initial_half_size: 500.0,
+        bisection_iterations: 24,
+        coarse_subdivisions: 16,
+    };
+    let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
+    let padding = Vec3::splat(1.0);
+    let mc_config = MarchingCubesConfig {
+        resolution: quality.mesh_resolution(),
+        ..Default::default()
+    };
+    let mesh = sdf_to_mesh(&sdf, aabb.min - padding, aabb.max + padding, &mc_config);
+    let vertex_count = mesh.vertices.len();
+    let triangle_count = mesh.indices.len() / 3;
+
+    let step_cfg = alice_sdf::io::step::StepConfig {
+        bounds: (aabb.min.min_element() - 1.0, aabb.max.max_element() + 1.0),
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        resolution: quality.mesh_resolution() as u32,
+        name: format!("text-to-print-{}", uuid::Uuid::now_v7()),
+    };
+    alice_sdf::io::step::export_step(output_path, &sdf, &step_cfg)
+        .map_err(|e| anyhow::anyhow!("STEP export error: {e}"))?;
+
+    Ok(MeshStats {
+        vertex_count,
+        triangle_count,
+        path: output_path.to_string_lossy().into_owned(),
+        overhang_summary: None,
+        safety_summary: None,
+        slice_summary: None,
+    })
+}
+
+/// LOL → G-code via `alice_print::slice_sdf`
+///
+/// The slicer uses the Bambu Lab preset (`SlicerConfig::bambu()`) with
+/// Marlin flavor by default Consumers who need Klipper / a different
+/// printer preset should call `alice_print::slice_sdf` directly for now
+/// (a `GcodeConfig` UI slot is planned separately)
+///
+/// `SliceSummary` is surfaced through `MeshStats.slice_summary` so the
+/// UI can show layer count, filament usage, and print-time estimates
+fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<MeshStats> {
+    let sdf = alice_bamboo::lol_to_sdf(lol_source)
+        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+    let slice = alice_bamboo::slice_sdf(
+        &sdf,
+        &alice_bamboo::SlicerConfig::bambu(),
+        alice_bamboo::GcodeFlavor::Marlin,
+    );
+    std::fs::write(output_path, &slice.gcode)
+        .map_err(|e| anyhow::anyhow!("G-code write error: {e}"))?;
+
+    Ok(MeshStats {
+        vertex_count: 0,
+        triangle_count: 0,
+        path: output_path.to_string_lossy().into_owned(),
+        overhang_summary: None,
+        safety_summary: None,
+        slice_summary: Some(SliceSummary {
+            layer_count: slice.layer_count,
+            filament_meters: slice.filament_meters,
+            print_time_seconds: slice.print_time_seconds,
+        }),
+    })
 }
 
 impl ExportFormat {
@@ -230,6 +342,8 @@ impl ExportFormat {
             Self::ThreeMf => "3mf",
             Self::Fbx => "fbx",
             Self::Stl => "stl",
+            Self::Step => "step",
+            Self::Gcode => "gcode",
         }
     }
 }
@@ -477,6 +591,56 @@ mod tests {
         assert_eq!(ExportFormat::ThreeMf.extension(), "3mf");
         assert_eq!(ExportFormat::Fbx.extension(), "fbx");
         assert_eq!(ExportFormat::Stl.extension(), "stl");
+        assert_eq!(ExportFormat::Step.extension(), "step");
+        assert_eq!(ExportFormat::Gcode.extension(), "gcode");
+    }
+
+    #[test]
+    fn test_export_step_produces_iso_10303_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let stats = export_mesh(
+            "sphere(10.0)",
+            dir.path(),
+            ExportFormat::Step,
+            Quality::Preview,
+        )
+        .expect("STEP export should succeed for sphere(10)");
+        assert!(stats.path.ends_with(".step"));
+        assert!(stats.vertex_count > 0);
+        assert!(stats.triangle_count > 0);
+        assert!(stats.slice_summary.is_none());
+        let header = std::fs::read_to_string(&stats.path).unwrap();
+        assert!(
+            header.contains("ISO-10303-21"),
+            "STEP file should start with ISO-10303-21 magic"
+        );
+    }
+
+    #[test]
+    fn test_export_gcode_produces_slice_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        let stats = export_mesh(
+            "sphere(10.0)",
+            dir.path(),
+            ExportFormat::Gcode,
+            Quality::Preview,
+        )
+        .expect("G-code export should succeed for sphere(10)");
+        assert!(stats.path.ends_with(".gcode"));
+        assert!(
+            stats.slice_summary.is_some(),
+            "G-code path should populate slice_summary"
+        );
+        let summary = stats.slice_summary.as_ref().unwrap();
+        assert!(summary.layer_count > 0);
+        assert!(summary.print_time_seconds > 0.0);
+        // Sanity check the file contains at least one G0/G1 command
+        let body = std::fs::read_to_string(&stats.path).unwrap();
+        assert!(
+            body.lines()
+                .any(|l| l.starts_with("G0 ") || l.starts_with("G1 ")),
+            "G-code file should contain G0 / G1 commands"
+        );
     }
 
     fn safety_summary(is_safe: bool, messages: Vec<String>) -> SafetySummary {
