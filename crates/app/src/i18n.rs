@@ -16,6 +16,14 @@ impl Lang {
             Self::En
         }
     }
+
+    /// BCP-47 language tag (`ja` / `en`), used for the manifest `prompt_lang`.
+    pub fn as_bcp47(self) -> &'static str {
+        match self {
+            Self::Ja => "ja",
+            Self::En => "en",
+        }
+    }
 }
 
 /// UI テキスト

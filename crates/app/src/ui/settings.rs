@@ -2,6 +2,7 @@ use egui::Ui;
 
 use crate::state::AppState;
 use text_to_print_core::license::{LicenseKey, LicenseVerifier};
+use text_to_print_llm::model::ModelChoice;
 
 const LICENSE_PUBLIC_KEY: [u8; 32] = [
     0x05, 0x7f, 0x9c, 0x5f, 0xdb, 0x3f, 0x6f, 0x93, 0x69, 0x11, 0xd9, 0x16, 0x85, 0xb1, 0x82, 0x5b,
@@ -45,10 +46,23 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
     // LLM 設定
     ui.collapsing("LLM", |ui| {
-        ui.label("Endpoint:");
+        ui.label("Endpoint (alice-llm-server):");
         ui.text_edit_singleline(&mut state.llm_config.endpoint);
+
+        ui.add_space(4.0);
         ui.label("Model:");
-        ui.text_edit_singleline(&mut state.llm_config.model);
+        egui::ComboBox::from_id_salt("llm_model_choice")
+            .selected_text(state.llm_config.model_choice.label())
+            .show_ui(ui, |ui| {
+                for choice in ModelChoice::all() {
+                    ui.selectable_value(
+                        &mut state.llm_config.model_choice,
+                        *choice,
+                        choice.label(),
+                    );
+                }
+            });
+
         ui.add_space(4.0);
         ui.label(format!("Temperature: {:.1}", state.llm_config.temperature));
         ui.add(egui::Slider::new(

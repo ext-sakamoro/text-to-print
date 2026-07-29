@@ -216,7 +216,7 @@ mod tests {
     fn commit_new() {
         let mut dag = SdfDag::new();
         let node = dag.commit_new("sphere(1.0)", "did:key:abc");
-        assert_eq!(dag.heads(), &[node.hash.clone()]);
+        assert_eq!(dag.heads(), std::slice::from_ref(&node.hash));
         assert_eq!(dag.get(&node.hash).unwrap().lol_source, "sphere(1.0)");
         assert_eq!(dag.node_count(), 1);
     }

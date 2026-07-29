@@ -57,6 +57,17 @@ pub fn show(ui: &mut Ui, state: &AppState, viewer: &mut SdfViewer) {
             ui.ctx().request_repaint();
         }
 
+        // 右上: カメラリセット
+        let reset_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.max.x - 96.0, rect.min.y + 8.0),
+            egui::vec2(88.0, 24.0),
+        );
+        let mut reset_ui = ui.new_child(egui::UiBuilder::new().max_rect(reset_rect));
+        if reset_ui.button("カメラリセット").clicked() {
+            viewer.camera = alice_view::app::Camera3D::default();
+            reset_ui.ctx().request_repaint();
+        }
+
         // オーバーレイ
         let cam = &viewer.camera;
         ui.painter().text(

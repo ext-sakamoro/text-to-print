@@ -9,6 +9,7 @@ use eframe::egui;
 use i18n::Lang;
 use state::AppState;
 use ui::gallery::GalleryState;
+use ui::prompt::PromptUiState;
 use ui::settings::SettingsState;
 use ui::viewer::SdfViewer;
 
@@ -100,6 +101,7 @@ struct App {
     viewer: SdfViewer,
     settings: SettingsState,
     gallery: GalleryState,
+    prompt_ui: PromptUiState,
     node: text_to_print_network::node::AliceNode,
     lang: Lang,
     update_checker: updater::UpdateChecker,
@@ -120,6 +122,7 @@ impl App {
             viewer: SdfViewer::default(),
             settings: SettingsState::default(),
             gallery: GalleryState::default(),
+            prompt_ui: PromptUiState::default(),
             node,
             lang: Lang::detect(),
             update_checker,
@@ -211,7 +214,7 @@ impl eframe::App for App {
                 egui::SidePanel::left("prompt_panel")
                     .default_width(350.0)
                     .show(ctx, |ui| {
-                        ui::prompt::show(ui, &mut self.state);
+                        ui::prompt::show(ui, &mut self.state, &mut self.prompt_ui, self.lang);
                     });
 
                 egui::CentralPanel::default().show(ctx, |ui| {

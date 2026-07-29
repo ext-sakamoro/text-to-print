@@ -2,10 +2,20 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use crate::model::ModelChoice;
+
+/// LLM 推論設定
+///
+/// `endpoint` は OpenAI 互換の chat/completions URL。デフォルトは
+/// `alice-llm-server` sidecar (`http://localhost:8000/v1/chat/completions`)
+/// を指す。sidecar プロセスは [`crate::sidecar::SidecarProcess::spawn`]
+/// で起動する
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub endpoint: String,
-    pub model: String,
+    /// model 選択 (Qwen 3.5-4B Q4_K_M / Bonsai 27B Q1_0)。
+    /// `model_id()` を通じて HTTP request の `model` field に載せる
+    pub model_choice: ModelChoice,
     pub max_tokens: u32,
     pub temperature: f32,
 }
@@ -13,8 +23,8 @@ pub struct LlmConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://localhost:11434/v1/chat/completions".to_string(),
-            model: "qwen2.5:7b".to_string(),
+            endpoint: "http://localhost:8000/v1/chat/completions".to_string(),
+            model_choice: ModelChoice::default(),
             max_tokens: 2048,
             temperature: 0.7,
         }
@@ -55,11 +65,12 @@ pub async fn generate(
     system_prompt: &str,
     user_prompt: &str,
 ) -> Result<String> {
-    info!(model = %config.model, "LLM inference");
+    let model_id = config.model_choice.model_id();
+    info!(model = %model_id, endpoint = %config.endpoint, "LLM inference");
 
     let client = reqwest::Client::new();
     let request = ChatRequest {
-        model: config.model.clone(),
+        model: model_id.to_string(),
         messages: vec![
             Message {
                 role: "system".to_string(),
@@ -97,16 +108,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_has_ollama_endpoint() {
+    fn default_config_targets_sidecar() {
         let config = LlmConfig::default();
-        assert!(config.endpoint.contains("11434"));
+        assert!(config.endpoint.contains(":8000"));
         assert!(config.endpoint.contains("chat/completions"));
     }
 
     #[test]
-    fn default_config_uses_qwen() {
+    fn default_config_uses_qwen_choice() {
         let config = LlmConfig::default();
-        assert!(config.model.contains("qwen"));
+        assert_eq!(config.model_choice, ModelChoice::Qwen35_4B);
     }
 
     #[test]
@@ -115,7 +126,7 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: LlmConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config.endpoint, deserialized.endpoint);
-        assert_eq!(config.model, deserialized.model);
+        assert_eq!(config.model_choice, deserialized.model_choice);
         assert_eq!(config.max_tokens, deserialized.max_tokens);
     }
 

@@ -1,10 +1,69 @@
 use std::path::PathBuf;
 use std::sync::mpsc;
+use std::time::Duration;
 
 use text_to_print_core::db::{Database, GenerationRow};
 use text_to_print_core::pipeline::MeshStats;
 use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend::LlmConfig;
+
+/// Ordered pipeline phases surfaced to the UI progress indicator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenerationPhase {
+    Llm,
+    Parse,
+    Mesh,
+    Safety,
+    Export,
+}
+
+impl GenerationPhase {
+    pub const ALL: [Self; 5] = [
+        Self::Llm,
+        Self::Parse,
+        Self::Mesh,
+        Self::Safety,
+        Self::Export,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Llm => "LLM",
+            Self::Parse => "parse",
+            Self::Mesh => "mesh",
+            Self::Safety => "safety",
+            Self::Export => "export",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PhaseProgress {
+    pub current: Option<GenerationPhase>,
+    /// Latency of each completed phase, in the order they completed.
+    pub completed: Vec<(GenerationPhase, Duration)>,
+    /// Retry count for the LLM phase (surfaced by Stage 8 backend when wired).
+    pub retry_count: u32,
+}
+
+impl PhaseProgress {
+    pub fn reset(&mut self) {
+        self.current = None;
+        self.completed.clear();
+        self.retry_count = 0;
+    }
+
+    pub fn is_done(&self, phase: GenerationPhase) -> bool {
+        self.completed.iter().any(|(p, _)| *p == phase)
+    }
+
+    pub fn latency_of(&self, phase: GenerationPhase) -> Option<Duration> {
+        self.completed
+            .iter()
+            .find(|(p, _)| *p == phase)
+            .map(|(_, d)| *d)
+    }
+}
 
 pub struct AppState {
     #[allow(dead_code)]
@@ -24,6 +83,9 @@ pub struct AppState {
     pub result_tx: mpsc::Sender<GenerationMessage>,
     pub model_progress: tokio::sync::watch::Receiver<text_to_print_llm::downloader::DownloadProgress>,
     pub model_ready: bool,
+    pub phase_progress: PhaseProgress,
+    /// Set true once egui focus has been requested for the prompt field.
+    pub prompt_focused_once: bool,
 }
 
 pub enum GenerationStatus {
@@ -37,6 +99,8 @@ pub enum GenerationStatus {
 }
 
 pub enum GenerationMessage {
+    PhaseStart(GenerationPhase),
+    PhaseDone(GenerationPhase, Duration),
     Success {
         id: String,
         lol_source: String,
@@ -106,6 +170,8 @@ impl AppState {
             result_tx,
             model_progress: progress_rx,
             model_ready,
+            phase_progress: PhaseProgress::default(),
+            prompt_focused_once: false,
         }
     }
 

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alicelaw.net/text-to-print/schema/v1/manifest.schema.json",
+  "title": "ALICE Manifest v1",
+  "description": "Provenance + quality manifest embedded in text-to-print generated 3MF (Metadata/alice_manifest.json)",
+  "type": "object",
+  "required": ["schema_version", "uuid", "timestamp", "generation", "quality", "environment"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1",
+      "description": "Manifest schema version"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID v7 (timestamp-based) per generation"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp of generation"
+    },
+    "generation": {
+      "type": "object",
+      "required": [
+        "prompt",
+        "prompt_lang",
+        "llm_model",
+        "lol_source",
+        "lol_sha256",
+        "mesh_sha256",
+        "vertex_count",
+        "triangle_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "prompt": { "type": "string" },
+        "prompt_lang": {
+          "type": "string",
+          "description": "BCP-47 language tag (e.g. ja, en)"
+        },
+        "llm_model": {
+          "type": "string",
+          "description": "Model identifier (e.g. qwen3.5-4b-q4km, bonsai-27b-q1_0)"
+        },
+        "llm_seed": {
+          "type": ["integer", "null"],
+          "description": "Sampling seed, null if non-deterministic"
+        },
+        "lol_source": {
+          "type": "string",
+          "description": "LOL DSL source text"
+        },
+        "lol_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mesh_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "vertex_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "triangle_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "success",
+        "retry_count",
+        "time_to_file_ms",
+        "safety_violations",
+        "export_format",
+        "user_kept",
+        "user_edited"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "success": { "type": "boolean" },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "time_to_file_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "safety_violations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "export_format": {
+          "type": "string",
+          "enum": ["3mf", "stl", "obj", "fbx", "step", "gcode"]
+        },
+        "user_kept": { "type": "boolean" },
+        "user_edited": { "type": "boolean" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["app_version", "os", "arch"],
+      "additionalProperties": false,
+      "properties": {
+        "app_version": { "type": "string" },
+        "os": { "type": "string" },
+        "arch": { "type": "string" }
+      }
+    }
+  }
+}
