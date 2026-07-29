@@ -8,7 +8,7 @@ pub fn save_mesh(
     format: ExportFormat,
     output_dir: &Path,
 ) -> Result<std::path::PathBuf> {
-    let filename = format!("{}.{}", uuid::Uuid::new_v4(), format.extension());
+    let filename = format!("{}.{}", uuid::Uuid::now_v7(), format.extension());
     let path = output_dir.join(filename);
     std::fs::write(&path, data)?;
     Ok(path)
