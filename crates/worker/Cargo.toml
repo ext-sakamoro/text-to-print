@@ -1,0 +1,28 @@
+[package]
+name = "text-to-print-worker"
+version = "0.1.0"
+# Cargo edition is 2021 rather than the workspace-wide 2024 because this
+# crate is intentionally excluded from the workspace (wasm32-only build via
+# worker-build) and workspace.package.* inheritance requires membership
+edition = "2021"
+license = "MIT"
+description = "text-to-print LoRA share upload backend (Cloudflare Workers, wasm32-unknown-unknown)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+worker = "0.5"
+# Direct versions rather than `.workspace = true` because this crate is
+# excluded from the workspace (see root Cargo.toml comment) Keep in loose
+# sync with workspace versions when they move
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

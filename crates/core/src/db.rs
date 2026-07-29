@@ -13,6 +13,9 @@ pub struct GenerationRecord<'a> {
     pub quality: &'a str,
     pub status: &'a str,
     pub is_public: bool,
+    /// Optional serialised `AliceManifest` JSON to persist at insert time
+    /// May be filled in later via [`Database::set_generation_manifest`]
+    pub manifest_json: Option<&'a str>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +27,9 @@ pub struct GenerationRow {
     pub status: String,
     pub is_public: bool,
     pub created_at: String,
+    /// Serialised `AliceManifest` JSON (v1 schema, `docs/schema/v1/alice_manifest.schema.json`)
+    /// persisted per generation for SharePayload upload (#44) without re-unzipping the 3MF
+    pub manifest_json: Option<String>,
 }
 
 pub struct Database {
@@ -93,6 +99,12 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN share_lol_dsl INTEGER NOT NULL DEFAULT 1",
             [],
         );
+        // GAP-7 (#45): manifest_json holds the serialised AliceManifest v1 so
+        // the SharePayload uploader (GAP-3 #44) can pull it without re-unzipping
+        // the exported 3MF. Idempotent for pre-existing DBs.
+        let _ = self
+            .conn
+            .execute("ALTER TABLE generations ADD COLUMN manifest_json TEXT", []);
         Ok(())
     }
 
@@ -143,10 +155,11 @@ impl Database {
             quality,
             status,
             is_public,
+            manifest_json,
         } = record;
         self.conn.execute(
-            "INSERT INTO generations (id, profile_id, prompt, lol_source, sdf_data, quality, status, is_public)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO generations (id, profile_id, prompt, lol_source, sdf_data, quality, status, is_public, manifest_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 id,
                 profile_id,
@@ -155,10 +168,45 @@ impl Database {
                 sdf_data,
                 quality,
                 status,
-                *is_public as i32,
+                i32::from(*is_public),
+                manifest_json,
             ],
         )?;
         Ok(())
+    }
+
+    /// Persist the serialised `AliceManifest` JSON for a completed generation
+    ///
+    /// Called after `Stage 4` pipeline finishes 3MF export with metadata so
+    /// the SharePayload upload path (GAP-3 #44) can retrieve the manifest
+    /// without re-parsing the 3MF ZIP
+    ///
+    /// # Errors
+    ///
+    /// - SQLite error from `UPDATE`
+    pub fn set_generation_manifest(&self, id: &str, manifest_json: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE generations SET manifest_json = ?2 WHERE id = ?1",
+            rusqlite::params![id, manifest_json],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve the persisted manifest JSON for a generation, if any
+    ///
+    /// # Errors
+    ///
+    /// - SQLite error from `SELECT`
+    pub fn get_generation_manifest(&self, id: &str) -> Result<Option<String>> {
+        let manifest: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT manifest_json FROM generations WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .unwrap_or(None);
+        Ok(manifest)
     }
 
     /// Fetch the LoRA share opt-in flag for the given profile Defaults to
@@ -209,7 +257,7 @@ impl Database {
 
     pub fn list_generations(&self, profile_id: &str, limit: u32) -> Result<Vec<GenerationRow>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, prompt, lol_source, quality, status, is_public, created_at
+            "SELECT id, prompt, lol_source, quality, status, is_public, created_at, manifest_json
              FROM generations WHERE profile_id = ?1
              ORDER BY created_at DESC LIMIT ?2",
         )?;
@@ -222,6 +270,7 @@ impl Database {
                 status: row.get(4)?,
                 is_public: row.get::<_, i32>(5)? != 0,
                 created_at: row.get(6)?,
+                manifest_json: row.get(7)?,
             })
         })?;
         let mut result = Vec::new();
@@ -292,6 +341,7 @@ mod tests {
             quality: "preview",
             status: "complete",
             is_public: false,
+            manifest_json: None,
         })
         .unwrap();
 
@@ -299,5 +349,86 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].prompt, "a cute cat");
         assert_eq!(rows[0].lol_source.as_deref(), Some("sphere(1.0)"));
+        assert!(rows[0].manifest_json.is_none());
+    }
+
+    #[test]
+    fn generation_manifest_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.insert_generation(&GenerationRecord {
+            id: "gen-with-manifest",
+            profile_id: "user1",
+            prompt: "cube 10mm",
+            lol_source: Some("cube(10.0)"),
+            sdf_data: None,
+            quality: "high",
+            status: "complete",
+            is_public: false,
+            manifest_json: Some(r#"{"schema_version":"1","uuid":"abc"}"#),
+        })
+        .unwrap();
+
+        let m = db.get_generation_manifest("gen-with-manifest").unwrap();
+        assert_eq!(m.as_deref(), Some(r#"{"schema_version":"1","uuid":"abc"}"#));
+
+        // Update via set_generation_manifest
+        db.set_generation_manifest(
+            "gen-with-manifest",
+            r#"{"schema_version":"1","uuid":"def"}"#,
+        )
+        .unwrap();
+        let m2 = db.get_generation_manifest("gen-with-manifest").unwrap();
+        assert_eq!(
+            m2.as_deref(),
+            Some(r#"{"schema_version":"1","uuid":"def"}"#)
+        );
+
+        let rows = db.list_generations("user1", 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].manifest_json.as_deref(),
+            Some(r#"{"schema_version":"1","uuid":"def"}"#)
+        );
+    }
+
+    #[test]
+    fn migration_is_idempotent_across_reopen() {
+        // First open creates the columns
+        let path = std::env::temp_dir().join(format!(
+            "text-to-print-db-idempotent-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let db = Database::open(&path).unwrap();
+            db.get_or_create_profile("user1").unwrap();
+        }
+
+        // Reopen — migrate() runs again, ALTER TABLE for manifest_json must be
+        // absorbed silently even though the column already exists
+        {
+            let db = Database::open(&path).unwrap();
+            // manifest_json accessible = migration succeeded on reopen
+            db.insert_generation(&GenerationRecord {
+                id: "reopen",
+                profile_id: "user1",
+                prompt: "x",
+                lol_source: None,
+                sdf_data: None,
+                quality: "preview",
+                status: "complete",
+                is_public: false,
+                manifest_json: Some("{}"),
+            })
+            .unwrap();
+            assert_eq!(
+                db.get_generation_manifest("reopen").unwrap().as_deref(),
+                Some("{}")
+            );
+        }
+
+        let _ = std::fs::remove_file(&path);
     }
 }

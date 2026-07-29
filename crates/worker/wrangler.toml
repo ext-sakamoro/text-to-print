@@ -1,0 +1,29 @@
+name = "text-to-print"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-01-01"
+account_id = ""  # fill in via wrangler login before deploy
+
+[build]
+command = "cargo install --version 0.2.6 --locked worker-build 2>/dev/null; worker-build --release"
+
+# Custom domain wiring is done via Cloudflare dashboard once the Worker is
+# deployed. Suggested route (owner must map after first deploy):
+#   text-to-print.alicelaw.net/api/* -> text-to-print worker
+# alicelaw.net is already Cloudflare-managed so the subdomain add is trivial.
+
+# D1 binding — create with `wrangler d1 create text-to-print-shares` and paste
+# the returned `database_id` here before first deploy.
+[[d1_databases]]
+binding = "SHARES_DB"
+database_name = "text-to-print-shares"
+database_id = ""  # fill after `wrangler d1 create`
+
+[vars]
+# Salt for hashing client IP so raw IPs never touch storage (privacy).
+# Override in production via `wrangler secret put IP_HASH_SALT`.
+IP_HASH_SALT = "dev-salt-change-in-production"
+
+# Rate-limit tuning — see src/rate_limit.rs. Free-tier defaults suit a solo
+# desktop app; bump after real traffic data.
+PER_UUID_HOURLY = "10"
+PER_IP_HOURLY = "100"

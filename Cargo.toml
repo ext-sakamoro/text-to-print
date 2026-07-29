@@ -5,6 +5,12 @@ members = [
     "crates/llm",
     "crates/network",
 ]
+# `crates/worker` is intentionally excluded from the default workspace so that
+# `cargo test`, `cargo clippy`, and desktop release builds don't try to
+# compile a wasm32-only crate. Build it with:
+#   cd crates/worker && wrangler dev      (invokes worker-build → wasm32)
+# or `cargo build --manifest-path crates/worker/Cargo.toml --target wasm32-unknown-unknown`
+exclude = ["crates/worker"]
 resolver = "2"
 
 [workspace.package]

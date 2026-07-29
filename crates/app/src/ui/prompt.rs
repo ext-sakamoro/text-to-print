@@ -660,6 +660,7 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
         quality: "preview",
         status: "pending",
         is_public,
+        manifest_json: None,
     });
     let _ = state
         .db
