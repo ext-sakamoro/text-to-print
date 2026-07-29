@@ -55,6 +55,12 @@ impl T {
             Lang::En => "Settings",
         }
     }
+    pub fn about(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "情報",
+            Lang::En => "About",
+        }
+    }
 
     // Prompt
     pub fn text_to_3d(l: Lang) -> &'static str {

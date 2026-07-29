@@ -94,6 +94,7 @@ enum Tab {
     Gallery,
     History,
     Settings,
+    About,
 }
 
 struct App {
@@ -183,6 +184,7 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.current_tab, Tab::Gallery, i18n::T::gallery(l));
                 ui.selectable_value(&mut self.current_tab, Tab::History, i18n::T::history(l));
                 ui.selectable_value(&mut self.current_tab, Tab::Settings, i18n::T::settings(l));
+                ui.selectable_value(&mut self.current_tab, Tab::About, i18n::T::about(l));
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let usage = self.state.daily_usage();
@@ -238,6 +240,11 @@ impl eframe::App for App {
             Tab::Settings => {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui::settings::show(ui, &mut self.state, &mut self.settings);
+                });
+            }
+            Tab::About => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::about::show(ui);
                 });
             }
         }

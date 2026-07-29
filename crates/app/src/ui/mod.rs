@@ -1,3 +1,4 @@
+pub mod about;
 pub mod gallery;
 pub mod history;
 pub mod prompt;
