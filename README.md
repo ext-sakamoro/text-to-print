@@ -32,9 +32,13 @@ ALICE-Physics print-safety pipeline
     │
     ▼
 ALICE-Bamboo 3MF export (+ optional 4-color AMS split, overhang layer)
+  or STEP export via alice-sdf (CAD import into Fusion 360 / FreeCAD)
+  or direct G-code via alice-print (Bambu Studio 不要 mode)
     │
     ▼
 .3mf file → open in Bambu Studio → print
+.step file → import into Fusion 360 / FreeCAD for CAD tweak
+.gcode file → send straight to printer (Bambu / Marlin / Klipper)
 ```
 
 All computation runs on a single machine No cloud GPU required LLM inference
@@ -94,6 +98,17 @@ generating LOL DSL over time Paid tier is fully offline
 | 3D preview | alice-view (WebGPU/WASM) with fallback |
 | Optional P2P share | libp2p (mdns / gossipsub / kad) for free-tier upload to ALICE-LOL |
 | Local DB | rusqlite (project history / license state) |
+
+## Export formats
+
+| Format | Path | Producer | Use |
+|--|--|--|--|
+| **3MF** | `alice_bamboo::export_to_3mf` (safety + overhang analysis) | Bambu Lab AMS / Prusa slicer | Standard FDM print |
+| **STL** | `alice_lol::print_export::lol_to_stl` | Any slicer | Legacy pipelines |
+| **FBX** | `alice_lol::print_export::lol_to_fbx` | 3D animation / game engines | Non-print exchange |
+| **STEP** | `alice_sdf::io::step::export_step` | Fusion 360 / FreeCAD / SolidWorks | CAD editing round-trip |
+| **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | Direct-to-printer | Skip Bambu Studio |
+| **3MF (4-color)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
 
 ## Repository layout
 
