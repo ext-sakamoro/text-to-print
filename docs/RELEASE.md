@@ -135,10 +135,28 @@ release upload なしで build + sign + notarize だけ実行:
 `ALICE_ECO_TOKEN` の scope が不足、または期限切れ
 → [Fine-grained tokens](https://github.com/settings/tokens?type=beta) で再作成、`contents:read` を `ext-sakamoro/ALICE-Bamboo` と `ext-sakamoro/ALICE-Physics` に付与
 
+## Windows Authenticode 署名 (future)
+
+`.msi` は cargo-wix で生成されるが、Windows Defender SmartScreen 回避には
+Authenticode 署名が必要 追加手順:
+
+1. DigiCert / SSL.com / GlobalSign から EV Code Signing Certificate を取得
+2. `.pfx` を base64 化して `WINDOWS_CERT_B64` + `WINDOWS_CERT_PASSWORD` secret 追加
+3. `.github/workflows/release.yml` の "Build .msi installer" step 直後に signtool step 追加:
+   ```powershell
+   $cert = [Convert]::FromBase64String($env:CERT_B64)
+   [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\\code.pfx", $cert)
+   & 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe' `
+     sign /f "$env:RUNNER_TEMP\\code.pfx" /p $env:CERT_PASSWORD `
+     /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+     text-to-print-*.msi
+   ```
+
 ## 関連 issue
 
 - **#31** T10.2: GitHub Actions release workflow (この doc の対象)
 - **#32** T10.3: macOS code signing + notarize (この doc の対象)
-- **#33** T10.4: Windows .msi packaging (未対応、現状 .zip)
-- **#34** T10.5: Linux .AppImage or .deb packaging (未対応、現状 .tar.gz)
+- **#33** T10.4: Windows .msi packaging (この doc の対象、Authenticode 署名は follow-up)
+- **#34** T10.5: Linux .AppImage or .deb packaging (この doc の対象)
 - **#30** T10.1: CI 3-OS matrix (別 workflow `ci.yml` で対応済)
+- **#40** CI cargo audit (別 workflow `ci.yml` で対応済)
