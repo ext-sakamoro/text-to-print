@@ -45,6 +45,7 @@ fn build_test_payload() -> SharePayload {
         lol_source: "cube(10.0)",
         lol_sha256: &"a".repeat(64),
         mesh_sha256: &"b".repeat(64),
+        tier: "Free",
         success: true,
         retry_count: 1,
         time_to_file_ms: 4200,

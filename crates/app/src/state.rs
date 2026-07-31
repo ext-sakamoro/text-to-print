@@ -215,6 +215,29 @@ impl AppState {
             });
         }
 
+        // Stage 5: real share upload sweep — retry any queued payloads
+        // from prior sessions Delayed 5s to let the sidecar + UI settle
+        // before hitting the network Runs once per launch; the offline
+        // queue keeps payloads for 24 h (`QUEUE_TTL`) so a subsequent
+        // launch drains anything that didn't land this time
+        {
+            let queue_dir = data_dir.join("share_queue");
+            runtime.spawn(async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                let cfg = text_to_print_network::share::ShareConfig::default();
+                match text_to_print_network::share::retry_queued_uploads(&cfg, &queue_dir).await {
+                    Ok(summary) => tracing::info!(
+                        delivered = summary.delivered,
+                        still_pending = summary.still_pending,
+                        rejected = summary.rejected_permanently,
+                        expired = summary.expired,
+                        "share queue sweep complete"
+                    ),
+                    Err(e) => tracing::warn!(error = %e, "share queue sweep failed"),
+                }
+            });
+        }
+
         Self {
             data_dir,
             tier,
@@ -266,6 +289,29 @@ impl AppState {
     /// backend (Epic-Infra #35) will drain the queue later
     pub fn share_dry_run_dir(&self) -> std::path::PathBuf {
         self.data_dir.join("share_dry_run")
+    }
+
+    /// Directory used by the real upload queue (Stage 5) `enqueue` writes
+    /// `SharePayload` JSON blobs here that `retry_queued_uploads` drains
+    /// on app startup / periodic sweep against the Cloudflare Worker
+    /// endpoint Distinct from `share_dry_run_dir` so operators can inspect
+    /// the dry-run corpus without touching live queue state
+    pub fn share_queue_dir(&self) -> std::path::PathBuf {
+        self.data_dir.join("share_queue")
+    }
+
+    /// Effective share flag Combines the user's opt-in toggle with the
+    /// tier gate: paid tiers (General / Pro / Enterprise) never share
+    /// regardless of the toggle Free tier respects the toggle
+    ///
+    /// This is the single value the generation path should consult before
+    /// dumping / enqueueing a `SharePayload` The settings UI can still
+    /// surface the raw toggle to communicate opt-in state
+    pub fn share_effective_enabled(&self) -> bool {
+        match self.tier {
+            Tier::Free => self.share_lol_dsl,
+            Tier::General | Tier::Pro | Tier::Enterprise => false,
+        }
     }
 }
 

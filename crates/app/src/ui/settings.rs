@@ -89,18 +89,26 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             }
         }
         ui.add_space(4.0);
-        ui.label(if state.share_lol_dsl {
+        // Stage 5: tier-effective status Paid tiers force opt-out
+        // regardless of the checkbox — surface that explicitly so users
+        // don't wonder why their toggle isn't taking effect
+        let effective_status = if state.share_effective_enabled() {
             "現在: 共有中 (LoRA 品質向上に貢献)"
+        } else if state.share_lol_dsl {
+            "現在: 有料 tier のため自動 opt-out (アップロードしません)"
         } else {
             "現在: opt-out (アップロードしません)"
-        });
+        };
+        ui.label(effective_status);
         ui.add_space(4.0);
-        // GAP-12: surface the dry-run queue count so users can verify the
-        // opt-in actually persists something even before the Cloudflare
-        // Workers backend (Epic-Infra #35) is online
-        let queued = text_to_print_network::share::count_dry_run_queued(&state.share_dry_run_dir());
+        // Stage 5: surface both queue counts — dry-run kept as local
+        // audit corpus, share_queue is the real upload backlog drained by
+        // `retry_queued_uploads` on startup
+        let dry_queued =
+            text_to_print_network::share::count_dry_run_queued(&state.share_dry_run_dir());
+        let queue_pending = text_to_print_network::share::count_pending(&state.share_queue_dir());
         ui.label(format!(
-            "アップロード待ち (dry-run キュー): {queued} 件",
+            "アップロード待ち: 実キュー {queue_pending} 件 / dry-run {dry_queued} 件"
         ));
         ui.add_space(4.0);
         ui.hyperlink_to(

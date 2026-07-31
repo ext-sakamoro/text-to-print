@@ -174,7 +174,11 @@ fn default_attribution(tier: Tier, uuid: &Uuid, lol_sha256: &str) -> Attribution
     }
 }
 
-const fn tier_slug(tier: Tier) -> &'static str {
+/// Stable, `Display`-safe slug used across the tier / share / hashtag
+/// surface Kept as a `const fn` so it round-trips through match arms in
+/// hot paths without allocation
+#[must_use]
+pub const fn tier_slug(tier: Tier) -> &'static str {
     match tier {
         Tier::Free => "Free",
         Tier::General => "General",

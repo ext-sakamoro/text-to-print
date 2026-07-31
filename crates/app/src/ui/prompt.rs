@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crate::i18n::Lang;
 use crate::state::{AppState, GenerationMessage, GenerationPhase, GenerationStatus, PhaseProgress};
 use text_to_print_core::db::GenerationRecord;
+use text_to_print_core::manifest::tier_slug;
 use text_to_print_core::pipeline::{self, ExportFormat, Quality};
 use text_to_print_llm::sidecar::SidecarStatus;
 use text_to_print_llm::{backend, prompt};
@@ -619,9 +620,10 @@ fn run_export(
         llm_seed: None,
         retry_count: state.phase_progress.retry_count,
         safety_violations: vec![],
-        // TODO(Stage 5): read effective tier from LicenseState / DB profile
-        // Hardcoded Free until license loading + Freemium share wire-up lands
-        tier: text_to_print_core::tier::Tier::Free,
+        // Stage 5: effective tier from DB profile (LicenseIssuer flow will
+        // upgrade `state.tier` on activation) drives both the alice:tier
+        // metadata in the exported 3MF and the LoRA share flag downstream
+        tier: state.tier,
     };
 
     let export_result =
@@ -686,10 +688,14 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     let id = gen_id;
     let output_dir = state.data_dir.join("exports");
     let can_download = state.tier.limits().can_download;
-    // GAP-12: capture the opt-in flag + dry-run dir so the async task can
-    // decide whether to write a `SharePayload` snapshot after export.
-    let share_enabled = state.share_lol_dsl;
+    // GAP-12 / Stage 5: capture the tier-effective opt-in flag + both share
+    // directories so the async task can (a) dry-run dump for local audit and
+    // (b) enqueue a real upload for the Cloudflare Worker sweep Paid tiers
+    // suppress both regardless of the raw checkbox state
+    let share_enabled = state.share_effective_enabled();
     let share_dry_run_dir = state.share_dry_run_dir();
+    let share_queue_dir = state.share_queue_dir();
+    let tier_slug = tier_slug(state.tier);
     let model_id = state.llm_config.model_choice.model_id().to_string();
     let prompt_lang = _lang.as_bcp47().to_string();
 
@@ -776,9 +782,10 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     None
                 };
 
-                // GAP-12: gate the dry-run share dump on opt-in + successful
-                // 3MF export. The Cloudflare Workers backend (Epic-Infra #35)
-                // will consume the same payload once online.
+                // GAP-12 / Stage 5: gate the share payload on the
+                // tier-effective opt-in flag Free-tier + opt-in → dry-run
+                // dump (local audit) + enqueue for the Cloudflare Worker
+                // sweep Paid tiers short-circuit the branch entirely
                 let share_dry_run = if share_enabled
                     && let Some(stats) = mesh_stats.as_ref()
                     && let Ok(mesh_bytes) = std::fs::read(&stats.path)
@@ -793,6 +800,7 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                             lol_source: &lol,
                             lol_sha256: &text_to_print_core::manifest::sha256_hex(lol.as_bytes()),
                             mesh_sha256: &text_to_print_core::manifest::sha256_hex(&mesh_bytes),
+                            tier: tier_slug,
                             success: true,
                             retry_count,
                             time_to_file_ms: 0,
@@ -806,6 +814,15 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                             user_edited: false,
                         },
                     );
+                    // Enqueue for the real upload sweep The dry-run dump
+                    // path is kept for local inspection but the queued file
+                    // is what actually gets delivered on the next
+                    // `retry_queued_uploads` cycle
+                    if let Err(e) =
+                        text_to_print_network::share::enqueue(&payload, &share_queue_dir)
+                    {
+                        tracing::warn!(error = %e, "share enqueue failed");
+                    }
                     match text_to_print_network::share::dump_dry_run(&payload, &share_dry_run_dir) {
                         Ok(p) => Some(p),
                         Err(e) => {

@@ -17,6 +17,12 @@ pub struct SharePayload {
     pub lol_source: String,
     pub lol_sha256: String,
     pub mesh_sha256: String,
+    /// Tier at generation time — Cloudflare Worker uses this both for
+    /// per-tier rate-limit / accounting and to reject upload attempts
+    /// that shouldn't have been sent in the first place (defence in depth
+    /// against a mis-configured client) Stringly-typed to keep this
+    /// crate free of a hard core dep on `text_to_print_core::tier::Tier`
+    pub tier: String,
     pub quality: QualitySignals,
 }
 
@@ -44,6 +50,12 @@ pub struct ShareInputs<'a> {
     pub lol_source: &'a str,
     pub lol_sha256: &'a str,
     pub mesh_sha256: &'a str,
+    /// Tier slug ("Free" / "General" / "Pro" / "Enterprise") — mirrored
+    /// from `text_to_print_core::manifest::Attribution::tier` at the
+    /// app boundary Paid-tier callers should never construct a
+    /// [`SharePayload`] in the first place; this field lets the server
+    /// still catch mis-configured clients
+    pub tier: &'a str,
     pub success: bool,
     pub retry_count: u32,
     pub time_to_file_ms: u64,
@@ -109,6 +121,7 @@ impl SharePayload {
             lol_source: i.lol_source.to_string(),
             lol_sha256: i.lol_sha256.to_string(),
             mesh_sha256: i.mesh_sha256.to_string(),
+            tier: i.tier.to_string(),
             quality: QualitySignals {
                 success: i.success,
                 retry_count: i.retry_count,
@@ -396,6 +409,7 @@ mod tests {
             lol_source: "sphere(1.0)",
             lol_sha256: "a".repeat(64).as_str(),
             mesh_sha256: "b".repeat(64).as_str(),
+            tier: "Free",
             success: true,
             retry_count: 0,
             time_to_file_ms: 1000,
@@ -655,6 +669,7 @@ mod tests {
             lol_source: "cube(10.0)",
             lol_sha256: "a".repeat(64).as_str(),
             mesh_sha256: "b".repeat(64).as_str(),
+            tier: "Free",
             success: true,
             retry_count: 2,
             time_to_file_ms: 7890,
@@ -666,6 +681,7 @@ mod tests {
 
         let json = serde_json::to_string(&p).unwrap();
         let back: SharePayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.tier, "Free");
         assert_eq!(back.quality.retry_count, 2);
         assert_eq!(back.quality.time_to_file_ms, 7890);
         assert_eq!(back.quality.safety_violations, vec!["overhang_65deg"]);
