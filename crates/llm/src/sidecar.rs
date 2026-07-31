@@ -22,10 +22,52 @@
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tracing::{info, warn};
+
+/// Platform-specific filename for the bundled sidecar binary
+#[must_use]
+pub const fn sidecar_exe_filename() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "alice-llm-server.exe"
+    } else {
+        "alice-llm-server"
+    }
+}
+
+/// Internal resolver: pure function taking optional exe directory so tests
+/// can exercise the priority chain without touching `std::env::current_exe`
+fn resolve_bin_path_from(explicit: Option<&Path>, exe_dir: Option<&Path>) -> PathBuf {
+    if let Some(p) = explicit {
+        return p.to_path_buf();
+    }
+    if let Some(dir) = exe_dir {
+        let candidate = dir.join(sidecar_exe_filename());
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    PathBuf::from(sidecar_exe_filename())
+}
+
+/// Resolve which `alice-llm-server` binary to spawn
+///
+/// Priority:
+///   1. `config.bin_path` if explicitly set
+///   2. Same directory as the current executable (bundled desktop layout)
+///   3. Fallback to bare filename so the OS resolves via `PATH`
+///
+/// The bundled case (2) makes MSI / .deb / .AppImage / .tar.gz installs
+/// self-contained no additional install step required for end users
+#[must_use]
+pub fn resolve_bin_path(config: &SidecarConfig) -> PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    resolve_bin_path_from(config.bin_path.as_deref(), exe_dir.as_deref())
+}
 
 /// GUI に露出する sidecar プロセス状態
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,10 +142,7 @@ pub struct SidecarProcess {
 impl SidecarProcess {
     /// sidecar を起動し、`/health` が応答するまで待つ
     pub async fn spawn(config: SidecarConfig) -> Result<Self> {
-        let bin = config
-            .bin_path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("alice-llm-server"));
+        let bin = resolve_bin_path(&config);
 
         if !config.model_path.exists() {
             bail!(
@@ -274,6 +313,52 @@ mod tests {
         assert!(!SidecarStatus::Starting.is_running());
         assert!(SidecarStatus::Running.is_running());
         assert!(!SidecarStatus::Error("nope".into()).is_running());
+    }
+
+    #[test]
+    fn resolve_uses_explicit_bin_path_when_set() {
+        let explicit = PathBuf::from("/opt/custom/alice-llm-server");
+        let resolved = resolve_bin_path_from(Some(&explicit), None);
+        assert_eq!(resolved, explicit);
+    }
+
+    #[test]
+    fn resolve_prefers_exe_neighbor_when_binary_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let neighbor = dir.path().join(sidecar_exe_filename());
+        std::fs::write(&neighbor, b"stub").unwrap();
+
+        let resolved = resolve_bin_path_from(None, Some(dir.path()));
+        assert_eq!(resolved, neighbor);
+    }
+
+    #[test]
+    fn resolve_falls_back_to_path_lookup_when_neighbor_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        // no binary placed next to the fake exe dir
+        let resolved = resolve_bin_path_from(None, Some(dir.path()));
+        assert_eq!(resolved, PathBuf::from(sidecar_exe_filename()));
+    }
+
+    #[test]
+    fn resolve_explicit_wins_over_neighbor() {
+        let dir = tempfile::tempdir().unwrap();
+        let neighbor = dir.path().join(sidecar_exe_filename());
+        std::fs::write(&neighbor, b"stub").unwrap();
+
+        let explicit = PathBuf::from("/opt/custom/alice-llm-server");
+        let resolved = resolve_bin_path_from(Some(&explicit), Some(dir.path()));
+        assert_eq!(resolved, explicit);
+    }
+
+    #[test]
+    fn sidecar_exe_filename_matches_platform() {
+        let name = sidecar_exe_filename();
+        if cfg!(target_os = "windows") {
+            assert_eq!(name, "alice-llm-server.exe");
+        } else {
+            assert_eq!(name, "alice-llm-server");
+        }
     }
 
     #[tokio::test]

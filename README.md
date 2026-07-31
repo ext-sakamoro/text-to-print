@@ -147,6 +147,9 @@ Recent changes:
 # Standalone desktop app
 cargo build --release --package text-to-print
 
+# Bundled LLM sidecar (`alice-llm-server` binary shipped alongside the app)
+scripts/build_sidecar.sh
+
 # LoRA license utility
 cargo build --release --package text-to-print-core --bin gen-license-key
 ```
@@ -154,7 +157,13 @@ cargo build --release --package text-to-print-core --bin gen-license-key
 Requires:
 - Rust 1.75+ (rust-toolchain.toml pinned)
 - ALICE ecosystem sibling checkouts at `../ALICE-SDF`, `../ALICE-LOL`,
-  `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`
+  `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`, `../ALICE-LLM`
+
+The release installers (`.msi` follow-up pending, `.deb`, `.AppImage`,
+`.tar.gz`, `.zip`) bundle `alice-llm-server` next to the desktop binary
+`crates/llm/src/sidecar.rs::resolve_bin_path` looks in the exe directory
+first, then falls back to `PATH`, so end users have nothing to install
+separately
 
 ## Run
 

@@ -44,6 +44,9 @@ section = "graphics"
 priority = "optional"
 assets = [
     ["target/release/text-to-print", "usr/bin/text-to-print", "755"],
+    # Stage 3-A: bundled sidecar Release workflow copies
+    # `alice-llm-server` into `target/release/` before invoking `cargo deb`
+    ["target/release/alice-llm-server", "usr/bin/alice-llm-server", "755"],
     ["../../README.md", "usr/share/doc/text-to-print/README.md", "644"],
     ["../../LICENSE", "usr/share/doc/text-to-print/LICENSE", "644"],
 ]

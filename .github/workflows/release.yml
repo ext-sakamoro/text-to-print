@@ -28,18 +28,22 @@ jobs:
             target: aarch64-apple-darwin
             archive_ext: tar.gz
             bin_name: text-to-print
+            sidecar_bin: alice-llm-server
           - os: macos-latest
             target: x86_64-apple-darwin
             archive_ext: tar.gz
             bin_name: text-to-print
+            sidecar_bin: alice-llm-server
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive_ext: tar.gz
             bin_name: text-to-print
+            sidecar_bin: alice-llm-server
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive_ext: zip
             bin_name: text-to-print.exe
+            sidecar_bin: alice-llm-server.exe
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -98,11 +102,27 @@ jobs:
       - name: cargo build --release
         run: cargo build --release --target ${{ matrix.target }} --bin text-to-print
 
+      # === Sidecar bundling (Stage 3-A) ===
+      # Build `alice-llm-server` (OpenAI-compatible HTTP endpoint) and stage
+      # it next to the desktop binary Bundled layout lets sidecar.rs resolve
+      # the binary via `resolve_bin_path` -> exe-neighbor lookup without any
+      # user-side install (`crates/llm/src/sidecar.rs`)
+      - name: Build alice-llm-server sidecar
+        shell: bash
+        working-directory: ALICE-LLM
+        run: cargo build --release --features server --bin alice-llm-server --target ${{ matrix.target }}
+
       - name: Stage binary artifact
         shell: bash
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
+          # Stage sidecar next to desktop binary (bundled layout)
+          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "dist/${{ matrix.sidecar_bin }}"
+          # Also mirror to target/release so cargo-deb (which reads from the
+          # unified profile dir) picks it up on the Linux runner
+          mkdir -p target/release
+          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "target/release/${{ matrix.sidecar_bin }}"
 
       # === macOS code signing + notarize (T10.3) ===
       # Requires the following secrets to be set at the repository level:
@@ -161,24 +181,37 @@ jobs:
             --sign "$IDENTITY" \
             dist/${{ matrix.bin_name }}
           codesign --verify --verbose dist/${{ matrix.bin_name }}
+          # Bundled sidecar must also be signed for notarization to succeed
+          codesign --force --deep --timestamp --options runtime \
+            --sign "$IDENTITY" \
+            dist/${{ matrix.sidecar_bin }}
+          codesign --verify --verbose dist/${{ matrix.sidecar_bin }}
 
       - name: Package archive (macOS/Linux)
         if: matrix.archive_ext == 'tar.gz'
         shell: bash
         run: |
           cd dist
-          tar czf ../text-to-print-${{ matrix.target }}.tar.gz ${{ matrix.bin_name }}
+          tar czf ../text-to-print-${{ matrix.target }}.tar.gz ${{ matrix.bin_name }} ${{ matrix.sidecar_bin }}
 
       - name: Package archive (Windows)
         if: matrix.archive_ext == 'zip'
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/${{ matrix.bin_name }} -DestinationPath text-to-print-${{ matrix.target }}.zip
+          Compress-Archive -Path dist/${{ matrix.bin_name }},dist/${{ matrix.sidecar_bin }} -DestinationPath text-to-print-${{ matrix.target }}.zip
 
       # === Windows .msi (#33 T10.4) via cargo-wix (WiX Toolset v3 wrapper) ===
       # `[package.metadata.wix]` in crates/app/Cargo.toml drives per-arch
       # `.msi` generation Authenticode signing hook via SIGNTOOL is left
       # as a TODO — see docs/RELEASE.md §Windows Authenticode
+      #
+      # TODO(Stage 3-A): the .msi does not yet bundle alice-llm-server.exe
+      # Adding a second binary requires `cargo wix init` to generate a
+      # `wix/main.wxs` template and inserting an extra `<File>` element
+      # under the ProgramFiles component End users installing via .msi
+      # therefore still need to `cargo install --features server` the
+      # sidecar until this follow-up ships The .zip archive above already
+      # contains the bundled sidecar for the meantime
       - name: Install cargo-wix (Windows)
         if: startsWith(matrix.os, 'windows')
         shell: pwsh
@@ -212,6 +245,9 @@ jobs:
           chmod +x linuxdeploy
           mkdir -p AppDir/usr/bin
           cp dist/${{ matrix.bin_name }} AppDir/usr/bin/
+          # Bundle alice-llm-server sidecar next to the desktop binary so
+          # resolve_bin_path() finds it via exe-neighbor lookup
+          cp dist/${{ matrix.sidecar_bin }} AppDir/usr/bin/
           cat > AppDir/text-to-print.desktop <<'EOF'
           [Desktop Entry]
           Type=Application
@@ -249,11 +285,13 @@ jobs:
             --wait
           rm -f "$RUNNER_TEMP/AuthKey.p8"
           # notarytool cannot staple .tar.gz directly Staple the individual
-          # binary for offline verification, then repack for distribution
+          # binaries (desktop + sidecar) for offline verification, then
+          # repack for distribution
           xcrun stapler staple dist/${{ matrix.bin_name }} || true
+          xcrun stapler staple dist/${{ matrix.sidecar_bin }} || true
           rm -f "text-to-print-${{ matrix.target }}.tar.gz"
           cd dist
-          tar czf "../text-to-print-${{ matrix.target }}.tar.gz" ${{ matrix.bin_name }}
+          tar czf "../text-to-print-${{ matrix.target }}.tar.gz" ${{ matrix.bin_name }} ${{ matrix.sidecar_bin }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
