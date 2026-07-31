@@ -13,6 +13,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::manifest::{self, AliceManifest, ManifestBuilder};
+use crate::tier::Tier;
 
 #[derive(Debug, Clone)]
 pub struct GenerationResult {
@@ -356,6 +357,10 @@ pub struct MetadataInputs<'a> {
     pub llm_seed: Option<u64>,
     pub retry_count: u32,
     pub safety_violations: Vec<String>,
+    /// Tier at generation time Populated on the [`crate::manifest::Attribution`]
+    /// section so the LoRA share pipeline can filter by tier and slicers see
+    /// `<metadata name="alice:tier">` in the exported 3MF
+    pub tier: Tier,
 }
 
 /// Fast safety check for LLM retry loop
@@ -452,6 +457,7 @@ pub fn export_mesh_with_metadata(
         time_to_file_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
         safety_violations,
         success: true,
+        tier: meta.tier,
     }
     .build();
 
@@ -761,6 +767,7 @@ mod tests {
             llm_seed: None,
             retry_count: 0,
             safety_violations: vec![],
+            tier: Tier::Free,
         };
         let (stats, manifest) = export_mesh_with_metadata(
             "sphere(1.0)",

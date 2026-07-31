@@ -98,6 +98,7 @@ fn e2e_export_with_metadata_embeds_manifest_and_matches_stats() {
         llm_seed: Some(42),
         retry_count: 0,
         safety_violations: vec![],
+        tier: text_to_print_core::tier::Tier::Free,
     };
     let (stats, manifest) = pipeline::export_mesh_with_metadata(
         &lol,

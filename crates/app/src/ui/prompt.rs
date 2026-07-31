@@ -619,6 +619,9 @@ fn run_export(
         llm_seed: None,
         retry_count: state.phase_progress.retry_count,
         safety_violations: vec![],
+        // TODO(Stage 5): read effective tier from LicenseState / DB profile
+        // Hardcoded Free until license loading + Freemium share wire-up lands
+        tier: text_to_print_core::tier::Tier::Free,
     };
 
     let export_result =

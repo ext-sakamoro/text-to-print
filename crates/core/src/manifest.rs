@@ -8,9 +8,12 @@ use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+use crate::tier::Tier;
+
 pub const SCHEMA_VERSION: &str = "1";
 pub const SCHEMA_URL: &str = "https://alicelaw.net/text-to-print/schema/v1/manifest.schema.json";
 pub const ALICE_NAMESPACE: &str = "https://alicelaw.net/text-to-print/ns";
+pub const ALICE_DESIGNER: &str = "ALICE (alicelaw.net)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AliceManifest {
@@ -20,6 +23,28 @@ pub struct AliceManifest {
     pub generation: Generation,
     pub quality: Quality,
     pub environment: Environment,
+    /// Slicer-visible attribution (Application/Designer/Description) plus the
+    /// user's tier flag at generation time Emitted as standard 3MF metadata
+    /// fields so ALICE-generated prints are identifiable in Bambu Studio /
+    /// Prusa / Cura and downstream tools can filter by tier
+    pub attribution: Attribution,
+}
+
+/// User-visible attribution embedded as standard 3MF metadata plus Freemium
+/// tier flag consumed by [`crate::pipeline::export_mesh_with_metadata`] and
+/// the LoRA share pipeline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attribution {
+    /// Tier at generation time (Free / General / Pro / Enterprise) Free tier
+    /// prints are eligible for opt-in LoRA share Paid tiers stay local
+    pub tier: Tier,
+    /// Human-readable hashtags emitted verbatim into the standard
+    /// `<metadata name="Description">` block Alphabetical, `#`-prefixed
+    pub hashtags: Vec<String>,
+    /// `<metadata name="Application">` value
+    pub application: String,
+    /// `<metadata name="Designer">` value
+    pub designer: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,21 +109,26 @@ pub struct ManifestBuilder<'a> {
     pub time_to_file_ms: u64,
     pub safety_violations: Vec<String>,
     pub success: bool,
+    pub tier: Tier,
 }
 
 impl<'a> ManifestBuilder<'a> {
     pub fn build(self) -> AliceManifest {
+        let uuid = Uuid::now_v7();
+        let timestamp = Utc::now();
+        let lol_sha256 = sha256_hex(self.lol_source.as_bytes());
+        let attribution = default_attribution(self.tier, &uuid, &lol_sha256);
         AliceManifest {
             schema_version: SCHEMA_VERSION.to_string(),
-            uuid: Uuid::now_v7(),
-            timestamp: Utc::now(),
+            uuid,
+            timestamp,
             generation: Generation {
                 prompt: self.prompt.to_string(),
                 prompt_lang: self.prompt_lang.to_string(),
                 llm_model: self.llm_model.to_string(),
                 llm_seed: self.llm_seed,
                 lol_source: self.lol_source.to_string(),
-                lol_sha256: sha256_hex(self.lol_source.as_bytes()),
+                lol_sha256,
                 mesh_sha256: sha256_hex(self.mesh_bytes),
                 vertex_count: self.vertex_count,
                 triangle_count: self.triangle_count,
@@ -113,7 +143,43 @@ impl<'a> ManifestBuilder<'a> {
                 user_edited: false,
             },
             environment: Environment::detect(),
+            attribution,
         }
+    }
+}
+
+/// Build the default [`Attribution`] for a given tier / uuid / lol hash
+///
+/// Hashtags are emitted alphabetically and always include `#ALICE` and
+/// `#text-to-print` so downstream `grep`-style tools can filter for ALICE
+/// output without a JSON parser
+fn default_attribution(tier: Tier, uuid: &Uuid, lol_sha256: &str) -> Attribution {
+    let tier_tag = format!("#tier-{}", tier_slug(tier));
+    let uuid_str = uuid.to_string();
+    let short_uuid = uuid_str.get(..8).unwrap_or(uuid_str.as_str());
+    let short_hash = lol_sha256.get(..16).unwrap_or(lol_sha256);
+    let mut hashtags = vec![
+        "#ALICE".to_string(),
+        "#text-to-print".to_string(),
+        tier_tag,
+        format!("#id-{short_uuid}"),
+        format!("#lol-{short_hash}"),
+    ];
+    hashtags.sort();
+    Attribution {
+        tier,
+        hashtags,
+        application: format!("text-to-print v{}", env!("CARGO_PKG_VERSION")),
+        designer: ALICE_DESIGNER.to_string(),
+    }
+}
+
+const fn tier_slug(tier: Tier) -> &'static str {
+    match tier {
+        Tier::Free => "Free",
+        Tier::General => "General",
+        Tier::Pro => "Pro",
+        Tier::Enterprise => "Enterprise",
     }
 }
 
@@ -183,16 +249,49 @@ fn inject_metadata_xml(model_xml: &str, m: &AliceManifest) -> String {
         buf
     };
 
+    let uuid_str = m.uuid.to_string();
+    let short_uuid = uuid_str.get(..8).unwrap_or(uuid_str.as_str());
+    let short_hash = m
+        .generation
+        .lol_sha256
+        .get(..16)
+        .unwrap_or(m.generation.lol_sha256.as_str());
+    let title = format!("ALICE #{short_uuid}");
+    // Description intentionally excludes the raw prompt text (avoids
+    // leaking user input into the slicer UI on Free-tier shared files)
+    let description = format!(
+        "Generated by {}\nLOL sha256: {}\n{}",
+        m.attribution.application,
+        short_hash,
+        m.attribution.hashtags.join(" ")
+    );
+    let creation_date = m.timestamp.to_rfc3339();
+
     out.push_str(before_model);
     out.push_str(&open_tag_with_ns);
     out.push('\n');
+    // Standard 3MF metadata fields — visible in Bambu Studio / Prusa / Cura
+    for (k, v) in [
+        ("Application", m.attribution.application.as_str()),
+        ("Designer", m.attribution.designer.as_str()),
+        ("Title", title.as_str()),
+        ("Description", description.as_str()),
+        ("CreationDate", creation_date.as_str()),
+    ] {
+        out.push_str(&format!(
+            "  <metadata name=\"{k}\">{}</metadata>\n",
+            xml_escape(v)
+        ));
+    }
+    // ALICE namespaced metadata — machine-parseable manifest surface
     for (k, v) in [
         ("alice:schema_version", m.schema_version.as_str()),
-        ("alice:uuid", &m.uuid.to_string()),
-        ("alice:timestamp", &m.timestamp.to_rfc3339()),
+        ("alice:uuid", uuid_str.as_str()),
+        ("alice:timestamp", creation_date.as_str()),
         ("alice:llm_model", m.generation.llm_model.as_str()),
         ("alice:lol_sha256", m.generation.lol_sha256.as_str()),
         ("alice:mesh_sha256", m.generation.mesh_sha256.as_str()),
+        ("alice:tier", tier_slug(m.attribution.tier)),
     ] {
         out.push_str(&format!(
             "  <metadata name=\"{k}\">{}</metadata>\n",
@@ -229,6 +328,7 @@ mod tests {
             time_to_file_ms: 1234,
             safety_violations: vec![],
             success: true,
+            tier: Tier::Free,
         }
         .build()
     }
@@ -263,6 +363,114 @@ mod tests {
         assert!(out.contains("xmlns:alice=\"https://alicelaw.net/text-to-print/ns\""));
         assert!(out.contains("<metadata name=\"alice:uuid\">"));
         assert!(out.contains("<metadata name=\"alice:lol_sha256\">"));
+    }
+
+    #[test]
+    fn inject_metadata_emits_standard_3mf_fields() {
+        let src =
+            "<?xml version=\"1.0\"?>\n<model unit=\"millimeter\" xmlns=\"http://x\">\n</model>";
+        let m = sample_manifest();
+        let out = inject_metadata_xml(src, &m);
+        assert!(
+            out.contains("<metadata name=\"Application\">text-to-print v"),
+            "expected Application metadata: {out}"
+        );
+        assert!(
+            out.contains("<metadata name=\"Designer\">ALICE (alicelaw.net)</metadata>"),
+            "expected Designer metadata: {out}"
+        );
+        assert!(
+            out.contains("<metadata name=\"Title\">ALICE #"),
+            "expected Title metadata: {out}"
+        );
+        assert!(
+            out.contains("<metadata name=\"Description\">"),
+            "expected Description metadata: {out}"
+        );
+        assert!(
+            out.contains("<metadata name=\"CreationDate\">"),
+            "expected CreationDate metadata: {out}"
+        );
+        assert!(
+            out.contains("<metadata name=\"alice:tier\">Free</metadata>"),
+            "expected alice:tier metadata: {out}"
+        );
+    }
+
+    #[test]
+    fn inject_metadata_description_contains_alice_hashtag() {
+        let src =
+            "<?xml version=\"1.0\"?>\n<model unit=\"millimeter\" xmlns=\"http://x\">\n</model>";
+        let m = sample_manifest();
+        let out = inject_metadata_xml(src, &m);
+        assert!(
+            out.contains("#ALICE"),
+            "Description should include #ALICE hashtag: {out}"
+        );
+        assert!(
+            out.contains("#text-to-print"),
+            "Description should include #text-to-print hashtag: {out}"
+        );
+        assert!(
+            out.contains("#tier-Free"),
+            "Description should include #tier-Free for Free tier: {out}"
+        );
+    }
+
+    #[test]
+    fn inject_metadata_description_excludes_raw_prompt() {
+        let src =
+            "<?xml version=\"1.0\"?>\n<model unit=\"millimeter\" xmlns=\"http://x\">\n</model>";
+        let m = sample_manifest();
+        let out = inject_metadata_xml(src, &m);
+        assert!(
+            !out.contains("a cube 20mm"),
+            "Description must NOT leak raw prompt: {out}"
+        );
+    }
+
+    #[test]
+    fn attribution_roundtrip_preserves_tier_and_hashtags() {
+        let m = sample_manifest();
+        let json = serde_json::to_string(&m).unwrap();
+        let back: AliceManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.attribution.tier, Tier::Free);
+        assert!(back.attribution.hashtags.contains(&"#ALICE".to_string()));
+        assert!(
+            back.attribution
+                .hashtags
+                .contains(&"#text-to-print".to_string())
+        );
+        assert!(
+            back.attribution
+                .hashtags
+                .contains(&"#tier-Free".to_string())
+        );
+        assert_eq!(back.attribution.designer, ALICE_DESIGNER);
+    }
+
+    #[test]
+    fn manifest_builder_paid_tier_emits_paid_hashtag() {
+        let m = ManifestBuilder {
+            prompt: "x",
+            prompt_lang: "en",
+            llm_model: "m",
+            llm_seed: None,
+            lol_source: "cube(1.0)",
+            mesh_bytes: b"",
+            vertex_count: 0,
+            triangle_count: 0,
+            export_format: "3mf",
+            retry_count: 0,
+            time_to_file_ms: 0,
+            safety_violations: vec![],
+            success: true,
+            tier: Tier::Pro,
+        }
+        .build();
+        assert_eq!(m.attribution.tier, Tier::Pro);
+        assert!(m.attribution.hashtags.contains(&"#tier-Pro".to_string()));
+        assert!(!m.attribution.hashtags.contains(&"#tier-Free".to_string()));
     }
 
     #[test]
