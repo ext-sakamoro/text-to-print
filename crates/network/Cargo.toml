@@ -17,7 +17,7 @@ uuid = { workspace = true }
 directories = { workspace = true }
 chrono = { workspace = true }
 rand = { workspace = true }
-alice-lol = { workspace = true }
+alice-bamboo = { workspace = true }
 hex = "0.4"
 sha2 = "0.10"
 # LoRA share upload backend HTTP client (GAP-3 #44).

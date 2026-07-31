@@ -101,9 +101,9 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
                     if ui.button("フォークして公開").clicked()
                         && !gallery.fork_input.trim().is_empty()
                     {
-                        // alice_lol で検証
+                        // alice-bamboo re-export 経由で LOL 検証
                         let new_lol = gallery.fork_input.trim();
-                        if alice_lol::runtime_parser::parse_lol(new_lol).is_ok() {
+                        if alice_bamboo::parse_lol(new_lol).is_ok() {
                             node.fork_sdf(&sdf.id, new_lol);
                             viewer.set_lol(new_lol);
                             gallery.fork_input.clear();

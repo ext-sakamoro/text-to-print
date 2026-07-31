@@ -20,8 +20,11 @@ license = "MIT"
 
 [workspace.dependencies]
 # ALICE ecosystem
+# Stage 4 (2026-08-01): alice-lol was removed as a direct dep — text-to-print
+# now consumes parse_lol / print_export / to_wgsl through alice-bamboo
+# re-exports (alice-bamboo has `wgsl` feature default-on so `to_wgsl` is
+# exposed uniformly)
 alice-sdf = { path = "../ALICE-SDF" }
-alice-lol = { path = "../ALICE-LOL/alice-lol", features = ["wgsl"] }
 alice-view = { path = "../ALICE-View", default-features = false }
 alice-llm = { path = "../ALICE-LLM", default-features = false }
 alice-bamboo = { path = "../ALICE-Bamboo" }

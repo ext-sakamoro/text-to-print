@@ -105,7 +105,7 @@ impl SdfDag {
     /// diff からフォークを適用（P2P 受信時）
     pub fn apply_diff(&mut self, diff: &SdfDiff) -> Option<MerkleNode> {
         // LOL を検証
-        if alice_lol::runtime_parser::parse_lol(&diff.forked_lol).is_err() {
+        if alice_bamboo::parse_lol(&diff.forked_lol).is_err() {
             tracing::warn!(hash = %diff.fork_hash, "received invalid forked LOL, dropping");
             return None;
         }

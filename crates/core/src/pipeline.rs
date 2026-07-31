@@ -1,8 +1,7 @@
 use alice_bamboo::color4::{Color4Config, quantize_to_4color};
 use alice_bamboo::overhang::{OverhangConfig, OverhangReport, analyze_overhang};
+use alice_bamboo::print_export::{ExportStats, PrintConfig};
 use alice_bamboo::safety::{SafetyReport, safety_validate};
-use alice_lol::print_export::{ExportStats, PrintConfig};
-use alice_lol::runtime_parser;
 use alice_sdf::io::threemf::export_3mf;
 use alice_sdf::mesh::{MarchingCubesConfig, MeshRepair, sdf_to_mesh};
 use alice_sdf::tight_aabb::{TightAabbConfig, compute_tight_aabb_with_config};
@@ -133,7 +132,7 @@ impl Quality {
 
 /// LOL ソースを検証（パースできるか）
 pub fn validate_lol(lol_source: &str) -> Result<()> {
-    runtime_parser::parse_lol(lol_source)
+    alice_bamboo::parse_lol(lol_source)
         .map(|_| ())
         .map_err(|e| anyhow::anyhow!("LOL parse error: {}", e.message))
 }
@@ -164,12 +163,12 @@ pub fn export_mesh(
         ExportFormat::ThreeMf => export_3mf_via_bamboo(lol_source, &output_path, quality),
         ExportFormat::Fbx => {
             let config = quality.to_print_config();
-            let stats = alice_lol::print_export::lol_to_fbx(lol_source, &output_path, &config)?;
+            let stats = alice_bamboo::print_export::lol_to_fbx(lol_source, &output_path, &config)?;
             Ok(to_mesh_stats(&stats))
         }
         ExportFormat::Stl => {
             let config = quality.to_print_config();
-            let stats = alice_lol::print_export::lol_to_stl(lol_source, &output_path, &config)?;
+            let stats = alice_bamboo::print_export::lol_to_stl(lol_source, &output_path, &config)?;
             Ok(to_mesh_stats(&stats))
         }
         ExportFormat::Step => export_step_via_alice_sdf(lol_source, &output_path, quality),
@@ -533,10 +532,10 @@ pub fn extract_lol(llm_response: &str) -> Option<String> {
 
 /// LOL → WGSL シェーダー生成（SDF プレビュー用）
 pub fn lol_to_wgsl(lol_source: &str) -> Result<String> {
-    let node = runtime_parser::parse_lol(lol_source)
+    let node = alice_bamboo::parse_lol(lol_source)
         .map_err(|e| anyhow::anyhow!("LOL parse error: {}", e.message))?;
 
-    let wgsl = alice_lol::to_wgsl(&node);
+    let wgsl = alice_bamboo::to_wgsl(&node);
     if wgsl.is_empty() {
         bail!("WGSL generation failed: empty output");
     }

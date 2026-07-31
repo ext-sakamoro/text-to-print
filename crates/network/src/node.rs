@@ -233,7 +233,7 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
             author_did,
             prompt,
         } => {
-            if alice_lol::runtime_parser::parse_lol(&lol_source).is_err() {
+            if alice_bamboo::parse_lol(&lol_source).is_err() {
                 tracing::warn!(id, "received invalid LOL source, dropping");
                 return;
             }
@@ -253,7 +253,7 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
             let _ = prompt;
         }
         SyncEvent::SdfForked { diff } => {
-            if alice_lol::runtime_parser::parse_lol(&diff.forked_lol).is_err() {
+            if alice_bamboo::parse_lol(&diff.forked_lol).is_err() {
                 tracing::warn!(hash = %diff.fork_hash, "received invalid forked LOL, dropping");
                 return;
             }
