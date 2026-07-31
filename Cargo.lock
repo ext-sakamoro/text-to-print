@@ -191,6 +191,11 @@ dependencies = [
 [[package]]
 name = "alice-llm"
 version = "1.6.0"
+dependencies = [
+ "libc",
+ "memmap2",
+ "rayon",
+]
 
 [[package]]
 name = "alice-lol"

@@ -87,10 +87,11 @@ pub struct RetryResult {
 ///
 /// # Errors
 ///
-/// Any network error from the underlying `generate` call terminates the
-/// loop and is returned to the caller unchanged
+/// Any transport or inference error from the underlying [`LlmBackend`]
+/// call terminates the loop and is returned to the caller unchanged
 pub async fn generate_with_retry<F>(
-    config: &LlmConfig,
+    backend: &crate::backend_kind::LlmBackend,
+    params: &crate::backend_kind::InferenceParams,
     system_prompt: &str,
     user_prompt: &str,
     max_retries: u32,
@@ -104,7 +105,9 @@ where
     let mut last_content = String::new();
 
     for attempt in 0..=max_retries {
-        let content = generate(config, system_prompt, &current_prompt).await?;
+        let content = backend
+            .generate(system_prompt, &current_prompt, params)
+            .await?;
         last_content = content.clone();
 
         let violations = safety_check(&content);

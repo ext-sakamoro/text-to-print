@@ -684,6 +684,12 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     state.phase_progress.reset();
 
     let config = state.llm_config.clone();
+    // Stage 3-C: dispatch through LlmBackend enum so future UI toggle
+    // between Sidecar (HTTP) / Embedded (in-process alice-llm) is a
+    // one-line switch here The current default keeps Sidecar behaviour
+    // byte-identical to the pre-3-C flow
+    let backend = text_to_print_llm::backend_kind::LlmBackend::Sidecar(config.clone());
+    let inference_params = text_to_print_llm::backend_kind::InferenceParams::from(&config);
     let tx = state.result_tx.clone();
     let id = gen_id;
     let output_dir = state.data_dir.join("exports");
@@ -709,7 +715,8 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
         // very first attempt succeeded.
         let tx_retry = tx.clone();
         let result = backend::generate_with_retry(
-            &config,
+            &backend,
+            &inference_params,
             prompt::SYSTEM_PROMPT,
             &prompt_text,
             3,
