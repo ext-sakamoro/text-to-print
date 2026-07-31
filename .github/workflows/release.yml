@@ -119,9 +119,11 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
           # Stage sidecar next to desktop binary (bundled layout)
           cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "dist/${{ matrix.sidecar_bin }}"
-          # Also mirror to target/release so cargo-deb (which reads from the
-          # unified profile dir) picks it up on the Linux runner
+          # Mirror both binaries into target/release/ so cargo-deb / cargo-wix
+          # (which read from the profile dir without a --target flag) pick
+          # them up uniformly on every runner
           mkdir -p target/release
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} target/release/${{ matrix.bin_name }}
           cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "target/release/${{ matrix.sidecar_bin }}"
 
       # === macOS code signing + notarize (T10.3) ===
@@ -202,16 +204,15 @@ jobs:
 
       # === Windows .msi (#33 T10.4) via cargo-wix (WiX Toolset v3 wrapper) ===
       # `[package.metadata.wix]` in crates/app/Cargo.toml drives per-arch
-      # `.msi` generation Authenticode signing hook via SIGNTOOL is left
-      # as a TODO — see docs/RELEASE.md §Windows Authenticode
+      # `.msi` generation The `wix/main.wxs` template (checked in under
+      # crates/app/wix/) bundles both text-to-print.exe and the Stage 3-B
+      # alice-llm-server.exe sidecar as separate Components under the
+      # Binaries feature
       #
-      # TODO(Stage 3-A): the .msi does not yet bundle alice-llm-server.exe
-      # Adding a second binary requires `cargo wix init` to generate a
-      # `wix/main.wxs` template and inserting an extra `<File>` element
-      # under the ProgramFiles component End users installing via .msi
-      # therefore still need to `cargo install --features server` the
-      # sidecar until this follow-up ships The .zip archive above already
-      # contains the bundled sidecar for the meantime
+      # Authenticode signing is a follow-up: once a code-signing cert is
+      # issued by the DigiCert / SSL.com CA, run `signtool sign` on the
+      # produced .msi in the release workflow (see docs/RELEASE.md
+      # §Windows Authenticode)
       - name: Install cargo-wix (Windows)
         if: startsWith(matrix.os, 'windows')
         shell: pwsh

@@ -3,6 +3,7 @@ name = "text-to-print"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "Standalone desktop app: text prompt → LOL DSL → 3MF/STEP/G-code via embedded ALICE-LLM"
 homepage = "https://github.com/ext-sakamoro/text-to-print"
 repository = "https://github.com/ext-sakamoro/text-to-print"
