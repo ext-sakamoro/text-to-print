@@ -2,6 +2,7 @@ use egui::Ui;
 
 use crate::state::AppState;
 use text_to_print_core::license::{LicenseKey, LicenseVerifier};
+use text_to_print_llm::backend_kind::BackendKind;
 use text_to_print_llm::model::ModelChoice;
 
 const LICENSE_PUBLIC_KEY: [u8; 32] = [
@@ -46,6 +47,35 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
     // LLM 設定
     ui.collapsing("LLM", |ui| {
+        // Stage 3-C.6: inference backend picker
+        ui.label("Inference backend:");
+        let current_kind = state.backend_kind;
+        let mut new_kind = current_kind;
+        ui.horizontal(|ui| {
+            ui.selectable_value(
+                &mut new_kind,
+                BackendKind::Sidecar,
+                BackendKind::Sidecar.label(),
+            );
+            ui.selectable_value(
+                &mut new_kind,
+                BackendKind::Embedded,
+                BackendKind::Embedded.label(),
+            );
+        });
+        if new_kind != current_kind {
+            state.switch_backend_kind(new_kind);
+        }
+        // Embedded load status (only meaningful when Embedded is selected)
+        if state.backend_kind == BackendKind::Embedded {
+            let status = state.embedded_status();
+            ui.label(format!("Embedded 状態: {}", status.label()))
+                .on_hover_text(
+                    "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします",
+                );
+        }
+        ui.add_space(6.0);
+
         ui.label("Endpoint (alice-llm-server):");
         ui.text_edit_singleline(&mut state.llm_config.endpoint);
 

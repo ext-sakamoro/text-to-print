@@ -684,11 +684,11 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     state.phase_progress.reset();
 
     let config = state.llm_config.clone();
-    // Stage 3-C: dispatch through LlmBackend enum so future UI toggle
-    // between Sidecar (HTTP) / Embedded (in-process alice-llm) is a
-    // one-line switch here The current default keeps Sidecar behaviour
-    // byte-identical to the pre-3-C flow
-    let backend = text_to_print_llm::backend_kind::LlmBackend::Sidecar(config.clone());
+    // Stage 3-C.6: dispatch through the user-selected backend When the
+    // Settings UI toggles to Embedded, `active_backend` returns the
+    // loaded `EmbeddedBackend` (Ready) or falls back to Sidecar (during
+    // load / on failure) so first-generation requests never dead-lock
+    let backend = state.active_backend();
     let inference_params = text_to_print_llm::backend_kind::InferenceParams::from(&config);
     let tx = state.result_tx.clone();
     let id = gen_id;

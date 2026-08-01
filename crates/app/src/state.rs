@@ -6,6 +6,8 @@ use text_to_print_core::db::{Database, GenerationRow};
 use text_to_print_core::pipeline::MeshStats;
 use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend::LlmConfig;
+use text_to_print_llm::backend_kind::{BackendKind, EmbeddedStatus};
+use text_to_print_llm::embedded_backend::EmbeddedBackend;
 use text_to_print_llm::sidecar::SidecarStatus;
 
 /// Ordered pipeline phases surfaced to the UI progress indicator.
@@ -99,6 +101,19 @@ pub struct AppState {
     /// `SidecarProcess` を task スコープに保持することで runtime drop 時に
     /// 自動 kill される
     pub sidecar_status: tokio::sync::watch::Receiver<SidecarStatus>,
+    /// Stage 3-C.6: user-selected inference backend (Sidecar HTTP or
+    /// in-process Embedded) Persisted in DB (`profiles.backend_kind`)
+    /// The default is `Sidecar` so existing installs keep the pre-3-C
+    /// behaviour without a migration step
+    pub backend_kind: BackendKind,
+    /// Loaded [`EmbeddedBackend`] wrapped for shared access The slot is
+    /// `None` until the user opts into Embedded and the background load
+    /// task populates it via [`AppState::switch_backend_kind`]
+    pub embedded: std::sync::Arc<std::sync::Mutex<Option<EmbeddedBackend>>>,
+    /// UI-facing load status Read via [`AppState::embedded_status`] The
+    /// underlying `Arc<Mutex<EmbeddedStatus>>` is written by the load
+    /// task in [`AppState::switch_backend_kind`]
+    pub embedded_status_cell: std::sync::Arc<std::sync::Mutex<EmbeddedStatus>>,
     /// LoRA share opt-in flag (Stage 5 T5.2) When `true` (default) the
     /// LOL DSL + quality signals are queued for upload to the shared LoRA
     /// training set; when `false` the user has opted out
@@ -155,6 +170,10 @@ impl AppState {
         let profile_id = load_or_create_profile_id(&data_dir);
         let tier = db.get_or_create_profile(&profile_id).unwrap_or(Tier::Free);
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
+        let backend_kind = BackendKind::from_db_str(
+            &db.get_backend_kind(&profile_id)
+                .unwrap_or_else(|_| "Sidecar".to_string()),
+        );
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
 
@@ -238,6 +257,57 @@ impl AppState {
             });
         }
 
+        // Stage 3-C.6: initial embedded slot Empty until the user opts
+        // into Embedded via the settings UI Kicking off the load here
+        // (even when backend_kind == Embedded from DB) would block app
+        // startup for tens of seconds; instead we surface the toggle in
+        // Settings and let the load begin only when the user asks
+        let embedded = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let embedded_status_cell =
+            std::sync::Arc::new(std::sync::Mutex::new(EmbeddedStatus::NotLoaded));
+
+        // If the persisted preference is Embedded, prime the load in the
+        // background so the first generation doesn't pay the ~30 s load
+        // cost synchronously The sidecar remains available in the mean
+        // time as a fallback
+        if backend_kind == BackendKind::Embedded {
+            let models_dir_for_embed = models_dir.clone();
+            let embedded_slot = embedded.clone();
+            let status_slot = embedded_status_cell.clone();
+            let mut model_progress_rx = progress_rx.clone();
+            runtime.spawn(async move {
+                while !matches!(
+                    model_progress_rx.borrow().status,
+                    text_to_print_llm::downloader::DownloadStatus::Complete
+                ) {
+                    if model_progress_rx.changed().await.is_err() {
+                        return;
+                    }
+                }
+                let model_path = text_to_print_llm::downloader::model_path(&models_dir_for_embed);
+                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
+                let load_result =
+                    tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
+                match load_result {
+                    Ok(Ok(backend)) => {
+                        *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
+                        *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
+                        tracing::info!("embedded backend loaded");
+                    }
+                    Ok(Err(e)) => {
+                        *status_slot.lock().expect("embedded status lock") =
+                            EmbeddedStatus::Error(e.to_string());
+                        tracing::warn!(error = %e, "embedded backend load failed");
+                    }
+                    Err(join_err) => {
+                        *status_slot.lock().expect("embedded status lock") =
+                            EmbeddedStatus::Error(join_err.to_string());
+                        tracing::warn!(error = %join_err, "embedded backend load task panicked");
+                    }
+                }
+            });
+        }
+
         Self {
             data_dir,
             tier,
@@ -257,6 +327,9 @@ impl AppState {
             phase_progress: PhaseProgress::default(),
             prompt_focused_once: false,
             sidecar_status: sidecar_rx,
+            backend_kind,
+            embedded,
+            embedded_status_cell,
             share_lol_dsl,
             pending_share_dry_run: None,
         }
@@ -311,6 +384,93 @@ impl AppState {
         match self.tier {
             Tier::Free => self.share_lol_dsl,
             Tier::General | Tier::Pro | Tier::Enterprise => false,
+        }
+    }
+
+    /// Snapshot the current [`EmbeddedStatus`] for UI display Cheap `Clone`
+    /// under a `std::sync::Mutex` so egui's sync render path can call it
+    #[must_use]
+    pub fn embedded_status(&self) -> EmbeddedStatus {
+        self.embedded_status_cell
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or(EmbeddedStatus::NotLoaded)
+    }
+
+    /// Persist a new [`BackendKind`] and, if switching to Embedded, kick
+    /// off a background load task Idempotent on the same kind
+    pub fn switch_backend_kind(&mut self, new_kind: BackendKind) {
+        if self.backend_kind == new_kind {
+            return;
+        }
+        self.backend_kind = new_kind;
+        if let Err(e) = self
+            .db
+            .set_backend_kind(&self.profile_id, new_kind.to_db_str())
+        {
+            tracing::warn!(error = %e, "failed to persist backend_kind");
+        }
+        if new_kind == BackendKind::Embedded {
+            let already_loaded = self.embedded.lock().map(|g| g.is_some()).unwrap_or(false);
+            if already_loaded {
+                return;
+            }
+            let models_dir = self.data_dir.join("models");
+            let embedded_slot = self.embedded.clone();
+            let status_slot = self.embedded_status_cell.clone();
+            let mut model_progress_rx = self.model_progress.clone();
+            self.runtime.spawn(async move {
+                while !matches!(
+                    model_progress_rx.borrow().status,
+                    text_to_print_llm::downloader::DownloadStatus::Complete
+                ) {
+                    if model_progress_rx.changed().await.is_err() {
+                        return;
+                    }
+                }
+                let model_path = text_to_print_llm::downloader::model_path(&models_dir);
+                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
+                let load_result =
+                    tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
+                match load_result {
+                    Ok(Ok(backend)) => {
+                        *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
+                        *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
+                        tracing::info!("embedded backend loaded via UI toggle");
+                    }
+                    Ok(Err(e)) => {
+                        *status_slot.lock().expect("embedded status lock") =
+                            EmbeddedStatus::Error(e.to_string());
+                        tracing::warn!(error = %e, "embedded backend load failed");
+                    }
+                    Err(join_err) => {
+                        *status_slot.lock().expect("embedded status lock") =
+                            EmbeddedStatus::Error(join_err.to_string());
+                        tracing::warn!(error = %join_err, "embedded backend load task panicked");
+                    }
+                }
+            });
+        }
+    }
+
+    /// Snapshot the currently-active backend for a generation request
+    ///
+    /// - `BackendKind::Sidecar` → wraps the current `LlmConfig`
+    /// - `BackendKind::Embedded` → clones the loaded backend if `Ready`,
+    ///   otherwise falls back to `Sidecar` (so a generation request
+    ///   during Embedded load doesn't fail silently)
+    #[must_use]
+    pub fn active_backend(&self) -> text_to_print_llm::backend_kind::LlmBackend {
+        use text_to_print_llm::backend_kind::LlmBackend;
+        match self.backend_kind {
+            BackendKind::Sidecar => LlmBackend::Sidecar(self.llm_config.clone()),
+            BackendKind::Embedded => {
+                let backend = self.embedded.lock().ok().and_then(|g| g.clone());
+                match backend {
+                    Some(b) => LlmBackend::Embedded(b),
+                    None => LlmBackend::Sidecar(self.llm_config.clone()),
+                }
+            }
         }
     }
 }

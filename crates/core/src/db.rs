@@ -105,6 +105,13 @@ impl Database {
         let _ = self
             .conn
             .execute("ALTER TABLE generations ADD COLUMN manifest_json TEXT", []);
+        // Stage 3-C.6: `backend_kind` persists the user's inference backend
+        // choice (Sidecar HTTP vs Embedded in-process) across app restarts
+        // Default `Sidecar` matches pre-3-C.6 behaviour.
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN backend_kind TEXT NOT NULL DEFAULT 'Sidecar'",
+            [],
+        );
         Ok(())
     }
 
@@ -233,6 +240,30 @@ impl Database {
         Ok(())
     }
 
+    /// Fetch the persisted `backend_kind` slug for the given profile
+    /// Missing / unknown rows fall back to `"Sidecar"` so pre-3-C.6 DBs
+    /// read as the pre-existing behaviour
+    pub fn get_backend_kind(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT backend_kind FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "Sidecar".to_string());
+        Ok(value)
+    }
+
+    /// Persist the user's inference backend choice for the given profile
+    pub fn set_backend_kind(&self, profile_id: &str, kind: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET backend_kind = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, kind],
+        )?;
+        Ok(())
+    }
+
     pub fn update_profile_tier(&self, id: &str, tier: &str, license_key: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE profiles SET tier = ?2, license_key = ?3, updated_at = datetime('now') WHERE id = ?1",
@@ -325,6 +356,29 @@ mod tests {
     fn share_lol_dsl_unknown_profile_returns_true() {
         let db = test_db();
         assert!(db.get_share_lol_dsl("nonexistent").unwrap());
+    }
+
+    #[test]
+    fn backend_kind_defaults_to_sidecar() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(db.get_backend_kind("user1").unwrap(), "Sidecar");
+    }
+
+    #[test]
+    fn backend_kind_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_backend_kind("user1", "Embedded").unwrap();
+        assert_eq!(db.get_backend_kind("user1").unwrap(), "Embedded");
+        db.set_backend_kind("user1", "Sidecar").unwrap();
+        assert_eq!(db.get_backend_kind("user1").unwrap(), "Sidecar");
+    }
+
+    #[test]
+    fn backend_kind_unknown_profile_falls_back_to_sidecar() {
+        let db = test_db();
+        assert_eq!(db.get_backend_kind("nonexistent").unwrap(), "Sidecar");
     }
 
     #[test]

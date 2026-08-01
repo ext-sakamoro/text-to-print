@@ -41,6 +41,10 @@ use alice_llm::llama3::Llama3Model;
 use crate::backend_kind::InferenceParams;
 
 /// GGUF-backed in-process LLM backend
+///
+/// `Clone` is a cheap `Arc` bump — clones share the underlying model and
+/// serialise inference requests through the same `tokio::sync::Mutex`
+#[derive(Clone)]
 pub struct EmbeddedBackend {
     inner: Arc<Mutex<EmbeddedInner>>,
 }

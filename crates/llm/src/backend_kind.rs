@@ -39,6 +39,59 @@ impl BackendKind {
             Self::Embedded => "Embedded (in-process)",
         }
     }
+
+    /// Stable string used for `profiles.backend_kind` column persistence
+    /// Round-trips via [`Self::from_db_str`]
+    #[must_use]
+    pub const fn to_db_str(self) -> &'static str {
+        match self {
+            Self::Sidecar => "Sidecar",
+            Self::Embedded => "Embedded",
+        }
+    }
+
+    /// Inverse of [`Self::to_db_str`] Unknown / missing values fall back
+    /// to the default (`Sidecar`) so pre-3-C.6 DBs read as Sidecar
+    #[must_use]
+    pub fn from_db_str(s: &str) -> Self {
+        match s {
+            "Embedded" => Self::Embedded,
+            _ => Self::Sidecar,
+        }
+    }
+}
+
+/// UI-facing status of the [`BackendKind::Embedded`] backend Independent
+/// of whether the user has selected Embedded — the model load runs in a
+/// background task after selection and the UI polls this to display
+/// progress
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EmbeddedStatus {
+    /// User has not requested Embedded, or model file not present yet
+    NotLoaded,
+    /// Load in progress (GGUF parse + tensor dequant)
+    Loading,
+    /// Model loaded, ready to serve `generate` calls
+    Ready,
+    /// Load failed with `msg`
+    Error(String),
+}
+
+impl EmbeddedStatus {
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready)
+    }
+
+    #[must_use]
+    pub fn label(&self) -> String {
+        match self {
+            Self::NotLoaded => "not loaded".to_string(),
+            Self::Loading => "loading…".to_string(),
+            Self::Ready => "ready".to_string(),
+            Self::Error(m) => format!("error: {m}"),
+        }
+    }
 }
 
 /// Unified inference parameters used by both backends The sidecar path
@@ -162,5 +215,38 @@ mod tests {
     fn sidecar_variant_reports_sidecar_kind() {
         let backend = LlmBackend::Sidecar(LlmConfig::default());
         assert_eq!(backend.kind(), BackendKind::Sidecar);
+    }
+
+    #[test]
+    fn to_db_str_from_db_str_roundtrip() {
+        for kind in [BackendKind::Sidecar, BackendKind::Embedded] {
+            assert_eq!(BackendKind::from_db_str(kind.to_db_str()), kind);
+        }
+    }
+
+    #[test]
+    fn from_db_str_unknown_falls_back_to_sidecar() {
+        assert_eq!(BackendKind::from_db_str("garbage"), BackendKind::Sidecar);
+        assert_eq!(BackendKind::from_db_str(""), BackendKind::Sidecar);
+    }
+
+    #[test]
+    fn embedded_status_is_ready_only_for_ready() {
+        assert!(!EmbeddedStatus::NotLoaded.is_ready());
+        assert!(!EmbeddedStatus::Loading.is_ready());
+        assert!(EmbeddedStatus::Ready.is_ready());
+        assert!(!EmbeddedStatus::Error("x".into()).is_ready());
+    }
+
+    #[test]
+    fn embedded_status_label_non_empty() {
+        for s in [
+            EmbeddedStatus::NotLoaded,
+            EmbeddedStatus::Loading,
+            EmbeddedStatus::Ready,
+            EmbeddedStatus::Error("boom".into()),
+        ] {
+            assert!(!s.label().is_empty());
+        }
     }
 }
