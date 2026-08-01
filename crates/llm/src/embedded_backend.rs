@@ -31,6 +31,7 @@
 //! async runtime stays responsive during the ~10 s + inference window
 
 use anyhow::{Context, Result, anyhow};
+use memmap2::Mmap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -55,24 +56,34 @@ struct EmbeddedInner {
 }
 
 impl EmbeddedBackend {
-    /// Load a GGUF model file into memory and prepare it for inference
+    /// Load a GGUF model file via mmap and prepare it for inference
     ///
-    /// The entire file is read into a `Vec<u8>` and leaked so its bytes
-    /// live for the app lifetime For a 2.4 GB Qwen 3.5-4B Q4_K_M model
-    /// this is a ~2.4 GB one-time RAM cost; the trade-off vs mmap is
-    /// simpler code and no page-fault stalls during the prefill phase
+    /// The file is memory-mapped read-only into the process address space
+    /// via [`memmap2::Mmap`] so the kernel pages weight tensors in on
+    /// demand For a 2.4 GB Qwen 3.5-4B Q4_K_M model this drops the load-
+    /// time resident-set spike from ~2.4 GB to ~50 MB (only the parsed
+    /// header + tokenizer metadata) The mmap `struct` is `Box::leak`ed to
+    /// give the borrowed `GgufFile<'static>` / `Llama3Model<'static>` the
+    /// lifetime they need; the mapping lives for the process lifetime
     ///
     /// # Errors
     ///
-    /// - IO error reading `model_path`
+    /// - IO error opening `model_path`
+    /// - `Mmap::map` failure (unusual on well-known file systems)
     /// - GGUF parse failure (corrupt file / unsupported version)
     /// - Tokenizer / model construction failure (arch mismatch, missing
     ///   tensors, unsupported quant type)
     pub fn load(model_path: &Path) -> Result<Self> {
-        tracing::info!(path = %model_path.display(), "loading embedded GGUF model");
-        let bytes = std::fs::read(model_path)
-            .with_context(|| format!("read GGUF file at {}", model_path.display()))?;
-        let bytes_static: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+        tracing::info!(path = %model_path.display(), "mmap loading embedded GGUF model");
+        let file = std::fs::File::open(model_path)
+            .with_context(|| format!("open GGUF file at {}", model_path.display()))?;
+        // SAFETY: the file is read-only and we hold the `Mmap` for the
+        // process lifetime (via `Box::leak` below), so no aliased mutable
+        // access can occur through the mapping
+        let mmap = unsafe { Mmap::map(&file) }
+            .with_context(|| format!("mmap GGUF file at {}", model_path.display()))?;
+        let mmap_static: &'static Mmap = Box::leak(Box::new(mmap));
+        let bytes_static: &'static [u8] = mmap_static.as_ref();
 
         let gguf = GgufFile::parse(bytes_static).ok_or_else(|| {
             anyhow!(

@@ -6383,6 +6383,7 @@ version = "0.1.0"
 dependencies = [
  "alice-llm",
  "anyhow",
+ "memmap2",
  "reqwest",
  "serde",
  "serde_json",
