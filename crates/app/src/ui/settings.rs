@@ -81,6 +81,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
         ui.add_space(4.0);
         ui.label("Model:");
+        // Stage 3-C.9: capture the previous choice so we can detect a
+        // change after the ComboBox mutates state and invoke the model-
+        // swap hook (only meaningful in Embedded mode)
+        let prev_choice = state.llm_config.model_choice;
         egui::ComboBox::from_id_salt("llm_model_choice")
             .selected_text(state.llm_config.model_choice.label())
             .show_ui(ui, |ui| {
@@ -92,6 +96,9 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                     );
                 }
             });
+        if state.llm_config.model_choice != prev_choice {
+            state.on_model_choice_changed(prev_choice);
+        }
 
         ui.add_space(4.0);
         ui.label(format!("Temperature: {:.1}", state.llm_config.temperature));

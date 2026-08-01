@@ -48,6 +48,27 @@ impl ModelChoice {
             Self::Bonsai27B => "bonsai-27b-q1_0.gguf",
         }
     }
+
+    /// Stage 3-C.9: Hugging Face repo + filename tuple used by
+    /// [`crate::downloader::download_model`] to construct the resolve URL
+    ///
+    /// Format: `(repo_id, file_within_repo)` The URL becomes
+    /// `https://huggingface.co/{repo}/resolve/main/{file}`
+    ///
+    /// Placeholder Bonsai repo `Project-ALICE/Bonsai-27B-GGUF` is a
+    /// stand-in until the actual repo is published — attempting to
+    /// download it will surface an HTTP 404 which the downloader turns
+    /// into `DownloadStatus::Error`, and the UI falls back to Sidecar
+    #[must_use]
+    pub const fn default_hf_ref(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Qwen35_4B => (
+                "Qwen/Qwen2.5-7B-Instruct-GGUF",
+                "qwen2.5-7b-instruct-q4_k_m.gguf",
+            ),
+            Self::Bonsai27B => ("Project-ALICE/Bonsai-27B-GGUF", "bonsai-27b-q1_0.gguf"),
+        }
+    }
 }
 
 #[cfg(test)]

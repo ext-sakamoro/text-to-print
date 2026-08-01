@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 
-const DEFAULT_MODEL_REPO: &str = "Qwen/Qwen2.5-7B-Instruct-GGUF";
-const DEFAULT_MODEL_FILE: &str = "qwen2.5-7b-instruct-q4_k_m.gguf";
+use crate::model::ModelChoice;
 
 /// モデルダウンロードの進捗
 #[derive(Debug, Clone)]
@@ -22,24 +21,36 @@ pub enum DownloadStatus {
     Error(String),
 }
 
-/// モデルが存在するか確認
-pub fn model_exists(models_dir: &Path) -> bool {
-    model_path(models_dir).exists()
+/// Stage 3-C.9: `models_dir/{choice.default_filename()}` に存在するか
+#[must_use]
+pub fn model_exists(models_dir: &Path, choice: ModelChoice) -> bool {
+    model_path(models_dir, choice).exists()
 }
 
-/// モデルのパスを返す
-pub fn model_path(models_dir: &Path) -> PathBuf {
-    models_dir.join(DEFAULT_MODEL_FILE)
+/// Stage 3-C.9: 指定 `ModelChoice` のローカルパスを返す 各 choice ごとの
+/// GGUF filename (`ModelChoice::default_filename()`) を `models_dir` に
+/// 結合するため、Qwen / Bonsai を並列にキャッシュ可能
+#[must_use]
+pub fn model_path(models_dir: &Path, choice: ModelChoice) -> PathBuf {
+    models_dir.join(choice.default_filename())
 }
 
-/// Hugging Face からモデルをダウンロード
+/// Hugging Face から指定 `ModelChoice` の GGUF をダウンロード 既に
+/// `model_path(...)` が存在すれば short-circuit で Complete を通知
+///
+/// # Errors
+///
+/// - `models_dir` 作成失敗
+/// - HTTP エラー (5xx 等)
+/// - ネットワーク中断 / 書き込み失敗
 pub async fn download_model(
     models_dir: &Path,
+    choice: ModelChoice,
     progress_tx: tokio::sync::watch::Sender<DownloadProgress>,
 ) -> Result<PathBuf> {
     std::fs::create_dir_all(models_dir)?;
 
-    let output_path = model_path(models_dir);
+    let output_path = model_path(models_dir, choice);
 
     if output_path.exists() {
         let _ = progress_tx.send(DownloadProgress {
@@ -50,10 +61,8 @@ pub async fn download_model(
         return Ok(output_path);
     }
 
-    let url = format!(
-        "https://huggingface.co/{}/resolve/main/{}",
-        DEFAULT_MODEL_REPO, DEFAULT_MODEL_FILE
-    );
+    let (repo, file) = choice.default_hf_ref();
+    let url = format!("https://huggingface.co/{repo}/resolve/main/{file}");
 
     info!(url = %url, "downloading LLM model");
 
@@ -116,15 +125,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn model_path_format() {
-        let p = model_path(Path::new("/tmp/models"));
-        assert!(p.to_str().unwrap().ends_with(".gguf"));
+    fn model_path_uses_choice_filename() {
+        let p = model_path(Path::new("/tmp/models"), ModelChoice::Qwen35_4B);
+        assert!(p.to_str().unwrap().ends_with("qwen3.5-4b-q4_k_m.gguf"));
+
+        let p2 = model_path(Path::new("/tmp/models"), ModelChoice::Bonsai27B);
+        assert!(p2.to_str().unwrap().ends_with("bonsai-27b-q1_0.gguf"));
+    }
+
+    #[test]
+    fn model_paths_differ_per_choice() {
+        let base = Path::new("/tmp/models");
+        assert_ne!(
+            model_path(base, ModelChoice::Qwen35_4B),
+            model_path(base, ModelChoice::Bonsai27B),
+        );
     }
 
     #[test]
     fn model_not_exists_in_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(!model_exists(dir.path()));
+        assert!(!model_exists(dir.path(), ModelChoice::Qwen35_4B));
+        assert!(!model_exists(dir.path(), ModelChoice::Bonsai27B));
     }
 
     #[test]

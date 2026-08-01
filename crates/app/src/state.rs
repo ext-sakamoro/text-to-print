@@ -186,8 +186,12 @@ impl AppState {
         let (result_tx, result_rx) = mpsc::channel();
 
         // モデルチェック + バックグラウンドダウンロード
+        // Stage 3-C.9: model_choice に対応する GGUF を保持 起動時は
+        // LlmConfig::default() (= Qwen 3.5-4B) を採用、UI で dropdown 変更
+        // → Embedded 有効時は on_model_choice_changed が呼ばれ切替
         let models_dir = data_dir.join("models");
-        let model_ready = text_to_print_llm::downloader::model_exists(&models_dir);
+        let initial_choice = LlmConfig::default().model_choice;
+        let model_ready = text_to_print_llm::downloader::model_exists(&models_dir, initial_choice);
         let initial_status = if model_ready {
             text_to_print_llm::downloader::DownloadStatus::Complete
         } else {
@@ -204,7 +208,8 @@ impl AppState {
             let md = models_dir.clone();
             runtime.spawn(async move {
                 if let Err(e) =
-                    text_to_print_llm::downloader::download_model(&md, progress_tx).await
+                    text_to_print_llm::downloader::download_model(&md, initial_choice, progress_tx)
+                        .await
                 {
                     tracing::error!(error = %e, "model download failed");
                 }
@@ -228,7 +233,10 @@ impl AppState {
                         return;
                     }
                 }
-                let model_path = text_to_print_llm::downloader::model_path(&models_dir_for_sidecar);
+                let model_path = text_to_print_llm::downloader::model_path(
+                    &models_dir_for_sidecar,
+                    initial_choice,
+                );
                 text_to_print_llm::sidecar::run_auto_spawn(model_path, sidecar_port, sidecar_tx)
                     .await;
             });
@@ -271,41 +279,14 @@ impl AppState {
         // cost synchronously The sidecar remains available in the mean
         // time as a fallback
         if backend_kind == BackendKind::Embedded {
-            let models_dir_for_embed = models_dir.clone();
-            let embedded_slot = embedded.clone();
-            let status_slot = embedded_status_cell.clone();
-            let mut model_progress_rx = progress_rx.clone();
-            runtime.spawn(async move {
-                while !matches!(
-                    model_progress_rx.borrow().status,
-                    text_to_print_llm::downloader::DownloadStatus::Complete
-                ) {
-                    if model_progress_rx.changed().await.is_err() {
-                        return;
-                    }
-                }
-                let model_path = text_to_print_llm::downloader::model_path(&models_dir_for_embed);
-                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
-                let load_result =
-                    tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
-                match load_result {
-                    Ok(Ok(backend)) => {
-                        *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
-                        *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
-                        tracing::info!("embedded backend loaded");
-                    }
-                    Ok(Err(e)) => {
-                        *status_slot.lock().expect("embedded status lock") =
-                            EmbeddedStatus::Error(e.to_string());
-                        tracing::warn!(error = %e, "embedded backend load failed");
-                    }
-                    Err(join_err) => {
-                        *status_slot.lock().expect("embedded status lock") =
-                            EmbeddedStatus::Error(join_err.to_string());
-                        tracing::warn!(error = %join_err, "embedded backend load task panicked");
-                    }
-                }
-            });
+            spawn_embedded_load(
+                &runtime,
+                models_dir.clone(),
+                initial_choice,
+                embedded.clone(),
+                embedded_status_cell.clone(),
+                progress_rx.clone(),
+            );
         }
 
         Self {
@@ -415,42 +396,56 @@ impl AppState {
             if already_loaded {
                 return;
             }
-            let models_dir = self.data_dir.join("models");
-            let embedded_slot = self.embedded.clone();
-            let status_slot = self.embedded_status_cell.clone();
-            let mut model_progress_rx = self.model_progress.clone();
-            self.runtime.spawn(async move {
-                while !matches!(
-                    model_progress_rx.borrow().status,
-                    text_to_print_llm::downloader::DownloadStatus::Complete
-                ) {
-                    if model_progress_rx.changed().await.is_err() {
-                        return;
-                    }
-                }
-                let model_path = text_to_print_llm::downloader::model_path(&models_dir);
-                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
-                let load_result =
-                    tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
-                match load_result {
-                    Ok(Ok(backend)) => {
-                        *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
-                        *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
-                        tracing::info!("embedded backend loaded via UI toggle");
-                    }
-                    Ok(Err(e)) => {
-                        *status_slot.lock().expect("embedded status lock") =
-                            EmbeddedStatus::Error(e.to_string());
-                        tracing::warn!(error = %e, "embedded backend load failed");
-                    }
-                    Err(join_err) => {
-                        *status_slot.lock().expect("embedded status lock") =
-                            EmbeddedStatus::Error(join_err.to_string());
-                        tracing::warn!(error = %join_err, "embedded backend load task panicked");
-                    }
-                }
-            });
+            spawn_embedded_load(
+                &self.runtime,
+                self.data_dir.join("models"),
+                self.llm_config.model_choice,
+                self.embedded.clone(),
+                self.embedded_status_cell.clone(),
+                self.model_progress.clone(),
+            );
         }
+    }
+
+    /// Stage 3-C.9: handle a `ModelChoice` change from the Settings UI
+    /// Called after the ComboBox has already updated
+    /// `self.llm_config.model_choice` to the newly selected value
+    ///
+    /// If Embedded is active, drop the currently loaded backend and kick
+    /// off a load for the new choice The Sidecar path is unaffected — the
+    /// alice-llm-server subprocess reads its `--model` arg once at spawn
+    /// time and would need a full sidecar restart to swap models (out of
+    /// scope for this hook)
+    pub fn on_model_choice_changed(&mut self, prev_choice: text_to_print_llm::model::ModelChoice) {
+        let new_choice = self.llm_config.model_choice;
+        if prev_choice == new_choice {
+            return;
+        }
+        if self.backend_kind != BackendKind::Embedded {
+            return;
+        }
+        tracing::info!(
+            prev = ?prev_choice,
+            new = ?new_choice,
+            "embedded backend swap on model choice change"
+        );
+        // Drop the currently loaded backend so the worker thread's stack
+        // unwinds and mmap / gguf / model release their memory before we
+        // begin loading the new file (avoids a 2× resident-set spike)
+        if let Ok(mut slot) = self.embedded.lock() {
+            *slot = None;
+        }
+        if let Ok(mut status) = self.embedded_status_cell.lock() {
+            *status = EmbeddedStatus::NotLoaded;
+        }
+        spawn_embedded_load(
+            &self.runtime,
+            self.data_dir.join("models"),
+            new_choice,
+            self.embedded.clone(),
+            self.embedded_status_cell.clone(),
+            self.model_progress.clone(),
+        );
     }
 
     /// Snapshot the currently-active backend for a generation request
@@ -497,6 +492,68 @@ fn load_or_create_profile_id(data_dir: &std::path::Path) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     let _ = std::fs::write(&id_path, &id);
     id
+}
+
+/// Stage 3-C.9: spawn a background task that waits for model DL to
+/// finish, then loads the specified `ModelChoice` into `embedded_slot`
+/// and reflects state through `status_slot`
+///
+/// Extracted so both the app startup path (when the persisted
+/// `backend_kind` is Embedded) and the runtime switch paths
+/// (`switch_backend_kind` / `on_model_choice_changed`) share the same
+/// wait-for-DL-then-load flow
+fn spawn_embedded_load(
+    runtime: &tokio::runtime::Runtime,
+    models_dir: PathBuf,
+    choice: text_to_print_llm::model::ModelChoice,
+    embedded_slot: std::sync::Arc<std::sync::Mutex<Option<EmbeddedBackend>>>,
+    status_slot: std::sync::Arc<std::sync::Mutex<EmbeddedStatus>>,
+    mut model_progress_rx: tokio::sync::watch::Receiver<
+        text_to_print_llm::downloader::DownloadProgress,
+    >,
+) {
+    runtime.spawn(async move {
+        // Wait for model DL to complete Choice-agnostic here — the DL
+        // pipeline only knows about the initial choice; runtime-switched
+        // choices are expected to be user-placed at
+        // `models_dir/{choice.default_filename()}` If missing, load fails
+        // fast with an IO error which surfaces as EmbeddedStatus::Error
+        while !matches!(
+            model_progress_rx.borrow().status,
+            text_to_print_llm::downloader::DownloadStatus::Complete
+        ) {
+            if model_progress_rx.changed().await.is_err() {
+                return;
+            }
+            // Once initial DL completes we still proceed even if the user
+            // switched to a different choice — the load path will
+            // discover whether the file exists on disk
+            if text_to_print_llm::downloader::model_exists(&models_dir, choice) {
+                break;
+            }
+        }
+        let model_path = text_to_print_llm::downloader::model_path(&models_dir, choice);
+        *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
+        let load_result =
+            tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
+        match load_result {
+            Ok(Ok(backend)) => {
+                *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
+                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
+                tracing::info!(?choice, "embedded backend loaded");
+            }
+            Ok(Err(e)) => {
+                *status_slot.lock().expect("embedded status lock") =
+                    EmbeddedStatus::Error(e.to_string());
+                tracing::warn!(error = %e, ?choice, "embedded backend load failed");
+            }
+            Err(join_err) => {
+                *status_slot.lock().expect("embedded status lock") =
+                    EmbeddedStatus::Error(join_err.to_string());
+                tracing::warn!(error = %join_err, ?choice, "embedded backend load task panicked");
+            }
+        }
+    });
 }
 
 #[cfg(test)]
