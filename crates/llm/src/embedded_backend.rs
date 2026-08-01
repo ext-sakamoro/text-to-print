@@ -1,9 +1,7 @@
 //! In-process embedded LLM backend (Stage 3-C)
 //!
 //! Links `alice-llm` directly as an rlib and runs GGUF inference in the
-//! same process No subprocess, no HTTP hop The trade-off is that the
-//! loaded model occupies process memory for the app's lifetime — swapping
-//! to a different model (Qwen ↔ Bonsai) requires an app restart
+//! same process No subprocess, no HTTP hop
 //!
 //! ## Chat template
 //!
@@ -16,28 +14,35 @@
 //!   <end_of_turn>\n` markers Assistant role is spelled `model` in the
 //!   emitted prompt, matching upstream Gemma tokenizer conventions
 //!
-//! ## Lifetime
+//! ## Worker thread architecture (Stage 3-C.9)
 //!
-//! `Llama3Model<'a>` borrows from the parsed `GgufFile<'a>` which in turn
-//! borrows from the raw bytes To keep both alive for the process's
-//! lifetime we `Box::leak` the byte buffer and the parsed file struct
-//! This is intentional: the model must be loaded once and never dropped
-//! (the alternative — self-referential structs — pulls in `ouroboros`
-//! or unsafe pinning tricks that aren't worth the complexity for a
-//! single-model desktop app)
+//! Loading a `Llama3Model<'a>` produces a struct that borrows from a
+//! parsed `GgufFile<'a>` which borrows from mmap bytes A previous
+//! iteration `Box::leak`-ed the mmap to obtain `'static` — that ruled out
+//! ever dropping the model, so switching between Qwen and Bonsai at
+//! runtime would leak the entire prior model into process memory
 //!
-//! ## Concurrency
+//! The current design instead pins the mmap + parsed file + model inside
+//! a dedicated OS thread The worker thread owns all three variables as
+//! locals of its main closure; their lifetimes are naturally bounded by
+//! the thread lifetime and no leak is needed The caller talks to the
+//! worker via a `tokio::sync::mpsc::UnboundedSender<Command>`; per-request
+//! responses come back through a `tokio::sync::oneshot` channel
 //!
-//! Inference mutates the KV cache so the model can't be shared across
-//! concurrent requests We wrap the model in `Arc<tokio::sync::Mutex<_>>`
-//! and run each generation inside `tokio::task::spawn_blocking` so the
-//! async runtime stays responsive during the ~10 s + inference window
+//! `Drop` of the last [`EmbeddedBackend`] clone closes the command
+//! channel, the worker loop exits, and the thread's stack unwinds —
+//! releasing mmap / GgufFile / Llama3Model in that order This is what
+//! makes multi-model runtime switching in [`crate::backend_kind`]
+//! straightforward: swap `EmbeddedBackend` values in an `AppState` slot
+//! and the prior model's memory is reclaimed as soon as the last
+//! `Clone` goes out of scope
 
 use anyhow::{Context, Result, anyhow};
 use memmap2::Mmap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::mpsc as sync_mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use alice_llm::gguf::{GgufFile, GgufTokenizer};
 use alice_llm::llama3::Llama3Model;
@@ -46,17 +51,27 @@ use crate::backend_kind::InferenceParams;
 
 /// GGUF-backed in-process LLM backend
 ///
-/// `Clone` is a cheap `Arc` bump — clones share the underlying model and
-/// serialise inference requests through the same `tokio::sync::Mutex`
+/// `Clone` is a cheap `Arc` bump — all clones share the same worker
+/// thread and serialise inference requests through the same command
+/// channel
 #[derive(Clone)]
 pub struct EmbeddedBackend {
-    inner: Arc<Mutex<EmbeddedInner>>,
+    inner: Arc<BackendShared>,
 }
 
-struct EmbeddedInner {
-    tokenizer: GgufTokenizer,
-    model: Llama3Model<'static>,
+struct BackendShared {
+    tx: mpsc::UnboundedSender<Command>,
     chat_template: ChatTemplate,
+    model_path: PathBuf,
+}
+
+enum Command {
+    Generate {
+        system: String,
+        user: String,
+        params: InferenceParams,
+        response: oneshot::Sender<String>,
+    },
 }
 
 /// Prompt formatting family detected from the loaded GGUF
@@ -94,18 +109,19 @@ impl ChatTemplate {
 }
 
 impl EmbeddedBackend {
-    /// Load a GGUF model file via mmap and prepare it for inference
+    /// Load a GGUF model file via mmap and spawn the worker thread that
+    /// will serve inference requests
     ///
-    /// The file is memory-mapped read-only into the process address space
-    /// via [`memmap2::Mmap`] so the kernel pages weight tensors in on
-    /// demand For a 2.4 GB Qwen 3.5-4B Q4_K_M model this drops the load-
-    /// time resident-set spike from ~2.4 GB to ~50 MB (only the parsed
-    /// header + tokenizer metadata) The mmap `struct` is `Box::leak`ed to
-    /// give the borrowed `GgufFile<'static>` / `Llama3Model<'static>` the
-    /// lifetime they need; the mapping lives for the process lifetime
+    /// The GGUF file is memory-mapped read-only inside the worker thread
+    /// (kernel demand-pages weight tensors during inference, keeping the
+    /// resident-set spike small at load time) The tokenizer, model, and
+    /// detected chat template all become worker-thread locals; the
+    /// caller's [`EmbeddedBackend`] holds only a `Send`-safe channel plus
+    /// the detected [`ChatTemplate`] cache
     ///
     /// # Errors
     ///
+    /// - OS thread spawn failure (extremely rare)
     /// - IO error opening `model_path`
     /// - `Mmap::map` failure (unusual on well-known file systems)
     /// - GGUF parse failure (corrupt file / unsupported version)
@@ -113,96 +129,161 @@ impl EmbeddedBackend {
     ///   tensors, unsupported quant type)
     pub fn load(model_path: &Path) -> Result<Self> {
         tracing::info!(path = %model_path.display(), "mmap loading embedded GGUF model");
-        let file = std::fs::File::open(model_path)
-            .with_context(|| format!("open GGUF file at {}", model_path.display()))?;
-        // SAFETY: the file is read-only and we hold the `Mmap` for the
-        // process lifetime (via `Box::leak` below), so no aliased mutable
-        // access can occur through the mapping
-        let mmap = unsafe { Mmap::map(&file) }
-            .with_context(|| format!("mmap GGUF file at {}", model_path.display()))?;
-        let mmap_static: &'static Mmap = Box::leak(Box::new(mmap));
-        let bytes_static: &'static [u8] = mmap_static.as_ref();
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
+        // `init_tx` communicates the load result back to the caller
+        // synchronously so `load()` returns an error if the GGUF fails to
+        // parse (rather than surfacing the failure on the first
+        // `generate` call, which would be much more confusing)
+        let (init_tx, init_rx) = sync_mpsc::sync_channel::<Result<ChatTemplate>>(1);
+        let mp = model_path.to_path_buf();
 
-        let gguf = GgufFile::parse(bytes_static).ok_or_else(|| {
-            anyhow!(
-                "GGUF parse failed for {} (bad magic / unsupported version)",
-                model_path.display()
-            )
-        })?;
-        let gguf_static: &'static GgufFile<'static> = Box::leak(Box::new(gguf));
+        std::thread::Builder::new()
+            .name("embedded-llm-worker".to_string())
+            .spawn(move || {
+                worker_main(&mp, init_tx, cmd_rx);
+            })
+            .with_context(|| "spawn embedded-llm-worker thread")?;
 
-        let tokenizer = GgufTokenizer::from_gguf(gguf_static)
-            .ok_or_else(|| anyhow!("tokenizer construction failed"))?;
-        let model = Llama3Model::from_gguf(gguf_static)
-            .ok_or_else(|| anyhow!("Llama3Model construction failed (arch not supported?)"))?;
-        let chat_template = ChatTemplate::detect(gguf_static);
-        tracing::info!(?chat_template, "detected chat template");
+        let chat_template = init_rx
+            .recv()
+            .with_context(|| "worker thread exited before init handshake")??;
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(EmbeddedInner {
-                tokenizer,
-                model,
+            inner: Arc::new(BackendShared {
+                tx: cmd_tx,
                 chat_template,
-            })),
+                model_path: model_path.to_path_buf(),
+            }),
         })
     }
 
     /// One-shot chat generation The system + user messages are wrapped in
-    /// the Qwen 2/3 chat template before being handed to the model
-    ///
-    /// The call is dispatched to a blocking thread pool worker via
-    /// [`tokio::task::spawn_blocking`] so the async runtime stays free
-    /// during the CPU-bound inference window
+    /// the detected chat template before being handed to the model
     ///
     /// # Errors
     ///
-    /// - `spawn_blocking` join failure (panic in worker thread)
-    /// - Model inference always returns text; there is no explicit error
-    ///   path from `Llama3Model::generate` today If the model produces
-    ///   no output, the caller sees an empty string
+    /// - Worker thread has died / dropped its channel (`Ok(())` normally,
+    ///   this is only observed after an internal panic)
+    /// - Worker never replies (also only after an internal panic)
     pub async fn generate(
         &self,
         system: &str,
         user: &str,
         params: &InferenceParams,
     ) -> Result<String> {
-        let inner = self.inner.clone();
-        let max_tokens = params.max_tokens as usize;
-        let temperature = params.temperature;
-        let top_k = params.top_k;
-        let system_owned = system.to_string();
-        let user_owned = user.to_string();
-
-        let (raw, template) = tokio::task::spawn_blocking(move || {
-            let mut guard = inner.blocking_lock();
-            let EmbeddedInner {
-                tokenizer,
-                model,
-                chat_template,
-            } = &mut *guard;
-            let prompt = format_chat(*chat_template, &system_owned, &user_owned);
-            let text = model
-                .generate(tokenizer, &prompt, max_tokens, temperature, top_k)
-                .text;
-            (text, *chat_template)
-        })
-        .await
-        .with_context(|| "embedded inference worker panicked")?;
-
-        Ok(strip_trailer(template, &raw))
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.inner
+            .tx
+            .send(Command::Generate {
+                system: system.to_string(),
+                user: user.to_string(),
+                params: *params,
+                response: resp_tx,
+            })
+            .map_err(|_| anyhow!("embedded worker thread has exited"))?;
+        resp_rx
+            .await
+            .map_err(|_| anyhow!("embedded worker dropped the response channel"))
     }
 
-    /// Which chat template family the loaded model uses (test / diagnostic)
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal mutex is poisoned — this can only happen if
-    /// a previous inference call itself panicked, in which case the model
-    /// state is already unrecoverable
+    /// Which chat template family the loaded model uses (diagnostic /
+    /// UI display) Cheap: reads the cached value from the shared struct
     #[must_use]
     pub fn chat_template(&self) -> ChatTemplate {
-        self.inner.blocking_lock().chat_template
+        self.inner.chat_template
     }
+
+    /// Path to the GGUF file backing this worker Used by the app layer to
+    /// decide whether a `ModelChoice` change requires a swap
+    #[must_use]
+    pub fn model_path(&self) -> &Path {
+        &self.inner.model_path
+    }
+}
+
+/// Worker thread entry point Owns the mmap / GgufFile / Llama3Model as
+/// stack locals; drops them when the command channel closes
+fn worker_main(
+    model_path: &Path,
+    init_tx: sync_mpsc::SyncSender<Result<ChatTemplate>>,
+    mut cmd_rx: mpsc::UnboundedReceiver<Command>,
+) {
+    let file = match std::fs::File::open(model_path)
+        .with_context(|| format!("open GGUF file at {}", model_path.display()))
+    {
+        Ok(f) => f,
+        Err(e) => {
+            let _ = init_tx.send(Err(e));
+            return;
+        }
+    };
+    // SAFETY: the file is read-only and we hold the `Mmap` for as long
+    // as the worker thread lives (no aliased mutable access can occur
+    // through the mapping) See module-level docs on lifetime management
+    let mmap = match unsafe { Mmap::map(&file) }
+        .with_context(|| format!("mmap GGUF file at {}", model_path.display()))
+    {
+        Ok(m) => m,
+        Err(e) => {
+            let _ = init_tx.send(Err(e));
+            return;
+        }
+    };
+    let bytes: &[u8] = mmap.as_ref();
+
+    let Some(gguf) = GgufFile::parse(bytes) else {
+        let _ = init_tx.send(Err(anyhow!(
+            "GGUF parse failed for {} (bad magic / unsupported version)",
+            model_path.display()
+        )));
+        return;
+    };
+
+    let Some(tokenizer) = GgufTokenizer::from_gguf(&gguf) else {
+        let _ = init_tx.send(Err(anyhow!("tokenizer construction failed")));
+        return;
+    };
+
+    let Some(mut model) = Llama3Model::from_gguf(&gguf) else {
+        let _ = init_tx.send(Err(anyhow!(
+            "Llama3Model construction failed (arch not supported?)"
+        )));
+        return;
+    };
+
+    let chat_template = ChatTemplate::detect(&gguf);
+    tracing::info!(?chat_template, "detected chat template");
+    if init_tx.send(Ok(chat_template)).is_err() {
+        // Caller dropped the init receiver before we handshook — nothing
+        // will consume our results Bail out to avoid a leaked worker
+        return;
+    }
+
+    while let Some(cmd) = cmd_rx.blocking_recv() {
+        match cmd {
+            Command::Generate {
+                system,
+                user,
+                params,
+                response,
+            } => {
+                let prompt = format_chat(chat_template, &system, &user);
+                let result = model.generate(
+                    &tokenizer,
+                    &prompt,
+                    params.max_tokens as usize,
+                    params.temperature,
+                    params.top_k,
+                );
+                let out = strip_trailer(chat_template, &result.text);
+                // Ignore send error — caller may have cancelled the await
+                let _ = response.send(out);
+            }
+        }
+    }
+
+    tracing::info!(path = %model_path.display(), "embedded-llm-worker exiting cleanly");
+    // mmap / gguf / tokenizer / model drop here as the stack unwinds
 }
 
 /// Format a system + user message pair according to `template`
@@ -333,6 +414,23 @@ mod tests {
         let gemma = format_gemma_chat("", "Hi");
         assert!(gemma.contains("<start_of_turn>system\n<end_of_turn>"));
         assert!(gemma.contains("<start_of_turn>user\nHi<end_of_turn>"));
+    }
+
+    #[test]
+    fn load_returns_error_for_missing_file() {
+        // The worker init handshake should surface a synchronous error
+        // when the GGUF path doesn't exist rather than silently spawning a
+        // zombie thread
+        let result = EmbeddedBackend::load(Path::new("/nonexistent/model.gguf"));
+        let err = match result {
+            Ok(_) => panic!("expected error for missing model file"),
+            Err(e) => e,
+        };
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("open GGUF file"),
+            "expected open error, got: {msg}"
+        );
     }
 
     // NOTE: end-to-end `EmbeddedBackend::load` + `generate` requires a real
