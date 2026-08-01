@@ -7,11 +7,14 @@
 //!
 //! ## Chat template
 //!
-//! v1 only supports the **Qwen 2 / 3 / 3.5** family (`<|im_start|>` /
-//! `<|im_end|>` markers) The default text-to-print model
-//! (`qwen3.5-4b-q4_k_m`) is Qwen 3.5; the alternate Bonsai 27B is a
-//! different family (Gemma-derived, `<start_of_turn>` markers) and is
-//! currently only supported through [`BackendKind::Sidecar`]
+//! Two chat template families are supported, auto-detected from the GGUF
+//! metadata at load time:
+//!
+//! - **Qwen 2 / 3 / 3.5** — `<|im_start|>role\n...<|im_end|>\n` markers
+//!   Default `qwen3.5-4b-q4_k_m` uses this
+//! - **Gemma 2 / 3n / 3 / Bonsai 27B** — `<start_of_turn>role\n...
+//!   <end_of_turn>\n` markers Assistant role is spelled `model` in the
+//!   emitted prompt, matching upstream Gemma tokenizer conventions
 //!
 //! ## Lifetime
 //!
@@ -53,6 +56,41 @@ pub struct EmbeddedBackend {
 struct EmbeddedInner {
     tokenizer: GgufTokenizer,
     model: Llama3Model<'static>,
+    chat_template: ChatTemplate,
+}
+
+/// Prompt formatting family detected from the loaded GGUF
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatTemplate {
+    /// `<|im_start|>role\n...<|im_end|>\n` used by Qwen 2 / 3 / 3.5
+    Qwen2,
+    /// `<start_of_turn>role\n...<end_of_turn>\n` used by Gemma 2 / 3n / 3
+    /// and Bonsai 27B Assistant role is emitted as `model`
+    Gemma,
+}
+
+impl ChatTemplate {
+    /// Detect the chat template family from GGUF metadata Uses the
+    /// authoritative `tokenizer.chat_template` string when present, else
+    /// falls back to the `general.architecture` slug
+    ///
+    /// Unknown architectures default to [`Self::Qwen2`] so a user pointing
+    /// at an unrecognised model still gets *some* prompt shape
+    #[must_use]
+    pub fn detect(gguf: &GgufFile<'_>) -> Self {
+        if let Some(tmpl) = gguf.meta_str("tokenizer.chat_template") {
+            if tmpl.contains("start_of_turn") {
+                return Self::Gemma;
+            }
+            if tmpl.contains("im_start") {
+                return Self::Qwen2;
+            }
+        }
+        match gguf.meta_str("general.architecture") {
+            Some(arch) if arch.starts_with("gemma") => Self::Gemma,
+            _ => Self::Qwen2,
+        }
+    }
 }
 
 impl EmbeddedBackend {
@@ -97,9 +135,15 @@ impl EmbeddedBackend {
             .ok_or_else(|| anyhow!("tokenizer construction failed"))?;
         let model = Llama3Model::from_gguf(gguf_static)
             .ok_or_else(|| anyhow!("Llama3Model construction failed (arch not supported?)"))?;
+        let chat_template = ChatTemplate::detect(gguf_static);
+        tracing::info!(?chat_template, "detected chat template");
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(EmbeddedInner { tokenizer, model })),
+            inner: Arc::new(Mutex::new(EmbeddedInner {
+                tokenizer,
+                model,
+                chat_template,
+            })),
         })
     }
 
@@ -122,23 +166,59 @@ impl EmbeddedBackend {
         user: &str,
         params: &InferenceParams,
     ) -> Result<String> {
-        let prompt = format_qwen_chat(system, user);
         let inner = self.inner.clone();
         let max_tokens = params.max_tokens as usize;
         let temperature = params.temperature;
         let top_k = params.top_k;
+        let system_owned = system.to_string();
+        let user_owned = user.to_string();
 
-        let raw = tokio::task::spawn_blocking(move || {
+        let (raw, template) = tokio::task::spawn_blocking(move || {
             let mut guard = inner.blocking_lock();
-            let EmbeddedInner { tokenizer, model } = &mut *guard;
-            model
+            let EmbeddedInner {
+                tokenizer,
+                model,
+                chat_template,
+            } = &mut *guard;
+            let prompt = format_chat(*chat_template, &system_owned, &user_owned);
+            let text = model
                 .generate(tokenizer, &prompt, max_tokens, temperature, top_k)
-                .text
+                .text;
+            (text, *chat_template)
         })
         .await
         .with_context(|| "embedded inference worker panicked")?;
 
-        Ok(strip_qwen_trailer(&raw))
+        Ok(strip_trailer(template, &raw))
+    }
+
+    /// Which chat template family the loaded model uses (test / diagnostic)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned — this can only happen if
+    /// a previous inference call itself panicked, in which case the model
+    /// state is already unrecoverable
+    #[must_use]
+    pub fn chat_template(&self) -> ChatTemplate {
+        self.inner.blocking_lock().chat_template
+    }
+}
+
+/// Format a system + user message pair according to `template`
+fn format_chat(template: ChatTemplate, system: &str, user: &str) -> String {
+    match template {
+        ChatTemplate::Qwen2 => format_qwen_chat(system, user),
+        ChatTemplate::Gemma => format_gemma_chat(system, user),
+    }
+}
+
+/// Trim the template-specific end-of-turn / end-of-message marker from
+/// the raw model output so callers see pure assistant text
+fn strip_trailer(template: ChatTemplate, text: &str) -> String {
+    match template {
+        ChatTemplate::Qwen2 => strip_qwen_trailer(text),
+        ChatTemplate::Gemma => strip_gemma_trailer(text),
     }
 }
 
@@ -150,12 +230,31 @@ fn format_qwen_chat(system: &str, user: &str) -> String {
     )
 }
 
+/// Format a system + user message pair into the Gemma 2/3/3n chat
+/// template shape Assistant role is spelled `model` per upstream Gemma
+/// convention
+fn format_gemma_chat(system: &str, user: &str) -> String {
+    format!(
+        "<start_of_turn>system\n{system}<end_of_turn>\n<start_of_turn>user\n{user}<end_of_turn>\n<start_of_turn>model\n"
+    )
+}
+
 /// The Qwen assistant continuation ends with `<|im_end|>` which can leak
 /// through when the tokenizer's `eos_id` doesn't match the im-end id
 /// Trim the trailer plus any leading/trailing whitespace so callers get
 /// pure assistant text
 fn strip_qwen_trailer(text: &str) -> String {
     text.split("<|im_end|>")
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+/// Gemma continuations terminate with `<end_of_turn>` Trim it + adjacent
+/// whitespace for parity with [`strip_qwen_trailer`]
+fn strip_gemma_trailer(text: &str) -> String {
+    text.split("<end_of_turn>")
         .next()
         .unwrap_or("")
         .trim()
@@ -176,26 +275,64 @@ mod tests {
     }
 
     #[test]
-    fn strip_trailer_removes_im_end_and_whitespace() {
+    fn gemma_chat_template_contains_all_role_markers() {
+        let out = format_gemma_chat("You are ALICE.", "Hello");
+        assert!(out.starts_with("<start_of_turn>system\n"));
+        assert!(out.contains("You are ALICE.<end_of_turn>"));
+        assert!(out.contains("<start_of_turn>user\nHello<end_of_turn>"));
+        // Assistant role in Gemma is spelled `model`
+        assert!(out.ends_with("<start_of_turn>model\n"));
+    }
+
+    #[test]
+    fn format_chat_dispatches_on_template_variant() {
+        let qwen = format_chat(ChatTemplate::Qwen2, "s", "u");
+        assert!(qwen.contains("<|im_start|>"));
+        let gemma = format_chat(ChatTemplate::Gemma, "s", "u");
+        assert!(gemma.contains("<start_of_turn>"));
+    }
+
+    #[test]
+    fn strip_qwen_trailer_removes_im_end_and_whitespace() {
         let raw = "  sphere(20)\n<|im_end|>\nextra garbage";
         assert_eq!(strip_qwen_trailer(raw), "sphere(20)");
     }
 
     #[test]
-    fn strip_trailer_no_marker_returns_trimmed() {
+    fn strip_gemma_trailer_removes_end_of_turn_and_whitespace() {
+        let raw = "  sphere(20)\n<end_of_turn>\nextra garbage";
+        assert_eq!(strip_gemma_trailer(raw), "sphere(20)");
+    }
+
+    #[test]
+    fn strip_trailer_dispatches_on_template_variant() {
+        assert_eq!(strip_trailer(ChatTemplate::Qwen2, "a<|im_end|>b"), "a");
+        assert_eq!(strip_trailer(ChatTemplate::Gemma, "a<end_of_turn>b"), "a");
+    }
+
+    #[test]
+    fn strip_qwen_trailer_no_marker_returns_trimmed() {
         assert_eq!(strip_qwen_trailer("  hello  "), "hello");
     }
 
     #[test]
-    fn strip_trailer_empty_input_is_empty() {
+    fn strip_gemma_trailer_no_marker_returns_trimmed() {
+        assert_eq!(strip_gemma_trailer("  hello  "), "hello");
+    }
+
+    #[test]
+    fn strip_qwen_trailer_empty_input_is_empty() {
         assert_eq!(strip_qwen_trailer(""), "");
     }
 
     #[test]
     fn chat_template_handles_empty_system_prompt() {
-        let out = format_qwen_chat("", "Hi");
-        assert!(out.contains("<|im_start|>system\n<|im_end|>"));
-        assert!(out.contains("<|im_start|>user\nHi<|im_end|>"));
+        let qwen = format_qwen_chat("", "Hi");
+        assert!(qwen.contains("<|im_start|>system\n<|im_end|>"));
+        assert!(qwen.contains("<|im_start|>user\nHi<|im_end|>"));
+        let gemma = format_gemma_chat("", "Hi");
+        assert!(gemma.contains("<start_of_turn>system\n<end_of_turn>"));
+        assert!(gemma.contains("<start_of_turn>user\nHi<end_of_turn>"));
     }
 
     // NOTE: end-to-end `EmbeddedBackend::load` + `generate` requires a real
