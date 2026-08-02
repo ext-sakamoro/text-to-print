@@ -37,6 +37,12 @@ struct ChatRequest {
     messages: Vec<Message>,
     max_tokens: u32,
     temperature: f32,
+    /// Stage 3-C.11: optional GBNF grammar forwarded verbatim to
+    /// `alice-llm-server` which parses + enforces it in the decode loop
+    /// Omitted from the JSON body when `None` so pre-3-C.11 servers stay
+    /// backward-compatible
+    #[serde(skip_serializing_if = "Option::is_none")]
+    grammar: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -148,8 +154,30 @@ pub async fn generate(
     system_prompt: &str,
     user_prompt: &str,
 ) -> Result<String> {
+    generate_with_grammar(config, system_prompt, user_prompt, None).await
+}
+
+/// Stage 3-C.11: like [`generate`] but forwards an optional GBNF grammar
+/// to the sidecar The `alice-llm-server` binary applies the grammar in
+/// its decode loop, guaranteeing the response conforms to the supplied
+/// GBNF (LOL DSL etc)
+///
+/// # Errors
+///
+/// Same as [`generate`]: transport / non-2xx status / JSON parse
+pub async fn generate_with_grammar(
+    config: &LlmConfig,
+    system_prompt: &str,
+    user_prompt: &str,
+    grammar: Option<&str>,
+) -> Result<String> {
     let model_id = config.model_choice.model_id();
-    info!(model = %model_id, endpoint = %config.endpoint, "LLM inference");
+    info!(
+        model = %model_id,
+        endpoint = %config.endpoint,
+        grammar_set = grammar.is_some(),
+        "LLM inference"
+    );
 
     let client = reqwest::Client::new();
     let request = ChatRequest {
@@ -166,6 +194,7 @@ pub async fn generate(
         ],
         max_tokens: config.max_tokens,
         temperature: config.temperature,
+        grammar: grammar.map(str::to_string),
     };
 
     let response = client.post(&config.endpoint).json(&request).send().await?;

@@ -45,7 +45,12 @@ use std::sync::mpsc as sync_mpsc;
 use tokio::sync::{mpsc, oneshot};
 
 use alice_llm::gguf::{GgufFile, GgufTokenizer};
+use alice_llm::grammar::{Fsm, parse_gbnf};
 use alice_llm::llama3::Llama3Model;
+use alice_llm::sampling::{advance_fsm_on_emit, mask_logits_by_grammar};
+use alice_llm::{
+    apply_temperature, sample_argmax, sample_with_random, softmax_inplace, top_k_filter,
+};
 
 use crate::backend_kind::InferenceParams;
 
@@ -177,7 +182,7 @@ impl EmbeddedBackend {
             .send(Command::Generate {
                 system: system.to_string(),
                 user: user.to_string(),
-                params: *params,
+                params: params.clone(),
                 response: resp_tx,
             })
             .map_err(|_| anyhow!("embedded worker thread has exited"))?;
@@ -268,14 +273,40 @@ fn worker_main(
                 response,
             } => {
                 let prompt = format_chat(chat_template, &system, &user);
-                let result = model.generate(
-                    &tokenizer,
-                    &prompt,
-                    params.max_tokens as usize,
-                    params.temperature,
-                    params.top_k,
-                );
-                let out = strip_trailer(chat_template, &result.text);
+                let text = if let Some(gbnf) = params.grammar.as_deref() {
+                    // Stage 3-C.11: grammar-constrained decode path
+                    // GBNF parse + Fsm init happen per request so a
+                    // caller can vary the grammar at runtime Parse
+                    // errors surface as the returned assistant text so
+                    // higher layers can distinguish grammar failures
+                    // from model failures
+                    match run_grammar_decode(
+                        &mut model,
+                        &tokenizer,
+                        &prompt,
+                        gbnf,
+                        params.max_tokens as usize,
+                        params.temperature,
+                        params.top_k,
+                    ) {
+                        Ok(text) => text,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "grammar-constrained decode failed");
+                            String::new()
+                        }
+                    }
+                } else {
+                    model
+                        .generate(
+                            &tokenizer,
+                            &prompt,
+                            params.max_tokens as usize,
+                            params.temperature,
+                            params.top_k,
+                        )
+                        .text
+                };
+                let out = strip_trailer(chat_template, &text);
                 // Ignore send error — caller may have cancelled the await
                 let _ = response.send(out);
             }
@@ -284,6 +315,101 @@ fn worker_main(
 
     tracing::info!(path = %model_path.display(), "embedded-llm-worker exiting cleanly");
     // mmap / gguf / tokenizer / model drop here as the stack unwinds
+}
+
+/// Stage 3-C.11: grammar-constrained autoregressive decode
+///
+/// Mirrors the logic in `alice-llm-server::generate` but runs in-process
+/// against the local [`Llama3Model`] Prefill forwards every prompt token
+/// through the KV cache; decode alternates
+/// `mask_logits_by_grammar` → sample → `advance_fsm_on_emit` → forward
+/// with early exit on EOS, stop-token, or [`Fsm::is_final`]
+///
+/// The `max_depth` value is copied from the alice-lol bridge default; the
+/// LOL DSL grammar can nest deeply enough that lower values would trip
+/// `FsmError::RecursionOverflow`
+///
+/// # Errors
+///
+/// - GBNF parse failure (surfaces as `anyhow::Error` with context)
+/// - `Fsm::start` returned an error (empty root rule etc.)
+/// - `Fsm::advance` diverged from the grammar mask (indicates a
+///   sampling / masking bug rather than input error)
+fn run_grammar_decode(
+    model: &mut Llama3Model<'_>,
+    tokenizer: &GgufTokenizer,
+    prompt: &str,
+    gbnf_src: &str,
+    max_tokens: usize,
+    temperature: f32,
+    top_k: usize,
+) -> Result<String> {
+    let grammar = parse_gbnf(gbnf_src).with_context(|| "parse GBNF grammar")?;
+    let mut fsm = Fsm::start(&grammar)
+        .map_err(|e| anyhow!("Fsm::start failed: {e:?}"))?
+        .with_max_depth(4096);
+
+    let mut tokens = tokenizer.encode(prompt);
+    if tokenizer.add_bos_token && (tokens.is_empty() || tokens[0] != tokenizer.bos_id) {
+        tokens.insert(0, tokenizer.bos_id);
+    }
+    if tokens.is_empty() {
+        return Err(anyhow!("empty prompt after tokenisation"));
+    }
+
+    model.clear_cache();
+    // Prefill everything except the last token
+    for &tok in &tokens[..tokens.len() - 1] {
+        model.forward(tok);
+    }
+    // Prefill last, keep logits for the first sample
+    let last = *tokens.last().expect("non-empty tokens");
+    let mut logits = model.forward(last);
+
+    let mut generated: Vec<u32> = Vec::with_capacity(max_tokens);
+    let mut rng_state: u64 = 0x_DEAD_BEEF_CAFE_1234;
+    let mut next_rand = || -> f32 {
+        rng_state ^= rng_state << 13;
+        rng_state ^= rng_state >> 7;
+        rng_state ^= rng_state << 17;
+        (rng_state as f32) / (u64::MAX as f32)
+    };
+
+    for _ in 0..max_tokens {
+        // Mask first so the -inf entries survive both temperature scale
+        // and top-k filter Ordering matches server.rs::generate for parity
+        mask_logits_by_grammar(&fsm, tokenizer, &mut logits);
+
+        let next = if temperature < 1e-6 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                sample_argmax(&logits) as u32
+            }
+        } else {
+            apply_temperature(&mut logits, temperature);
+            top_k_filter(&mut logits, top_k);
+            softmax_inplace(&mut logits);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                sample_with_random(&logits, next_rand()) as u32
+            }
+        };
+
+        if next == tokenizer.eos_id {
+            break;
+        }
+
+        advance_fsm_on_emit(&mut fsm, tokenizer, next)
+            .map_err(|e| anyhow!("Fsm::advance diverged from mask at token {next}: {e:?}"))?;
+        generated.push(next);
+
+        if fsm.is_final() {
+            break;
+        }
+        logits = model.forward(next);
+    }
+
+    Ok(tokenizer.decode(&generated))
 }
 
 /// Format a system + user message pair according to `template`
@@ -449,6 +575,7 @@ mod tests {
             max_tokens: 32,
             temperature: 0.1,
             top_k: 40,
+            grammar: None,
         };
         let out = backend
             .generate("You are ALICE.", "Say 'sphere(1)' verbatim.", &params)

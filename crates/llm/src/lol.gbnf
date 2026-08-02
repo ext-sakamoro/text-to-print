@@ -1,0 +1,253 @@
+# ALICE-LOL DSL grammar for constrained decoding (Phase X.8 B-5).
+#
+# Covers the 124 constructs implemented in
+# `alice_lol::runtime_parser::parse_lol`. Grouped by *argument shape*
+# rather than one rule per construct: a `sphere(1.0)` and `heart(1.0)`
+# share the same body shape (`name "(" number ")"`), so they live in
+# the same `prim_1f` production and only differ in the enumerated name.
+#
+# What the grammar enforces
+# -------------------------
+# - Only construct names known to the runtime parser are accepted
+#   (unknown / typo'd names are rejected).
+# - The argument *shape* (number-count vs child-count, comma placement,
+#   balanced parens) matches one of the recognised categories.
+# - Whitespace and `//` line comments are permitted between tokens
+#   (mirrors the runtime lexer).
+#
+# What the grammar does NOT enforce
+# ---------------------------------
+# - Exact per-construct arity (e.g. that `sphere` really takes exactly
+#   one number vs two). Constructs are bucketed by *category*, so
+#   swapping within a category still parses. The runtime parser catches
+#   arity mismatches at eval time.
+# - Numeric ranges / semantic validity (negative radii, etc.).
+# - Rust-side variable capture `{expr}` or bare identifiers — those are
+#   `proc_macro`-only syntax, absent from the runtime LLM path.
+
+# ─── Root ──────────────────────────────────────────────────────────────
+
+root ::= ws expr ws
+
+# ─── Whitespace + line comment (mirrors runtime_parser lexer) ─────────
+
+ws ::= wsunit*
+wsunit ::= [ \t\r\n] | linecomment
+linecomment ::= "//" noteol* "\n"
+noteol ::= [^\n]
+
+# ─── Numeric literal (matches runtime_parser::read_number) ────────────
+#
+#   [-]? ( digits ("." digits)? | "." digits ) ( [eE][+-]? digits )?
+
+number ::= sign? magnitude expon?
+sign ::= "-"
+magnitude ::= digits fract? | fract
+digits ::= [0-9]+
+fract ::= "." [0-9]+
+expon ::= expchar signchar? digits
+expchar ::= "e" | "E"
+signchar ::= "+" | "-"
+
+# ─── Expression dispatcher ────────────────────────────────────────────
+
+expr ::= prim_1f
+       | prim_2f
+       | prim_3f
+       | prim_4f
+       | prim_5f
+       | prim_6f
+       | prim_9f
+       | prim_10f
+       | op_variadic
+       | op_k_children
+       | op_2k_children
+       | op_ab
+       | op_1f_ab
+       | op_2f_ab
+       | mod_1f_child
+       | mod_2f_child
+       | mod_3f_child
+       | mod_6f_child
+       | mod_child_only
+
+# ─── Primitives (fixed number of floats, no children) ─────────────────
+
+prim_1f ::= name_1f ws "(" ws number ws ")"
+prim_2f ::= name_2f ws "(" ws number ws "," ws number ws ")"
+prim_3f ::= name_3f ws "(" ws number ws "," ws number ws "," ws number ws ")"
+prim_4f ::= name_4f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+prim_5f ::= name_5f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+prim_6f ::= name_6f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+prim_9f ::= name_9f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+prim_10f ::= name_10f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+
+name_1f ::= "sphere"
+          | "octahedron"
+          | "pyramid"
+          | "heart"
+          | "tetrahedron"
+          | "dodecahedron"
+          | "icosahedron"
+          | "truncated_octahedron"
+          | "truncated_icosahedron"
+          | "infinite_cylinder"
+          | "infinite_cone"
+
+name_2f ::= "cylinder"
+          | "torus"
+          | "cone"
+          | "capsule"
+          | "hex_prism"
+          | "egg"
+          | "diamond"
+          | "triangular_prism"
+          | "cut_sphere"
+          | "solid_angle"
+          | "vesica"
+          | "gyroid"
+          | "schwarz_p"
+          | "diamond_surface"
+          | "neovius"
+          | "lidinoid"
+          | "iwp"
+          | "frd"
+          | "fischer_koch_s"
+          | "pmy"
+          | "circle_2d"
+          | "blobby_cross"
+          | "terrain"
+
+name_3f ::= "box3d"
+          | "ellipsoid"
+          | "rounded_cone"
+          | "link"
+          | "capped_cone"
+          | "capped_torus"
+          | "rounded_cylinder"
+          | "tube"
+          | "barrel"
+          | "cut_hollow_sphere"
+          | "death_star"
+          | "rect_2d"
+          | "annular_2d"
+          | "parabola_segment"
+          | "regular_polygon"
+          | "tunnel"
+          | "rounded_x"
+          | "pie"
+
+name_4f ::= "rounded_box"
+          | "plane"
+          | "helix"
+          | "box_frame"
+          | "star_polygon"
+          | "cross_shape"
+          | "chamfered_cube"
+          | "rhombus"
+          | "trapezoid"
+          | "parallelogram"
+          | "uneven_capsule"
+          | "arc_shape"
+          | "moon"
+          | "stairs_prim"
+          | "rounded_rect_2d"
+
+name_5f ::= "horseshoe" | "superellipsoid"
+
+name_6f ::= "segment_2d"
+
+name_9f ::= "triangle"
+
+name_10f ::= "bezier"
+
+# ─── Operations (Boolean / combining constructs) ──────────────────────
+#
+# op_variadic:  name(expr, expr, ...) with 2+ children.
+# op_k_children: name(number, expr, expr, ...) — smoothing family.
+# op_2k_children: name(number, number, expr, expr, ...) — stairs/columns.
+# op_ab: name(expr, expr) — subtract / xor.
+# op_1f_ab: name(number, expr, expr) — smooth_subtract / morph etc.
+# op_2f_ab: name(number, number, expr, expr).
+
+op_variadic ::= name_variadic ws "(" ws expr ws exprtail exprtail* ")"
+op_k_children ::= name_k_children ws "(" ws number ws exprtail exprtail exprtail* ")"
+op_2k_children ::= name_2k_children ws "(" ws number ws "," ws number ws exprtail exprtail exprtail* ")"
+op_ab ::= name_ab ws "(" ws expr ws "," ws expr ws ")"
+op_1f_ab ::= name_1f_ab ws "(" ws number ws "," ws expr ws "," ws expr ws ")"
+op_2f_ab ::= name_2f_ab ws "(" ws number ws "," ws number ws "," ws expr ws "," ws expr ws ")"
+
+exprtail ::= "," ws expr ws
+
+name_variadic ::= "union" | "intersection"
+
+name_k_children ::= "smooth_union"
+                  | "smooth_intersection"
+                  | "chamfer_union"
+                  | "chamfer_intersection"
+                  | "exp_smooth_union"
+                  | "exp_smooth_intersection"
+
+name_2k_children ::= "stairs_union"
+                   | "stairs_intersection"
+                   | "columns_union"
+                   | "columns_intersection"
+
+name_ab ::= "subtract" | "xor"
+
+name_1f_ab ::= "smooth_subtract"
+             | "chamfer_subtraction"
+             | "pipe"
+             | "engrave"
+             | "exp_smooth_subtraction"
+             | "morph"
+
+name_2f_ab ::= "groove"
+             | "tongue"
+             | "stairs_subtraction"
+             | "columns_subtraction"
+
+# ─── Modifiers / transforms (floats + one child) ──────────────────────
+#
+# mod_1f_child:    name(number, expr)
+# mod_2f_child:    name(number, number, expr)  — animate only
+# mod_3f_child:    name(number, number, number, expr)
+# mod_6f_child:    name(number, number, number, number, number, number, expr)
+# mod_child_only:  name(expr)
+
+mod_1f_child ::= name_1f_child ws "(" ws number ws "," ws expr ws ")"
+mod_2f_child ::= name_2f_child ws "(" ws number ws "," ws number ws "," ws expr ws ")"
+mod_3f_child ::= name_3f_child ws "(" ws number ws "," ws number ws "," ws number ws "," ws expr ws ")"
+mod_6f_child ::= name_6f_child ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws expr ws ")"
+mod_child_only ::= name_child_only ws "(" ws expr ws ")"
+
+name_1f_child ::= "scale"
+                | "round"
+                | "onion"
+                | "twist"
+                | "bend"
+                | "revolution"
+                | "extrude"
+                | "taper"
+                | "displacement"
+                | "polar_repeat"
+                | "with_material"
+
+name_2f_child ::= "animate"
+
+name_3f_child ::= "translate"
+                | "rotate"
+                | "scale_non_uniform"
+                | "mirror"
+                | "repeat"
+                | "elongate"
+                | "shear"
+                | "noise"
+                | "surface_roughness"
+                | "lattice_infill"
+                | "diamond_infill"
+                | "schwarz_infill"
+
+name_6f_child ::= "repeat_finite" | "sweep_bezier"
+
+name_child_only ::= "octant_mirror" | "icosahedral_symmetry"

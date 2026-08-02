@@ -7,7 +7,9 @@ license.workspace = true
 [dependencies]
 # Stage 3-C: `gguf` feature drives EmbeddedBackend GGUF parsing + tokenizer
 # `parallel` enables rayon-backed matmul (~2× on desktop CPUs during prefill)
-alice-llm = { workspace = true, features = ["gguf", "parallel"] }
+# `grammar` (Stage 3-C.11) exposes GBNF parser + Fsm + mask_logits_by_grammar
+# so EmbeddedBackend can constrain LLM output to a formal grammar (LOL DSL)
+alice-llm = { workspace = true, features = ["gguf", "parallel", "grammar"] }
 # Stage 3-C.7: mmap the GGUF file into the process address space so the
 # ~2.4 GB Qwen 3.5-4B / ~7 GB Bonsai payload doesn't inflate the resident
 # working set at load time Kernel pages in on demand during inference

@@ -97,7 +97,12 @@ impl EmbeddedStatus {
 /// Unified inference parameters used by both backends The sidecar path
 /// forwards these into the OpenAI `chat/completions` body; the embedded
 /// path passes them directly to `Llama3Model::generate`
-#[derive(Debug, Clone, Copy)]
+///
+/// `Clone`-not-`Copy` because the [`Self::grammar`] field is `String`
+/// (owned GBNF source) The struct is still lightweight — the grammar
+/// string is only a few hundred lines and cheap to `Arc<T>` upstream if
+/// per-request cloning ever becomes a bottleneck
+#[derive(Debug, Clone)]
 pub struct InferenceParams {
     pub max_tokens: u32,
     pub temperature: f32,
@@ -105,6 +110,14 @@ pub struct InferenceParams {
     /// currently ignores this (the OpenAI-compatible endpoint would need
     /// a `top_k` extension that isn't wired yet)
     pub top_k: usize,
+    /// Optional GBNF source (Stage 3-C.11) When `Some`, the embedded
+    /// backend uses a custom decode loop that masks logits against the
+    /// grammar per token, guaranteeing well-formed output The sidecar
+    /// backend forwards this in the OpenAI `chat/completions` request
+    /// body under the `grammar` field (accepted by `alice-llm-server`)
+    /// `None` = free-form generation, backward-compatible with
+    /// pre-3-C.11 behaviour
+    pub grammar: Option<String>,
 }
 
 impl Default for InferenceParams {
@@ -113,6 +126,7 @@ impl Default for InferenceParams {
             max_tokens: 2048,
             temperature: 0.7,
             top_k: 40,
+            grammar: None,
         }
     }
 }
@@ -123,6 +137,7 @@ impl From<&LlmConfig> for InferenceParams {
             max_tokens: cfg.max_tokens,
             temperature: cfg.temperature,
             top_k: 40,
+            grammar: None,
         }
     }
 }
@@ -167,7 +182,13 @@ impl LlmBackend {
                     temperature: params.temperature,
                     ..cfg.clone()
                 };
-                crate::backend::generate(&effective, system, user).await
+                crate::backend::generate_with_grammar(
+                    &effective,
+                    system,
+                    user,
+                    params.grammar.as_deref(),
+                )
+                .await
             }
             Self::Embedded(inner) => inner.generate(system, user, params).await,
         }
