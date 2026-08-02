@@ -112,6 +112,14 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN backend_kind TEXT NOT NULL DEFAULT 'Sidecar'",
             [],
         );
+        // Stage 3-C.12: `execution_mode` persists whether the Embedded
+        // backend runs on CPU or GPU Default `Cpu` matches pre-3-C.12
+        // behaviour and is the always-safe fallback (GPU init can fail
+        // if no wgpu adapter is available)
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'Cpu'",
+            [],
+        );
         Ok(())
     }
 
@@ -264,6 +272,30 @@ impl Database {
         Ok(())
     }
 
+    /// Fetch the persisted `execution_mode` slug for the given profile
+    /// Missing / unknown rows fall back to `"Cpu"` so pre-3-C.12 DBs and
+    /// systems without a GPU behave sensibly
+    pub fn get_execution_mode(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT execution_mode FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "Cpu".to_string());
+        Ok(value)
+    }
+
+    /// Persist the user's Embedded execution mode for the given profile
+    pub fn set_execution_mode(&self, profile_id: &str, mode: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET execution_mode = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, mode],
+        )?;
+        Ok(())
+    }
+
     pub fn update_profile_tier(&self, id: &str, tier: &str, license_key: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE profiles SET tier = ?2, license_key = ?3, updated_at = datetime('now') WHERE id = ?1",
@@ -379,6 +411,29 @@ mod tests {
     fn backend_kind_unknown_profile_falls_back_to_sidecar() {
         let db = test_db();
         assert_eq!(db.get_backend_kind("nonexistent").unwrap(), "Sidecar");
+    }
+
+    #[test]
+    fn execution_mode_defaults_to_cpu() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(db.get_execution_mode("user1").unwrap(), "Cpu");
+    }
+
+    #[test]
+    fn execution_mode_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_execution_mode("user1", "Gpu").unwrap();
+        assert_eq!(db.get_execution_mode("user1").unwrap(), "Gpu");
+        db.set_execution_mode("user1", "Cpu").unwrap();
+        assert_eq!(db.get_execution_mode("user1").unwrap(), "Cpu");
+    }
+
+    #[test]
+    fn execution_mode_unknown_profile_falls_back_to_cpu() {
+        let db = test_db();
+        assert_eq!(db.get_execution_mode("nonexistent").unwrap(), "Cpu");
     }
 
     #[test]

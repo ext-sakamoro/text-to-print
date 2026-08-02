@@ -6,7 +6,7 @@ use text_to_print_core::db::{Database, GenerationRow};
 use text_to_print_core::pipeline::MeshStats;
 use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend::LlmConfig;
-use text_to_print_llm::backend_kind::{BackendKind, EmbeddedStatus};
+use text_to_print_llm::backend_kind::{BackendKind, EmbeddedStatus, ExecutionMode};
 use text_to_print_llm::embedded_backend::EmbeddedBackend;
 use text_to_print_llm::sidecar::SidecarStatus;
 
@@ -106,6 +106,11 @@ pub struct AppState {
     /// The default is `Sidecar` so existing installs keep the pre-3-C
     /// behaviour without a migration step
     pub backend_kind: BackendKind,
+    /// Stage 3-C.12: whether the Embedded backend runs on CPU or GPU
+    /// Only meaningful when [`Self::backend_kind`] is
+    /// [`BackendKind::Embedded`] Persisted in DB
+    /// (`profiles.execution_mode`) Default `Cpu`
+    pub execution_mode: ExecutionMode,
     /// Loaded [`EmbeddedBackend`] wrapped for shared access The slot is
     /// `None` until the user opts into Embedded and the background load
     /// task populates it via [`AppState::switch_backend_kind`]
@@ -173,6 +178,10 @@ impl AppState {
         let backend_kind = BackendKind::from_db_str(
             &db.get_backend_kind(&profile_id)
                 .unwrap_or_else(|_| "Sidecar".to_string()),
+        );
+        let execution_mode = ExecutionMode::from_db_str(
+            &db.get_execution_mode(&profile_id)
+                .unwrap_or_else(|_| "Cpu".to_string()),
         );
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
@@ -283,6 +292,7 @@ impl AppState {
                 &runtime,
                 models_dir.clone(),
                 initial_choice,
+                execution_mode,
                 embedded.clone(),
                 embedded_status_cell.clone(),
                 progress_rx.clone(),
@@ -309,6 +319,7 @@ impl AppState {
             prompt_focused_once: false,
             sidecar_status: sidecar_rx,
             backend_kind,
+            execution_mode,
             embedded,
             embedded_status_cell,
             share_lol_dsl,
@@ -400,11 +411,49 @@ impl AppState {
                 &self.runtime,
                 self.data_dir.join("models"),
                 self.llm_config.model_choice,
+                self.execution_mode,
                 self.embedded.clone(),
                 self.embedded_status_cell.clone(),
                 self.model_progress.clone(),
             );
         }
+    }
+
+    /// Stage 3-C.12: change the Embedded execution mode (CPU ↔ GPU) at
+    /// runtime If Embedded is currently active, drops the loaded model
+    /// and re-loads under the new mode
+    pub fn switch_execution_mode(&mut self, new_mode: ExecutionMode) {
+        if self.execution_mode == new_mode {
+            return;
+        }
+        self.execution_mode = new_mode;
+        if let Err(e) = self
+            .db
+            .set_execution_mode(&self.profile_id, new_mode.to_db_str())
+        {
+            tracing::warn!(error = %e, "failed to persist execution_mode");
+        }
+        // Only reload if Embedded is the active backend Sidecar path
+        // ignores execution_mode entirely (server subprocess decides its
+        // own CPU / GPU via its own --hybrid flag)
+        if self.backend_kind != BackendKind::Embedded {
+            return;
+        }
+        if let Ok(mut slot) = self.embedded.lock() {
+            *slot = None;
+        }
+        if let Ok(mut status) = self.embedded_status_cell.lock() {
+            *status = EmbeddedStatus::NotLoaded;
+        }
+        spawn_embedded_load(
+            &self.runtime,
+            self.data_dir.join("models"),
+            self.llm_config.model_choice,
+            new_mode,
+            self.embedded.clone(),
+            self.embedded_status_cell.clone(),
+            self.model_progress.clone(),
+        );
     }
 
     /// Stage 3-C.9: handle a `ModelChoice` change from the Settings UI
@@ -442,6 +491,7 @@ impl AppState {
             &self.runtime,
             self.data_dir.join("models"),
             new_choice,
+            self.execution_mode,
             self.embedded.clone(),
             self.embedded_status_cell.clone(),
             self.model_progress.clone(),
@@ -506,6 +556,7 @@ fn spawn_embedded_load(
     runtime: &tokio::runtime::Runtime,
     models_dir: PathBuf,
     choice: text_to_print_llm::model::ModelChoice,
+    execution_mode: ExecutionMode,
     embedded_slot: std::sync::Arc<std::sync::Mutex<Option<EmbeddedBackend>>>,
     status_slot: std::sync::Arc<std::sync::Mutex<EmbeddedStatus>>,
     mut model_progress_rx: tokio::sync::watch::Receiver<
@@ -534,23 +585,35 @@ fn spawn_embedded_load(
         }
         let model_path = text_to_print_llm::downloader::model_path(&models_dir, choice);
         *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
-        let load_result =
-            tokio::task::spawn_blocking(move || EmbeddedBackend::load(&model_path)).await;
+        let load_result = tokio::task::spawn_blocking(move || {
+            EmbeddedBackend::load_with_mode(&model_path, execution_mode)
+        })
+        .await;
         match load_result {
             Ok(Ok(backend)) => {
                 *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
                 *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Ready;
-                tracing::info!(?choice, "embedded backend loaded");
+                tracing::info!(?choice, ?execution_mode, "embedded backend loaded");
             }
             Ok(Err(e)) => {
                 *status_slot.lock().expect("embedded status lock") =
                     EmbeddedStatus::Error(e.to_string());
-                tracing::warn!(error = %e, ?choice, "embedded backend load failed");
+                tracing::warn!(
+                    error = %e,
+                    ?choice,
+                    ?execution_mode,
+                    "embedded backend load failed"
+                );
             }
             Err(join_err) => {
                 *status_slot.lock().expect("embedded status lock") =
                     EmbeddedStatus::Error(join_err.to_string());
-                tracing::warn!(error = %join_err, ?choice, "embedded backend load task panicked");
+                tracing::warn!(
+                    error = %join_err,
+                    ?choice,
+                    ?execution_mode,
+                    "embedded backend load task panicked"
+                );
             }
         }
     });

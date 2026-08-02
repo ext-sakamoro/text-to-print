@@ -45,14 +45,43 @@ use std::sync::mpsc as sync_mpsc;
 use tokio::sync::{mpsc, oneshot};
 
 use alice_llm::gguf::{GgufFile, GgufTokenizer};
+use alice_llm::gpu::{GpuEngine, GpuModel, GpuModelConfig};
 use alice_llm::grammar::{Fsm, parse_gbnf};
-use alice_llm::llama3::Llama3Model;
+use alice_llm::llama3::{Llama3Config, Llama3Model};
 use alice_llm::sampling::{advance_fsm_on_emit, mask_logits_by_grammar};
 use alice_llm::{
     apply_temperature, sample_argmax, sample_with_random, softmax_inplace, top_k_filter,
 };
 
-use crate::backend_kind::InferenceParams;
+use crate::backend_kind::{ExecutionMode, InferenceParams};
+
+/// Unified trait so [`run_decode`] can drive either the CPU
+/// (`Llama3Model`) or GPU (`GpuModel`) forward pass with the same
+/// grammar mask + sampling loop
+trait ModelForward {
+    /// Forward one token, return the logits distribution
+    fn forward_read(&mut self, token: u32) -> Vec<f32>;
+    /// Clear internal KV cache (start of a new sequence)
+    fn clear(&mut self);
+}
+
+impl ModelForward for Llama3Model<'_> {
+    fn forward_read(&mut self, token: u32) -> Vec<f32> {
+        self.forward(token)
+    }
+    fn clear(&mut self) {
+        self.clear_cache();
+    }
+}
+
+impl ModelForward for GpuModel {
+    fn forward_read(&mut self, token: u32) -> Vec<f32> {
+        self.forward_and_read(token)
+    }
+    fn clear(&mut self) {
+        self.reset();
+    }
+}
 
 /// GGUF-backed in-process LLM backend
 ///
@@ -68,6 +97,7 @@ struct BackendShared {
     tx: mpsc::UnboundedSender<Command>,
     chat_template: ChatTemplate,
     model_path: PathBuf,
+    execution_mode: ExecutionMode,
 }
 
 enum Command {
@@ -114,15 +144,26 @@ impl ChatTemplate {
 }
 
 impl EmbeddedBackend {
-    /// Load a GGUF model file via mmap and spawn the worker thread that
-    /// will serve inference requests
+    /// Load a GGUF model with the default [`ExecutionMode::Cpu`] mode
     ///
-    /// The GGUF file is memory-mapped read-only inside the worker thread
-    /// (kernel demand-pages weight tensors during inference, keeping the
-    /// resident-set spike small at load time) The tokenizer, model, and
-    /// detected chat template all become worker-thread locals; the
-    /// caller's [`EmbeddedBackend`] holds only a `Send`-safe channel plus
-    /// the detected [`ChatTemplate`] cache
+    /// Equivalent to `load_with_mode(path, ExecutionMode::Cpu)` — kept
+    /// for source-compat with pre-3-C.12 callers
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::load_with_mode`]
+    pub fn load(model_path: &Path) -> Result<Self> {
+        Self::load_with_mode(model_path, ExecutionMode::Cpu)
+    }
+
+    /// Load a GGUF model in the specified execution mode
+    ///
+    /// - `ExecutionMode::Cpu` spins up a CPU worker that owns
+    ///   `Mmap` + `GgufFile` + `Llama3Model` on its stack
+    /// - `ExecutionMode::Gpu` spins up a GPU worker that additionally
+    ///   allocates a `GpuEngine` (wgpu adapter + device) and uploads all
+    ///   weight tensors into `GpuModel` GPU buffers The `Mmap` is still
+    ///   held so tokenizer + config metadata stay accessible
     ///
     /// # Errors
     ///
@@ -132,22 +173,29 @@ impl EmbeddedBackend {
     /// - GGUF parse failure (corrupt file / unsupported version)
     /// - Tokenizer / model construction failure (arch mismatch, missing
     ///   tensors, unsupported quant type)
-    pub fn load(model_path: &Path) -> Result<Self> {
-        tracing::info!(path = %model_path.display(), "mmap loading embedded GGUF model");
+    /// - GPU-only: adapter / device request failure (no adapter or
+    ///   insufficient VRAM)
+    pub fn load_with_mode(model_path: &Path, execution_mode: ExecutionMode) -> Result<Self> {
+        tracing::info!(
+            path = %model_path.display(),
+            ?execution_mode,
+            "mmap loading embedded GGUF model"
+        );
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<Command>();
-        // `init_tx` communicates the load result back to the caller
-        // synchronously so `load()` returns an error if the GGUF fails to
-        // parse (rather than surfacing the failure on the first
-        // `generate` call, which would be much more confusing)
         let (init_tx, init_rx) = sync_mpsc::sync_channel::<Result<ChatTemplate>>(1);
         let mp = model_path.to_path_buf();
+        let thread_name = match execution_mode {
+            ExecutionMode::Cpu => "embedded-llm-worker-cpu",
+            ExecutionMode::Gpu => "embedded-llm-worker-gpu",
+        };
 
         std::thread::Builder::new()
-            .name("embedded-llm-worker".to_string())
-            .spawn(move || {
-                worker_main(&mp, init_tx, cmd_rx);
+            .name(thread_name.to_string())
+            .spawn(move || match execution_mode {
+                ExecutionMode::Cpu => worker_main_cpu(&mp, init_tx, cmd_rx),
+                ExecutionMode::Gpu => worker_main_gpu(&mp, init_tx, cmd_rx),
             })
-            .with_context(|| "spawn embedded-llm-worker thread")?;
+            .with_context(|| format!("spawn {thread_name} thread"))?;
 
         let chat_template = init_rx
             .recv()
@@ -158,8 +206,15 @@ impl EmbeddedBackend {
                 tx: cmd_tx,
                 chat_template,
                 model_path: model_path.to_path_buf(),
+                execution_mode,
             }),
         })
+    }
+
+    /// Which execution mode the loaded worker is using (diagnostic)
+    #[must_use]
+    pub fn execution_mode(&self) -> ExecutionMode {
+        self.inner.execution_mode
     }
 
     /// One-shot chat generation The system + user messages are wrapped in
@@ -206,33 +261,45 @@ impl EmbeddedBackend {
     }
 }
 
-/// Worker thread entry point Owns the mmap / GgufFile / Llama3Model as
-/// stack locals; drops them when the command channel closes
-fn worker_main(
+/// Load `Mmap` + parse GGUF Small helper shared between the CPU and GPU
+/// worker init paths Reports errors through `init_tx` and returns `None`
+/// so callers can early-return on failure
+fn init_gguf(
     model_path: &Path,
-    init_tx: sync_mpsc::SyncSender<Result<ChatTemplate>>,
-    mut cmd_rx: mpsc::UnboundedReceiver<Command>,
-) {
+    init_tx: &sync_mpsc::SyncSender<Result<ChatTemplate>>,
+) -> Option<Mmap> {
     let file = match std::fs::File::open(model_path)
         .with_context(|| format!("open GGUF file at {}", model_path.display()))
     {
         Ok(f) => f,
         Err(e) => {
             let _ = init_tx.send(Err(e));
-            return;
+            return None;
         }
     };
     // SAFETY: the file is read-only and we hold the `Mmap` for as long
     // as the worker thread lives (no aliased mutable access can occur
-    // through the mapping) See module-level docs on lifetime management
-    let mmap = match unsafe { Mmap::map(&file) }
+    // through the mapping)
+    match unsafe { Mmap::map(&file) }
         .with_context(|| format!("mmap GGUF file at {}", model_path.display()))
     {
-        Ok(m) => m,
+        Ok(m) => Some(m),
         Err(e) => {
             let _ = init_tx.send(Err(e));
-            return;
+            None
         }
+    }
+}
+
+/// CPU worker thread entry point Owns the mmap / GgufFile / Llama3Model
+/// as stack locals; drops them when the command channel closes
+fn worker_main_cpu(
+    model_path: &Path,
+    init_tx: sync_mpsc::SyncSender<Result<ChatTemplate>>,
+    mut cmd_rx: mpsc::UnboundedReceiver<Command>,
+) {
+    let Some(mmap) = init_gguf(model_path, &init_tx) else {
+        return;
     };
     let bytes: &[u8] = mmap.as_ref();
 
@@ -243,12 +310,10 @@ fn worker_main(
         )));
         return;
     };
-
     let Some(tokenizer) = GgufTokenizer::from_gguf(&gguf) else {
         let _ = init_tx.send(Err(anyhow!("tokenizer construction failed")));
         return;
     };
-
     let Some(mut model) = Llama3Model::from_gguf(&gguf) else {
         let _ = init_tx.send(Err(anyhow!(
             "Llama3Model construction failed (arch not supported?)"
@@ -257,13 +322,123 @@ fn worker_main(
     };
 
     let chat_template = ChatTemplate::detect(&gguf);
-    tracing::info!(?chat_template, "detected chat template");
+    tracing::info!(?chat_template, backend = "cpu", "detected chat template");
     if init_tx.send(Ok(chat_template)).is_err() {
-        // Caller dropped the init receiver before we handshook — nothing
-        // will consume our results Bail out to avoid a leaked worker
         return;
     }
 
+    serve_commands(&mut model, &tokenizer, chat_template, &mut cmd_rx);
+    tracing::info!(path = %model_path.display(), "embedded-llm-worker-cpu exiting cleanly");
+}
+
+/// GPU worker thread entry point Mirrors [`worker_main_cpu`] but wraps a
+/// `GpuModel` behind `alice_llm::gpu::GpuEngine` The `GpuEngine` +
+/// `GpuModel` are stack locals; dropping them releases the wgpu adapter
+/// and GPU buffers cleanly
+fn worker_main_gpu(
+    model_path: &Path,
+    init_tx: sync_mpsc::SyncSender<Result<ChatTemplate>>,
+    mut cmd_rx: mpsc::UnboundedReceiver<Command>,
+) {
+    let Some(mmap) = init_gguf(model_path, &init_tx) else {
+        return;
+    };
+    let bytes: &[u8] = mmap.as_ref();
+
+    let Some(gguf) = GgufFile::parse(bytes) else {
+        let _ = init_tx.send(Err(anyhow!(
+            "GGUF parse failed for {} (bad magic / unsupported version)",
+            model_path.display()
+        )));
+        return;
+    };
+    let Some(tokenizer) = GgufTokenizer::from_gguf(&gguf) else {
+        let _ = init_tx.send(Err(anyhow!("tokenizer construction failed")));
+        return;
+    };
+    let Some(llm_config) = Llama3Config::from_gguf(&gguf) else {
+        let _ = init_tx.send(Err(anyhow!(
+            "Llama3Config::from_gguf failed (missing metadata?)"
+        )));
+        return;
+    };
+
+    let gpu_config = gpu_config_from_llama3(&llm_config);
+    let engine = GpuEngine::new();
+    // `GpuModel::load` panics on unrecoverable init errors (e.g.
+    // architecture not supported by the GPU code path) Catch that so
+    // the caller sees `EmbeddedStatus::Error(...)` instead of the
+    // worker thread crashing silently
+    let model_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        GpuModel::load(engine, &gguf, gpu_config)
+    }));
+    let mut model = match model_result {
+        Ok(m) => m,
+        Err(panic) => {
+            let msg = panic_message(&panic);
+            let _ = init_tx.send(Err(anyhow!("GpuModel::load panicked: {msg}")));
+            return;
+        }
+    };
+
+    let chat_template = ChatTemplate::detect(&gguf);
+    tracing::info!(?chat_template, backend = "gpu", "detected chat template");
+    if init_tx.send(Ok(chat_template)).is_err() {
+        return;
+    }
+
+    serve_commands(&mut model, &tokenizer, chat_template, &mut cmd_rx);
+    tracing::info!(path = %model_path.display(), "embedded-llm-worker-gpu exiting cleanly");
+}
+
+/// Best-effort string extraction from a boxed panic payload
+fn panic_message(panic: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic payload".to_string()
+    }
+}
+
+/// Extract the `GpuModelConfig` fields from a parsed `Llama3Config`
+/// Mirrors the mapping in `alice-llm-server::main`
+fn gpu_config_from_llama3(llm: &Llama3Config) -> GpuModelConfig {
+    #[allow(clippy::cast_possible_truncation)]
+    GpuModelConfig {
+        num_layers: llm.num_layers,
+        hidden_dim: llm.hidden_dim,
+        intermediate_dim: llm.intermediate_dim,
+        num_heads: llm.num_heads as u32,
+        num_kv_heads: llm.num_kv_heads as u32,
+        head_dim: llm.head_dim as u32,
+        rope_theta: llm.rope_theta,
+        eps: llm.norm_eps,
+        max_seq_len: llm.max_seq_len,
+        neox_rope: llm.use_neox_rope(),
+        full_attention_interval: llm.full_attention_interval(),
+        linear_num_kv_heads: llm.linear_num_kv_heads().map(|v| v as u32),
+        linear_qk_head_dim: llm.linear_qk_head_dim().map(|v| v as u32),
+        linear_kv_head_dim: llm.linear_kv_head_dim().map(|v| v as u32),
+        linear_num_v_heads: llm.linear_num_v_heads().map(|v| v as u32),
+        linear_conv_kernel_dim: llm.linear_conv_kernel_dim().map(|v| v as u32),
+        attention_only_load: false,
+    }
+}
+
+/// Backend-agnostic command loop shared between CPU and GPU workers
+///
+/// `M: ModelForward` erases the concrete `Llama3Model` / `GpuModel`
+/// choice The grammar-free fast path calls `Llama3Model::generate` for
+/// CPU (its stateful decode loop is heavily tuned) but reconstructs the
+/// same loop through the trait for GPU / grammar-constrained paths
+fn serve_commands<M: ModelForward>(
+    model: &mut M,
+    tokenizer: &GgufTokenizer,
+    chat_template: ChatTemplate,
+    cmd_rx: &mut mpsc::UnboundedReceiver<Command>,
+) {
     while let Some(cmd) = cmd_rx.blocking_recv() {
         match cmd {
             Command::Generate {
@@ -273,22 +448,8 @@ fn worker_main(
                 response,
             } => {
                 let prompt = format_chat(chat_template, &system, &user);
-                let text = if let Some(gbnf) = params.grammar.as_deref() {
-                    // Stage 3-C.11: grammar-constrained decode path
-                    // GBNF parse + Fsm init happen per request so a
-                    // caller can vary the grammar at runtime Parse
-                    // errors surface as the returned assistant text so
-                    // higher layers can distinguish grammar failures
-                    // from model failures
-                    match run_grammar_decode(
-                        &mut model,
-                        &tokenizer,
-                        &prompt,
-                        gbnf,
-                        params.max_tokens as usize,
-                        params.temperature,
-                        params.top_k,
-                    ) {
+                let text = if params.grammar.is_some() {
+                    match run_decode(model, tokenizer, &prompt, &params) {
                         Ok(text) => text,
                         Err(e) => {
                             tracing::warn!(error = %e, "grammar-constrained decode failed");
@@ -296,15 +457,13 @@ fn worker_main(
                         }
                     }
                 } else {
-                    model
-                        .generate(
-                            &tokenizer,
-                            &prompt,
-                            params.max_tokens as usize,
-                            params.temperature,
-                            params.top_k,
-                        )
-                        .text
+                    match run_decode(model, tokenizer, &prompt, &params) {
+                        Ok(text) => text,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "unconstrained decode failed");
+                            String::new()
+                        }
+                    }
                 };
                 let out = strip_trailer(chat_template, &text);
                 // Ignore send error — caller may have cancelled the await
@@ -312,18 +471,16 @@ fn worker_main(
             }
         }
     }
-
-    tracing::info!(path = %model_path.display(), "embedded-llm-worker exiting cleanly");
-    // mmap / gguf / tokenizer / model drop here as the stack unwinds
 }
 
-/// Stage 3-C.11: grammar-constrained autoregressive decode
+/// Stage 3-C.11 / 3-C.12: unified autoregressive decode
 ///
-/// Mirrors the logic in `alice-llm-server::generate` but runs in-process
-/// against the local [`Llama3Model`] Prefill forwards every prompt token
-/// through the KV cache; decode alternates
-/// `mask_logits_by_grammar` → sample → `advance_fsm_on_emit` → forward
-/// with early exit on EOS, stop-token, or [`Fsm::is_final`]
+/// Works for both CPU (`Llama3Model`) and GPU (`GpuModel`) backends via
+/// the [`ModelForward`] trait When `params.grammar` is `Some`, the loop
+/// masks logits per token against the GBNF FSM and stops early once the
+/// grammar reaches `is_final` Otherwise the loop is equivalent to
+/// `Llama3Model::generate` minus repetition-penalty defaults (grammar
+/// mode doesn't need them)
 ///
 /// The `max_depth` value is copied from the alice-lol bridge default; the
 /// LOL DSL grammar can nest deeply enough that lower values would trip
@@ -331,23 +488,33 @@ fn worker_main(
 ///
 /// # Errors
 ///
-/// - GBNF parse failure (surfaces as `anyhow::Error` with context)
+/// - GBNF parse failure (`params.grammar` set but malformed)
 /// - `Fsm::start` returned an error (empty root rule etc.)
 /// - `Fsm::advance` diverged from the grammar mask (indicates a
 ///   sampling / masking bug rather than input error)
-fn run_grammar_decode(
-    model: &mut Llama3Model<'_>,
+fn run_decode<M: ModelForward>(
+    model: &mut M,
     tokenizer: &GgufTokenizer,
     prompt: &str,
-    gbnf_src: &str,
-    max_tokens: usize,
-    temperature: f32,
-    top_k: usize,
+    params: &InferenceParams,
 ) -> Result<String> {
-    let grammar = parse_gbnf(gbnf_src).with_context(|| "parse GBNF grammar")?;
-    let mut fsm = Fsm::start(&grammar)
-        .map_err(|e| anyhow!("Fsm::start failed: {e:?}"))?
-        .with_max_depth(4096);
+    // Optional grammar setup
+    let (mut fsm, grammar_owner) = if let Some(gbnf) = params.grammar.as_deref() {
+        let grammar = parse_gbnf(gbnf).with_context(|| "parse GBNF grammar")?;
+        // `Fsm<'g>` borrows from `Grammar` so we bind the owner to the
+        // same scope
+        let boxed = Box::new(grammar);
+        let boxed_ref: &'static _ = Box::leak(boxed);
+        let fsm = Fsm::start(boxed_ref)
+            .map_err(|e| anyhow!("Fsm::start failed: {e:?}"))?
+            .with_max_depth(4096);
+        (Some(fsm), Some(boxed_ref))
+    } else {
+        (None, None)
+    };
+    // Suppress unused warning — the leak is intentional and the owner
+    // pointer lives with the FSM
+    let _ = grammar_owner;
 
     let mut tokens = tokenizer.encode(prompt);
     if tokenizer.add_bos_token && (tokens.is_empty() || tokens[0] != tokenizer.bos_id) {
@@ -357,14 +524,16 @@ fn run_grammar_decode(
         return Err(anyhow!("empty prompt after tokenisation"));
     }
 
-    model.clear_cache();
-    // Prefill everything except the last token
+    model.clear();
     for &tok in &tokens[..tokens.len() - 1] {
-        model.forward(tok);
+        model.forward_read(tok);
     }
-    // Prefill last, keep logits for the first sample
     let last = *tokens.last().expect("non-empty tokens");
-    let mut logits = model.forward(last);
+    let mut logits = model.forward_read(last);
+
+    let max_tokens = params.max_tokens as usize;
+    let temperature = params.temperature;
+    let top_k = params.top_k;
 
     let mut generated: Vec<u32> = Vec::with_capacity(max_tokens);
     let mut rng_state: u64 = 0x_DEAD_BEEF_CAFE_1234;
@@ -376,9 +545,9 @@ fn run_grammar_decode(
     };
 
     for _ in 0..max_tokens {
-        // Mask first so the -inf entries survive both temperature scale
-        // and top-k filter Ordering matches server.rs::generate for parity
-        mask_logits_by_grammar(&fsm, tokenizer, &mut logits);
+        if let Some(ref f) = fsm {
+            mask_logits_by_grammar(f, tokenizer, &mut logits);
+        }
 
         let next = if temperature < 1e-6 {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -399,14 +568,18 @@ fn run_grammar_decode(
             break;
         }
 
-        advance_fsm_on_emit(&mut fsm, tokenizer, next)
-            .map_err(|e| anyhow!("Fsm::advance diverged from mask at token {next}: {e:?}"))?;
+        if let Some(ref mut f) = fsm {
+            advance_fsm_on_emit(f, tokenizer, next)
+                .map_err(|e| anyhow!("Fsm::advance diverged from mask at token {next}: {e:?}"))?;
+        }
         generated.push(next);
 
-        if fsm.is_final() {
+        if let Some(ref f) = fsm
+            && f.is_final()
+        {
             break;
         }
-        logits = model.forward(next);
+        logits = model.forward_read(next);
     }
 
     Ok(tokenizer.decode(&generated))

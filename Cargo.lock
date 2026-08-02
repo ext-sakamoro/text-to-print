@@ -192,9 +192,12 @@ dependencies = [
 name = "alice-llm"
 version = "1.6.0"
 dependencies = [
+ "bytemuck",
  "libc",
  "memmap2",
+ "pollster",
  "rayon",
+ "wgpu",
 ]
 
 [[package]]

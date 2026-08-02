@@ -61,6 +61,50 @@ impl BackendKind {
     }
 }
 
+/// Stage 3-C.12: whether the Embedded backend runs inference on CPU
+/// (via `alice_llm::llama3::Llama3Model`) or GPU (via
+/// `alice_llm::gpu::GpuModel`) Persisted in DB alongside [`BackendKind`]
+/// so the user's preference survives app restarts
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ExecutionMode {
+    /// CPU-only inference `Llama3Model` reads dequant tensors on demand
+    /// through mmap Works everywhere `alice-llm` builds
+    #[default]
+    Cpu,
+    /// GPU-accelerated inference via wgpu backends (Metal / Vulkan /
+    /// DX12) Requires an available adapter and adequate VRAM for the
+    /// chosen model (Qwen 3.5-4B: ~4 GB VRAM, Gemma 2 27B: ~14 GB VRAM
+    /// at Q3_K_L) Falls back to `EmbeddedStatus::Error` if init fails
+    Gpu,
+}
+
+impl ExecutionMode {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Cpu => "CPU",
+            Self::Gpu => "GPU",
+        }
+    }
+
+    /// DB round-trip Missing / unknown values fall back to `Cpu`
+    #[must_use]
+    pub const fn to_db_str(self) -> &'static str {
+        match self {
+            Self::Cpu => "Cpu",
+            Self::Gpu => "Gpu",
+        }
+    }
+
+    #[must_use]
+    pub fn from_db_str(s: &str) -> Self {
+        match s {
+            "Gpu" => Self::Gpu,
+            _ => Self::Cpu,
+        }
+    }
+}
+
 /// UI-facing status of the [`BackendKind::Embedded`] backend Independent
 /// of whether the user has selected Embedded — the model load runs in a
 /// background task after selection and the UI polls this to display
@@ -269,5 +313,29 @@ mod tests {
         ] {
             assert!(!s.label().is_empty());
         }
+    }
+
+    #[test]
+    fn execution_mode_default_is_cpu() {
+        assert_eq!(ExecutionMode::default(), ExecutionMode::Cpu);
+    }
+
+    #[test]
+    fn execution_mode_db_roundtrip() {
+        for mode in [ExecutionMode::Cpu, ExecutionMode::Gpu] {
+            assert_eq!(ExecutionMode::from_db_str(mode.to_db_str()), mode);
+        }
+    }
+
+    #[test]
+    fn execution_mode_from_db_unknown_falls_back_to_cpu() {
+        assert_eq!(ExecutionMode::from_db_str("wat"), ExecutionMode::Cpu);
+        assert_eq!(ExecutionMode::from_db_str(""), ExecutionMode::Cpu);
+    }
+
+    #[test]
+    fn execution_mode_labels_non_empty() {
+        assert!(!ExecutionMode::Cpu.label().is_empty());
+        assert!(!ExecutionMode::Gpu.label().is_empty());
     }
 }

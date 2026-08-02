@@ -2,7 +2,7 @@ use egui::Ui;
 
 use crate::state::AppState;
 use text_to_print_core::license::{LicenseKey, LicenseVerifier};
-use text_to_print_llm::backend_kind::BackendKind;
+use text_to_print_llm::backend_kind::{BackendKind, ExecutionMode};
 use text_to_print_llm::model::ModelChoice;
 
 const LICENSE_PUBLIC_KEY: [u8; 32] = [
@@ -72,6 +72,22 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.label(format!("Embedded 状態: {}", status.label()))
                 .on_hover_text(
                     "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします",
+                );
+            // Stage 3-C.12: CPU / GPU picker (only relevant to Embedded)
+            ui.add_space(4.0);
+            ui.label("Execution mode:");
+            let prev_mode = state.execution_mode;
+            let mut new_mode = prev_mode;
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut new_mode, ExecutionMode::Cpu, ExecutionMode::Cpu.label());
+                ui.selectable_value(&mut new_mode, ExecutionMode::Gpu, ExecutionMode::Gpu.label());
+            });
+            if new_mode != prev_mode {
+                state.switch_execution_mode(new_mode);
+            }
+            ui.label(format!("現在: {}", state.execution_mode.label()))
+                .on_hover_text(
+                    "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい",
                 );
         }
         ui.add_space(6.0);
