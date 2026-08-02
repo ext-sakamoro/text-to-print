@@ -129,8 +129,8 @@ mod tests {
         let p = model_path(Path::new("/tmp/models"), ModelChoice::Qwen35_4B);
         assert!(p.to_str().unwrap().ends_with("qwen3.5-4b-q4_k_m.gguf"));
 
-        let p2 = model_path(Path::new("/tmp/models"), ModelChoice::Bonsai27B);
-        assert!(p2.to_str().unwrap().ends_with("bonsai-27b-q1_0.gguf"));
+        let p2 = model_path(Path::new("/tmp/models"), ModelChoice::Gemma2_27B);
+        assert!(p2.to_str().unwrap().ends_with("gemma-2-27b-it-q3_k_l.gguf"));
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod tests {
         let base = Path::new("/tmp/models");
         assert_ne!(
             model_path(base, ModelChoice::Qwen35_4B),
-            model_path(base, ModelChoice::Bonsai27B),
+            model_path(base, ModelChoice::Gemma2_27B),
         );
     }
 
@@ -146,7 +146,7 @@ mod tests {
     fn model_not_exists_in_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
         assert!(!model_exists(dir.path(), ModelChoice::Qwen35_4B));
-        assert!(!model_exists(dir.path(), ModelChoice::Bonsai27B));
+        assert!(!model_exists(dir.path(), ModelChoice::Gemma2_27B));
     }
 
     #[test]
