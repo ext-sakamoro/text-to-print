@@ -98,6 +98,11 @@ struct BackendShared {
     chat_template: ChatTemplate,
     model_path: PathBuf,
     execution_mode: ExecutionMode,
+    /// Stage 3-C.13: [`crate::model::ModelChoice`] the app UI selected
+    /// when this backend was loaded The app layer compares this to the
+    /// current dropdown value to decide whether a `ModelChoice` change
+    /// needs an actual reload or is a no-op
+    loaded_choice: crate::model::ModelChoice,
 }
 
 enum Command {
@@ -144,26 +149,48 @@ impl ChatTemplate {
 }
 
 impl EmbeddedBackend {
-    /// Load a GGUF model with the default [`ExecutionMode::Cpu`] mode
+    /// Load a GGUF model with default [`ExecutionMode::Cpu`] mode
     ///
-    /// Equivalent to `load_with_mode(path, ExecutionMode::Cpu)` — kept
-    /// for source-compat with pre-3-C.12 callers
+    /// Equivalent to `load_full(path, ModelChoice::default(), Cpu)` —
+    /// kept for source-compat with pre-3-C.12 callers
     ///
     /// # Errors
     ///
-    /// See [`Self::load_with_mode`]
+    /// See [`Self::load_full`]
     pub fn load(model_path: &Path) -> Result<Self> {
-        Self::load_with_mode(model_path, ExecutionMode::Cpu)
+        Self::load_full(
+            model_path,
+            crate::model::ModelChoice::default(),
+            ExecutionMode::Cpu,
+        )
     }
 
-    /// Load a GGUF model in the specified execution mode
+    /// Load with an explicit execution mode Kept for source-compat with
+    /// Stage 3-C.12 callers Uses `ModelChoice::default()` as the tracked
+    /// choice (callers that care about `loaded_choice()` should use
+    /// [`Self::load_full`] instead)
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::load_full`]
+    pub fn load_with_mode(model_path: &Path, execution_mode: ExecutionMode) -> Result<Self> {
+        Self::load_full(
+            model_path,
+            crate::model::ModelChoice::default(),
+            execution_mode,
+        )
+    }
+
+    /// Load a GGUF model, tracking both the `ModelChoice` the app UI
+    /// selected AND the `ExecutionMode` The `loaded_choice` field lets
+    /// [`Self::loaded_choice`] answer no-op swap checks without probing
+    /// the file path
     ///
     /// - `ExecutionMode::Cpu` spins up a CPU worker that owns
     ///   `Mmap` + `GgufFile` + `Llama3Model` on its stack
     /// - `ExecutionMode::Gpu` spins up a GPU worker that additionally
     ///   allocates a `GpuEngine` (wgpu adapter + device) and uploads all
-    ///   weight tensors into `GpuModel` GPU buffers The `Mmap` is still
-    ///   held so tokenizer + config metadata stay accessible
+    ///   weight tensors into `GpuModel` GPU buffers
     ///
     /// # Errors
     ///
@@ -175,9 +202,14 @@ impl EmbeddedBackend {
     ///   tensors, unsupported quant type)
     /// - GPU-only: adapter / device request failure (no adapter or
     ///   insufficient VRAM)
-    pub fn load_with_mode(model_path: &Path, execution_mode: ExecutionMode) -> Result<Self> {
+    pub fn load_full(
+        model_path: &Path,
+        choice: crate::model::ModelChoice,
+        execution_mode: ExecutionMode,
+    ) -> Result<Self> {
         tracing::info!(
             path = %model_path.display(),
+            ?choice,
             ?execution_mode,
             "mmap loading embedded GGUF model"
         );
@@ -207,6 +239,7 @@ impl EmbeddedBackend {
                 chat_template,
                 model_path: model_path.to_path_buf(),
                 execution_mode,
+                loaded_choice: choice,
             }),
         })
     }
@@ -215,6 +248,14 @@ impl EmbeddedBackend {
     #[must_use]
     pub fn execution_mode(&self) -> ExecutionMode {
         self.inner.execution_mode
+    }
+
+    /// Stage 3-C.13: which [`crate::model::ModelChoice`] the app tracked
+    /// at load time Used by the app layer to short-circuit no-op model
+    /// swaps
+    #[must_use]
+    pub fn loaded_choice(&self) -> crate::model::ModelChoice {
+        self.inner.loaded_choice
     }
 
     /// One-shot chat generation The system + user messages are wrapped in

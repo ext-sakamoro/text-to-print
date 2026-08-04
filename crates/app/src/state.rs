@@ -465,12 +465,30 @@ impl AppState {
     /// alice-llm-server subprocess reads its `--model` arg once at spawn
     /// time and would need a full sidecar restart to swap models (out of
     /// scope for this hook)
+    ///
+    /// Stage 3-C.13: If the currently loaded backend already tracks the
+    /// new choice (e.g. the user flipped through the dropdown and landed
+    /// back on the loaded choice), skip the drop + reload cycle — a
+    /// wasted ~30 s and duplicate memory pressure
     pub fn on_model_choice_changed(&mut self, prev_choice: text_to_print_llm::model::ModelChoice) {
         let new_choice = self.llm_config.model_choice;
         if prev_choice == new_choice {
             return;
         }
         if self.backend_kind != BackendKind::Embedded {
+            return;
+        }
+        let already_loaded = self
+            .embedded
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|b| b.loaded_choice()))
+            == Some(new_choice);
+        if already_loaded {
+            tracing::info!(
+                ?new_choice,
+                "embedded backend already loaded with target choice, skipping swap"
+            );
             return;
         }
         tracing::info!(
@@ -586,7 +604,7 @@ fn spawn_embedded_load(
         let model_path = text_to_print_llm::downloader::model_path(&models_dir, choice);
         *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
         let load_result = tokio::task::spawn_blocking(move || {
-            EmbeddedBackend::load_with_mode(&model_path, execution_mode)
+            EmbeddedBackend::load_full(&model_path, choice, execution_mode)
         })
         .await;
         match load_result {
