@@ -120,6 +120,14 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'Cpu'",
             [],
         );
+        // Stage 3-C.14: `enforce_lol_grammar` gates the LOL GBNF being
+        // sent along with every generation request Default `1` (on) so
+        // out-of-the-box output is guaranteed to be parseable Users can
+        // toggle it off in Settings when debugging free-form output
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN enforce_lol_grammar INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
         Ok(())
     }
 
@@ -296,6 +304,30 @@ impl Database {
         Ok(())
     }
 
+    /// Stage 3-C.14: fetch the LOL GBNF enforcement toggle Missing rows
+    /// return `true` so new profiles get grammar-constrained output by
+    /// default (the LOL DSL grammar is what alice-lol expects downstream)
+    pub fn get_enforce_lol_grammar(&self, profile_id: &str) -> Result<bool> {
+        let value: i64 = self
+            .conn
+            .query_row(
+                "SELECT enforce_lol_grammar FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(1);
+        Ok(value != 0)
+    }
+
+    /// Persist the LOL GBNF enforcement toggle
+    pub fn set_enforce_lol_grammar(&self, profile_id: &str, value: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET enforce_lol_grammar = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, i64::from(value)],
+        )?;
+        Ok(())
+    }
+
     pub fn update_profile_tier(&self, id: &str, tier: &str, license_key: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE profiles SET tier = ?2, license_key = ?3, updated_at = datetime('now') WHERE id = ?1",
@@ -434,6 +466,29 @@ mod tests {
     fn execution_mode_unknown_profile_falls_back_to_cpu() {
         let db = test_db();
         assert_eq!(db.get_execution_mode("nonexistent").unwrap(), "Cpu");
+    }
+
+    #[test]
+    fn enforce_lol_grammar_defaults_to_true() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert!(db.get_enforce_lol_grammar("user1").unwrap());
+    }
+
+    #[test]
+    fn enforce_lol_grammar_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_enforce_lol_grammar("user1", false).unwrap();
+        assert!(!db.get_enforce_lol_grammar("user1").unwrap());
+        db.set_enforce_lol_grammar("user1", true).unwrap();
+        assert!(db.get_enforce_lol_grammar("user1").unwrap());
+    }
+
+    #[test]
+    fn enforce_lol_grammar_unknown_profile_returns_true() {
+        let db = test_db();
+        assert!(db.get_enforce_lol_grammar("nonexistent").unwrap());
     }
 
     #[test]

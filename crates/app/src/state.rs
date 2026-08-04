@@ -123,6 +123,11 @@ pub struct AppState {
     /// LOL DSL + quality signals are queued for upload to the shared LoRA
     /// training set; when `false` the user has opted out
     pub share_lol_dsl: bool,
+    /// Stage 3-C.14: when `true` (default), every generation forwards
+    /// [`text_to_print_llm::grammar_lol::LOL_GBNF`] to the backend so
+    /// output is guaranteed to be parseable by
+    /// `alice_bamboo::parse_lol` Turn off for debugging free-form output
+    pub enforce_lol_grammar: bool,
     /// Most recent share-payload dry-run path (GAP-12) Populated when the
     /// generation success path serialises a `SharePayload` to
     /// `data_dir/share_dry_run/{uuid}.json` The real Cloudflare Workers
@@ -183,6 +188,7 @@ impl AppState {
             &db.get_execution_mode(&profile_id)
                 .unwrap_or_else(|_| "Cpu".to_string()),
         );
+        let enforce_lol_grammar = db.get_enforce_lol_grammar(&profile_id).unwrap_or(true);
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
 
@@ -323,6 +329,7 @@ impl AppState {
             embedded,
             embedded_status_cell,
             share_lol_dsl,
+            enforce_lol_grammar,
             pending_share_dry_run: None,
         }
     }

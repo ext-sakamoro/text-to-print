@@ -689,7 +689,13 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     // loaded `EmbeddedBackend` (Ready) or falls back to Sidecar (during
     // load / on failure) so first-generation requests never dead-lock
     let backend = state.active_backend();
-    let inference_params = text_to_print_llm::backend_kind::InferenceParams::from(&config);
+    // Stage 3-C.14: attach the LOL DSL GBNF grammar when the user has
+    // opted in (default) so both Sidecar and Embedded paths return
+    // syntactically valid LOL DSL
+    let mut inference_params = text_to_print_llm::backend_kind::InferenceParams::from(&config);
+    if state.enforce_lol_grammar {
+        inference_params.grammar = Some(text_to_print_llm::grammar_lol::LOL_GBNF.to_string());
+    }
     let tx = state.result_tx.clone();
     let id = gen_id;
     let output_dir = state.data_dir.join("exports");

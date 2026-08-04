@@ -122,6 +122,25 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             &mut state.llm_config.temperature,
             0.0..=2.0,
         ));
+
+        // Stage 3-C.14: LOL GBNF grammar-constrained decoding toggle
+        ui.add_space(6.0);
+        let mut enforce = state.enforce_lol_grammar;
+        if ui
+            .checkbox(&mut enforce, "LOL DSL grammar 強制 (GBNF)")
+            .on_hover_text(
+                "オンにすると生成 request に text_to_print_llm::grammar_lol::LOL_GBNF (253 行) を付随して送信し、alice-llm 側で mask_logits_by_grammar を毎 token 適用します 出力は parse_lol でパース保証 (シンタックス誤り 0) オフにすると free-form output (デバッグ / 別 grammar 検証時用)",
+            )
+            .changed()
+        {
+            state.enforce_lol_grammar = enforce;
+            if let Err(e) = state
+                .db
+                .set_enforce_lol_grammar(&state.profile_id, enforce)
+            {
+                tracing::warn!(error = %e, "failed to persist enforce_lol_grammar toggle");
+            }
+        }
     });
 
     ui.add_space(8.0);
