@@ -115,6 +115,22 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         if state.llm_config.model_choice != prev_choice {
             state.on_model_choice_changed(prev_choice);
         }
+        // Stage 3-C.17: surface manual-placement requirement for the
+        // Bonsai variant (HF repo not public yet) The download flow
+        // still tries but 404s; this label tells the user why and where
+        // to place the file if they have it
+        if state.llm_config.model_choice.requires_manual_placement() {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                format!(
+                    "手動配置要: HF repo 非公開のため {} を models_dir に配置",
+                    state.llm_config.model_choice.default_filename()
+                ),
+            )
+            .on_hover_text(
+                "PrismML fork Q1_0 (128-element binary ternary) の Bonsai 27B は現在 HF 非公開 GGUF ファイルを手動で models/bonsai-27b-q1_0.gguf に配置すると Embedded backend が拾います (Stage 3-C.9 の model_exists 経路)",
+            );
+        }
 
         ui.add_space(4.0);
         ui.label(format!("Temperature: {:.1}", state.llm_config.temperature));
