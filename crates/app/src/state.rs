@@ -610,8 +610,9 @@ fn spawn_embedded_load(
         }
         let model_path = text_to_print_llm::downloader::model_path(&models_dir, choice);
         *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
+        let mp_first = model_path.clone();
         let load_result = tokio::task::spawn_blocking(move || {
-            EmbeddedBackend::load_full(&model_path, choice, execution_mode)
+            EmbeddedBackend::load_full(&mp_first, choice, execution_mode)
         })
         .await;
         match load_result {
@@ -621,6 +622,53 @@ fn spawn_embedded_load(
                 tracing::info!(?choice, ?execution_mode, "embedded backend loaded");
             }
             Ok(Err(e)) => {
+                // Stage 3-C.15: GPU load failure → automatic CPU
+                // fallback so users on hostless-GPU systems (or with
+                // insufficient VRAM) still get a working Embedded path
+                // Surfaces as `EmbeddedStatus::Ready` with a fallback
+                // log line rather than `Error(...)` so the UI doesn't
+                // look like the toggle was rejected
+                if execution_mode == ExecutionMode::Gpu {
+                    tracing::warn!(
+                        error = %e,
+                        ?choice,
+                        "GPU load failed, falling back to CPU"
+                    );
+                    let mp_cpu = model_path.clone();
+                    let cpu_result = tokio::task::spawn_blocking(move || {
+                        EmbeddedBackend::load_full(&mp_cpu, choice, ExecutionMode::Cpu)
+                    })
+                    .await;
+                    match cpu_result {
+                        Ok(Ok(backend)) => {
+                            *embedded_slot.lock().expect("embedded slot lock") = Some(backend);
+                            *status_slot.lock().expect("embedded status lock") =
+                                EmbeddedStatus::Ready;
+                            tracing::info!(
+                                ?choice,
+                                "embedded backend loaded (CPU fallback after GPU failure)"
+                            );
+                            return;
+                        }
+                        Ok(Err(e_cpu)) => {
+                            *status_slot.lock().expect("embedded status lock") =
+                                EmbeddedStatus::Error(format!("GPU: {e} / CPU fallback: {e_cpu}"));
+                            tracing::warn!(
+                                error = %e_cpu,
+                                ?choice,
+                                "CPU fallback also failed"
+                            );
+                            return;
+                        }
+                        Err(join_err) => {
+                            *status_slot.lock().expect("embedded status lock") =
+                                EmbeddedStatus::Error(format!(
+                                    "GPU: {e} / CPU fallback task panic: {join_err}"
+                                ));
+                            return;
+                        }
+                    }
+                }
                 *status_slot.lock().expect("embedded status lock") =
                     EmbeddedStatus::Error(e.to_string());
                 tracing::warn!(
