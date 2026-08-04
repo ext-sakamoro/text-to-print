@@ -404,6 +404,21 @@ fn worker_main_gpu(
         return;
     };
 
+    // Stage 3-C.16: Qwen 3.5 hybrid DeltaNet architectures require the
+    // per-layer orchestrator that `alice-llm-server` implements via the
+    // `--hybrid-per-layer` flag (Attention layers on GPU, DeltaNet
+    // layers on CPU) That path involves ~2 000 LOC of split scheduling
+    // that hasn't been ported into `EmbeddedBackend` yet Fail fast with
+    // a specific error so the app-layer fallback (3-C.15) reroutes the
+    // request to a CPU-only worker instead of letting `GpuModel::load`
+    // panic partway through weight upload
+    if llm_config.is_hybrid() {
+        let _ = init_tx.send(Err(anyhow!(
+            "GPU mode does not yet support hybrid DeltaNet models (Qwen 3.5 / 3.6 / Bonsai); fall back to CPU"
+        )));
+        return;
+    }
+
     let gpu_config = gpu_config_from_llama3(&llm_config);
     let engine = GpuEngine::new();
     // `GpuModel::load` panics on unrecoverable init errors (e.g.
