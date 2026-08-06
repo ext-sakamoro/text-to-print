@@ -1,9 +1,12 @@
+use alice_bamboo::bambu_3mf::export_bambu_3mf;
 use alice_bamboo::color4::{Color4Config, quantize_to_4color};
 use alice_bamboo::overhang::{OverhangConfig, OverhangReport, analyze_overhang};
 use alice_bamboo::print_export::{ExportStats, PrintConfig};
 use alice_bamboo::safety::{SafetyReport, safety_validate};
 use alice_sdf::io::threemf::export_3mf;
-use alice_sdf::mesh::{MarchingCubesConfig, MeshRepair, sdf_to_mesh};
+use alice_sdf::mesh::{
+    DualContouringConfig, MarchingCubesConfig, MeshRepair, dual_contouring, sdf_to_mesh,
+};
 use alice_sdf::tight_aabb::{TightAabbConfig, compute_tight_aabb_with_config};
 use anyhow::{Result, bail};
 use glam::Vec3;
@@ -187,7 +190,9 @@ pub fn export_mesh(
 ///    the overhang analyser before writing the 3MF file).
 /// 4. `alice_bamboo::overhang::analyze_overhang` — per-face wall angle
 ///    analysis for FDM support planning.
-/// 5. `alice_sdf::io::threemf::export_3mf` — write the repaired mesh.
+/// 5. `alice_bamboo::bambu_3mf::export_bambu_3mf` — write Bambu template-embedded 3MF
+///    (MakerWorld 対応、Phase 5.4 で `alice_sdf::io::threemf::export_3mf` から切替、
+///    Phase 3''.2 実測に基づき薄物 (< 5mm) は Dual Contouring、厚物は MC 自動判定)
 fn export_3mf_via_bamboo(
     lol_source: &str,
     output_path: &Path,
@@ -215,11 +220,31 @@ fn export_3mf_via_bamboo(
     let padding = Vec3::splat(1.0);
     let min_bounds = aabb.min - padding;
     let max_bounds = aabb.max + padding;
-    let mc_config = MarchingCubesConfig {
-        resolution: quality.mesh_resolution(),
-        ..Default::default()
+
+    // Phase 5.4: 厚さ判定 → 薄物 (Y 範囲 < 5mm) は DC 経路、厚物は MC 経路 (Phase 3''.2 実測根拠)
+    let thickness_y = aabb.max.y - aabb.min.y;
+    let use_dc = thickness_y < 5.0;
+    info!(
+        thickness_y = thickness_y,
+        use_dc = use_dc,
+        resolution = quality.mesh_resolution(),
+        "mesh route selected (< 5mm → DC、>= 5mm → MC)"
+    );
+
+    let mesh = if use_dc {
+        let dc_config = DualContouringConfig {
+            resolution: quality.mesh_resolution(),
+            compute_normals: true,
+            ..DualContouringConfig::default()
+        };
+        dual_contouring(&sdf, min_bounds, max_bounds, &dc_config)
+    } else {
+        let mc_config = MarchingCubesConfig {
+            resolution: quality.mesh_resolution(),
+            ..Default::default()
+        };
+        sdf_to_mesh(&sdf, min_bounds, max_bounds, &mc_config)
     };
-    let mesh = sdf_to_mesh(&sdf, min_bounds, max_bounds, &mc_config);
     let mesh = MeshRepair::repair_all(&mesh, 5e-3);
 
     let overhang_report = analyze_overhang(&mesh, &OverhangConfig::default());
@@ -227,7 +252,14 @@ fn export_3mf_via_bamboo(
 
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
-    export_3mf(&mesh, output_path).map_err(|e| anyhow::anyhow!("3MF export error: {e}"))?;
+
+    // Phase 5.4: Bambu template embedded 3MF (MakerWorld 対応)、素の 3MF から切替
+    let name = output_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("model");
+    export_bambu_3mf(&mesh, output_path, name)
+        .map_err(|e| anyhow::anyhow!("Bambu 3MF export error: {e}"))?;
 
     Ok(MeshStats {
         vertex_count,
