@@ -17,10 +17,12 @@ Embedded ALICE-LLM (Qwen 3.5-4B Q4_K_M / Bonsai 27B Q1_0)
 LOL DSL source
     │
     ▼
-ALICE-LOL parser → SdfNode tree
+ALICE-LOL parser → SdfNode tree (厚物 > 5mm) or Polygon2D (薄物 <= 5mm)
     │
-    ▼
-ALICE-SDF marching cubes → watertight mesh
+    ├── 厚物 (>= 5mm): ALICE-SDF marching cubes → watertight mesh
+    │
+    └── 薄物 (< 5mm): ALICE-SDF polygon_extrude (earcutr) → watertight mesh
+                      (Bamboo 実測 SDF+MC 「1.7mm → 5.1mm、6177 non-manifold」問題を回避)
     │
     ▼
 ALICE-Physics print-safety pipeline
