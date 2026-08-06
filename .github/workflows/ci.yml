@@ -71,41 +71,41 @@ jobs:
         with:
           path: text-to-print
 
-      # Public ALICE ecosystem repos (Project-ALICE org)
+      # ALICE ecosystem repos — canonical org は `ext-sakamoro`
+      # 5 public (SDF/LOL/View/LLM/Physics) + 1 private (Bamboo)
+      # 旧 `Project-ALICE/*` 参照は 2026-08-06 修正 (repo 存在せず 404、CI ずっと red)
       - name: Checkout ALICE-SDF
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-SDF
+          repository: ext-sakamoro/ALICE-SDF
           path: ALICE-SDF
       - name: Checkout ALICE-LOL
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-LOL
+          repository: ext-sakamoro/ALICE-LOL
           path: ALICE-LOL
       - name: Checkout ALICE-View
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-View
+          repository: ext-sakamoro/ALICE-View
           path: ALICE-View
       - name: Checkout ALICE-LLM
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-LLM
+          repository: ext-sakamoro/ALICE-LLM
           path: ALICE-LLM
+      - name: Checkout ALICE-Physics
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
 
-      # Private ALICE ecosystem repos (ext-sakamoro org) — require
-      # `ALICE_ECO_TOKEN` secret with `contents: read`
+      # Private repo (Bamboo) — requires `ALICE_ECO_TOKEN` secret
       - name: Checkout ALICE-Bamboo (private)
         uses: actions/checkout@v4
         with:
           repository: ext-sakamoro/ALICE-Bamboo
           path: ALICE-Bamboo
-          token: ${{ secrets.ALICE_ECO_TOKEN }}
-      - name: Checkout ALICE-Physics (private)
-        uses: actions/checkout@v4
-        with:
-          repository: ext-sakamoro/ALICE-Physics
-          path: ALICE-Physics
           token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
