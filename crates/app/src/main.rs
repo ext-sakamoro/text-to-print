@@ -54,14 +54,14 @@ fn main() -> Result<()> {
         Box::new(move |cc| {
             configure_fonts(&cc.egui_ctx);
 
-            // SDF リソースを wgpu レンダラーに登録
+            // Mesh preview リソースを wgpu レンダラーに登録
             if let Some(render_state) = cc.wgpu_render_state.as_ref() {
-                let sdf_resources = sdf::SdfResources::init(render_state);
+                let resources = sdf::MeshResources::init(render_state);
                 render_state
                     .renderer
                     .write()
                     .callback_resources
-                    .insert(sdf_resources);
+                    .insert(resources);
             }
 
             let render_state = cc.wgpu_render_state.clone();
@@ -158,32 +158,21 @@ impl eframe::App for App {
             self.node.publish_sdf(&id, &lol, &prompt);
         }
 
-        // pending WGSL があれば SDF パイプラインを再構築
-        if let Some(wgsl) = self.viewer.pending_wgsl.take()
-            && let Some(rs) = &self.render_state
-            && let Some(res) = rs
+        // Sync any newly-generated mesh from state into the GPU-side
+        // preview pipeline The viewer's `sync_with_state` bumps its own
+        // uploaded-version to avoid re-uploading every frame Also publish
+        // the shared camera handle so drag / scroll inside `viewer::show`
+        // can mutate it
+        if let Some(rs) = &self.render_state {
+            self.viewer.sync_with_state(&self.state, rs);
+            if let Some(res) = rs
                 .renderer
-                .write()
+                .read()
                 .callback_resources
-                .get_mut::<sdf::SdfResources>()
-        {
-            res.rebuild_with_wgsl(&rs.device, &wgsl);
-        }
-
-        // カメラ情報を SdfResources に反映
-        if self.viewer.has_sdf
-            && let Some(rs) = &self.render_state
-            && let Some(res) = rs
-                .renderer
-                .write()
-                .callback_resources
-                .get_mut::<sdf::SdfResources>()
-        {
-            let cam = &self.viewer.camera;
-            res.camera_pos = cam.position.into();
-            res.camera_target = cam.target.into();
-            res.camera_up = cam.up.into();
-            res.camera_fov = cam.fov;
+                .get::<sdf::MeshResources>()
+            {
+                ui::viewer::publish_camera(ctx, res.camera.clone());
+            }
         }
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {

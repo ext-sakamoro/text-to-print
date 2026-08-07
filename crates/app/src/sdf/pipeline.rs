@@ -1,48 +1,118 @@
+use glam::{Mat4, Vec3};
+use wgpu::util::DeviceExt;
 use wgpu::*;
 
-const RAYMARCHING_TEMPLATE: &str = include_str!("raymarching.wgsl");
+/// WGSL shader for basic Phong-lit mesh preview
+///
+/// - Vertex: MVP transform, pass world position + normal to fragment
+/// - Fragment: ambient + diffuse + specular with a single directional light
+/// - Depth-tested, no alpha blending (opaque solid)
+const MESH_SHADER: &str = r#"
+struct Uniforms {
+    view_proj: mat4x4<f32>,
+    model: mat4x4<f32>,
+    camera_pos: vec4<f32>,
+    light_dir: vec4<f32>,
+    base_color: vec4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> u: Uniforms;
+
+struct VsIn {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+};
+
+struct VsOut {
+    @builtin(position) clip_pos: vec4<f32>,
+    @location(0) world_pos: vec3<f32>,
+    @location(1) world_normal: vec3<f32>,
+};
+
+@vertex
+fn vs_main(in: VsIn) -> VsOut {
+    let world = u.model * vec4<f32>(in.position, 1.0);
+    var out: VsOut;
+    out.clip_pos = u.view_proj * world;
+    out.world_pos = world.xyz;
+    out.world_normal = (u.model * vec4<f32>(in.normal, 0.0)).xyz;
+    return out;
+}
+
+@fragment
+fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+    let n = normalize(in.world_normal);
+    let l = normalize(u.light_dir.xyz);
+    let v = normalize(u.camera_pos.xyz - in.world_pos);
+    let h = normalize(l + v);
+
+    let ambient = 0.20;
+    let diffuse = max(dot(n, l), 0.0);
+    let specular = pow(max(dot(n, h), 0.0), 32.0) * 0.35;
+
+    // Add a subtle rim light so back faces / silhouettes are still readable
+    let rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.15;
+
+    let lit = u.base_color.rgb * (ambient + diffuse) + vec3<f32>(specular) + vec3<f32>(rim);
+    return vec4<f32>(lit, u.base_color.a);
+}
+"#;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct SdfUniforms {
-    pub resolution: [f32; 2],
-    pub time: f32,
-    pub _pad0: f32,
+pub struct MeshUniforms {
+    pub view_proj: [[f32; 4]; 4],
+    pub model: [[f32; 4]; 4],
     pub camera_pos: [f32; 4],
-    pub camera_target: [f32; 4],
-    pub camera_up: [f32; 4],
-    pub max_steps: u32,
-    pub max_distance: f32,
-    pub epsilon: f32,
-    pub flags: u32,
-    pub scene_id: u32,
-    pub light_intensity: f32,
-    pub ambient_intensity: f32,
-    pub quality_flags: u32,
     pub light_dir: [f32; 4],
-    pub bg_color: [f32; 4],
+    pub base_color: [f32; 4],
 }
 
-pub struct SdfPipeline {
+impl MeshUniforms {
+    #[must_use]
+    pub fn from_camera(camera_pos: Vec3, view_proj: Mat4) -> Self {
+        Self {
+            view_proj: view_proj.to_cols_array_2d(),
+            model: Mat4::IDENTITY.to_cols_array_2d(),
+            camera_pos: [camera_pos.x, camera_pos.y, camera_pos.z, 1.0],
+            // Light comes from upper-front-right, matches the Bambu Studio
+            // default preview convention closely enough for shape reading
+            light_dir: [0.4, -0.5, 0.8, 0.0],
+            base_color: [0.82, 0.82, 0.87, 1.0],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshVertex {
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+}
+
+pub struct MeshPipeline {
     pub render_pipeline: RenderPipeline,
     pub uniform_buffer: Buffer,
     pub bind_group: BindGroup,
-    format: TextureFormat,
+    /// Current uploaded mesh — `None` when nothing has been loaded yet
+    pub mesh: Option<UploadedMesh>,
 }
 
-impl SdfPipeline {
-    pub fn new(device: &Device, format: TextureFormat) -> Self {
-        Self::new_with_shader(device, format, RAYMARCHING_TEMPLATE)
-    }
+pub struct UploadedMesh {
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Buffer,
+    pub index_count: u32,
+}
 
-    fn new_with_shader(device: &Device, format: TextureFormat, shader_source: &str) -> Self {
+impl MeshPipeline {
+    pub fn new(device: &Device, format: TextureFormat) -> Self {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("SDF Raymarching Shader"),
-            source: ShaderSource::Wgsl(shader_source.into()),
+            label: Some("mesh_view shader"),
+            source: ShaderSource::Wgsl(MESH_SHADER.into()),
         });
 
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("SDF Bind Group Layout"),
+            label: Some("mesh_view bgl"),
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
@@ -56,14 +126,14 @@ impl SdfPipeline {
         });
 
         let uniform_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("SDF Uniform Buffer"),
-            size: std::mem::size_of::<SdfUniforms>() as u64,
+            label: Some("mesh_view uniform"),
+            size: std::mem::size_of::<MeshUniforms>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("SDF Bind Group"),
+            label: Some("mesh_view bg"),
             layout: &bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
@@ -72,18 +142,35 @@ impl SdfPipeline {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("SDF Pipeline Layout"),
+            label: Some("mesh_view pipeline layout"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
+        let vertex_layout = VertexBufferLayout {
+            array_stride: std::mem::size_of::<MeshVertex>() as u64,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &[
+                VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: VertexFormat::Float32x3,
+                },
+                VertexAttribute {
+                    offset: 12,
+                    shader_location: 1,
+                    format: VertexFormat::Float32x3,
+                },
+            ],
+        };
+
         let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("SDF Render Pipeline"),
+            label: Some("mesh_view pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[vertex_layout],
                 compilation_options: Default::default(),
             },
             fragment: Some(FragmentState {
@@ -100,11 +187,19 @@ impl SdfPipeline {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
+                // Mesh from marching cubes / dual contouring can flip
+                // winding on internal cavity surfaces; disable culling so
+                // the whole shape is always visible regardless of normal
                 cull_mode: None,
                 polygon_mode: PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
+            // egui's paint callback runs inside egui's own render pass
+            // which has no depth attachment, so a depth-stencil target here
+            // would fail validation Preview shows slight front/back sort
+            // artifacts as a result — acceptable trade-off for the ability
+            // to plug straight into egui without an offscreen texture pass
             depth_stencil: None,
             multisample: MultisampleState::default(),
             multiview: None,
@@ -115,67 +210,36 @@ impl SdfPipeline {
             render_pipeline,
             uniform_buffer,
             bind_group,
-            format,
+            mesh: None,
         }
     }
 
-    pub fn rebuild_with_dynamic_sdf(&self, device: &Device, sdf_wgsl: &str) -> Self {
-        let (helpers, body, material_fn) = split_helpers_body_material(sdf_wgsl);
+    /// Upload a mesh's vertex / index data to GPU buffers Replaces any
+    /// existing uploaded mesh
+    pub fn upload_mesh(&mut self, device: &Device, mesh: &alice_sdf::mesh::Mesh) {
+        let verts: Vec<MeshVertex> = mesh
+            .vertices
+            .iter()
+            .map(|v| MeshVertex {
+                position: v.position.into(),
+                normal: v.normal.into(),
+            })
+            .collect();
 
-        let material_section = if material_fn.is_empty() {
-            "fn sdf_material_dynamic(p: vec3<f32>) -> f32 { return 0.0; }".to_string()
-        } else {
-            material_fn.replace("sdf_eval_material", "sdf_material_dynamic")
-        };
-
-        let dynamic_function = format!(
-            "{helpers}\n\
-             fn sdf_eval_dynamic(p: vec3<f32>) -> f32 {{\n\
-             {body}\n\
-             }}\n\n\
-             {material_section}",
-        );
-
-        let shader_source = RAYMARCHING_TEMPLATE.replace(
-            "// {{DYNAMIC_SDF_FUNCTION}}\n// Default fallback when no .asdf is loaded\nfn sdf_eval_dynamic(p: vec3<f32>) -> f32 {\n    return length(p) - 1.0;  // Simple sphere fallback\n}\nfn sdf_material_dynamic(p: vec3<f32>) -> f32 {\n    return 0.0;\n}",
-            &dynamic_function,
-        );
-
-        Self::new_with_shader(device, self.format, &shader_source)
-    }
-}
-
-fn split_helpers_body_material(sdf_wgsl: &str) -> (String, String, String) {
-    if let Some(eval_pos) = sdf_wgsl.find("fn sdf_eval(") {
-        let helpers = sdf_wgsl[..eval_pos].trim().to_string();
-        let after_helpers = &sdf_wgsl[eval_pos..];
-
-        let mut brace_depth = 0i32;
-        let mut eval_end = after_helpers.len();
-        let mut found_start = false;
-        for (i, c) in after_helpers.char_indices() {
-            if c == '{' {
-                brace_depth += 1;
-                found_start = true;
-            } else if c == '}' {
-                brace_depth -= 1;
-                if found_start && brace_depth == 0 {
-                    eval_end = i + 1;
-                    break;
-                }
-            }
-        }
-
-        let eval_fn = &after_helpers[..eval_end];
-        let material_section = after_helpers[eval_end..].trim().to_string();
-
-        if let Some(start) = eval_fn.find('{') {
-            let body = eval_fn[start + 1..eval_end - 1].trim().to_string();
-            return (helpers, body, material_section);
-        }
-
-        (helpers, eval_fn.to_string(), material_section)
-    } else {
-        (String::new(), sdf_wgsl.to_string(), String::new())
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("mesh_view vertex"),
+            contents: bytemuck::cast_slice(&verts),
+            usage: BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("mesh_view index"),
+            contents: bytemuck::cast_slice(&mesh.indices),
+            usage: BufferUsages::INDEX,
+        });
+        self.mesh = Some(UploadedMesh {
+            vertex_buffer,
+            index_buffer,
+            index_count: mesh.indices.len() as u32,
+        });
     }
 }

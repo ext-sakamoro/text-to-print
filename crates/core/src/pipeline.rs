@@ -8,7 +8,7 @@ use alice_sdf::mesh::{
     DualContouringConfig, MarchingCubesConfig, MeshRepair, dual_contouring, sdf_to_mesh,
 };
 use alice_sdf::tight_aabb::{TightAabbConfig, compute_tight_aabb_with_config};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use glam::Vec3;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -37,6 +37,13 @@ pub struct MeshStats {
     /// G-code slicer summary (populated only for `ExportFormat::Gcode`
     /// exports via `alice_print::slice_sdf`)
     pub slice_summary: Option<SliceSummary>,
+    /// Handle to the just-generated mesh, for the in-app preview viewer
+    ///
+    /// Populated by the 3MF export path — the same mesh that was written
+    /// to disk is shared here via `Arc` so the viewer can render it
+    /// without re-running marching cubes Other export formats leave this
+    /// `None`
+    pub preview_mesh: Option<std::sync::Arc<alice_sdf::mesh::Mesh>>,
 }
 
 /// Compact G-code slicer summary kept in `MeshStats` for UI display
@@ -267,6 +274,7 @@ fn export_3mf_via_bamboo(
     export_bambu_3mf(&mesh, output_path, name)
         .map_err(|e| anyhow::anyhow!("Bambu 3MF export error: {e}"))?;
 
+    let preview_mesh = std::sync::Arc::new(mesh);
     Ok(MeshStats {
         vertex_count,
         triangle_count,
@@ -274,6 +282,7 @@ fn export_3mf_via_bamboo(
         overhang_summary: Some(overhang_summary),
         safety_summary: Some(safety_summary),
         slice_summary: None,
+        preview_mesh: Some(preview_mesh),
     })
 }
 
@@ -285,6 +294,7 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
         overhang_summary: None,
         safety_summary: None,
         slice_summary: None,
+        preview_mesh: None,
     }
 }
 
@@ -337,6 +347,7 @@ fn export_step_via_alice_sdf(
         overhang_summary: None,
         safety_summary: None,
         slice_summary: None,
+        preview_mesh: None,
     })
 }
 
@@ -371,6 +382,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
             filament_meters: slice.filament_meters,
             print_time_seconds: slice.print_time_seconds,
         }),
+        preview_mesh: None,
     })
 }
 
@@ -674,18 +686,6 @@ fn extract_json_code(text: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// LOL → WGSL シェーダー生成（SDF プレビュー用）
-pub fn lol_to_wgsl(lol_source: &str) -> Result<String> {
-    let node = alice_bamboo::parse_lol(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {}", e.message))?;
-
-    let wgsl = alice_bamboo::to_wgsl(&node);
-    if wgsl.is_empty() {
-        bail!("WGSL generation failed: empty output");
-    }
-    Ok(wgsl)
 }
 
 #[cfg(test)]

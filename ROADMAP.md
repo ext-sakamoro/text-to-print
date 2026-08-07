@@ -2,7 +2,12 @@
 
 target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
-現状 (2026-08-07): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace **213**/213 pass、UI phase state machine test 追加後、+7 test) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+現状 (2026-08-08): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace **228**/228 pass、mesh preview + Z-up system_prompt + retry loop 完成後) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+
+### 2026-08-08 完了項目
+
+- ✅ **3D preview を WGSL raymarching → in-process mesh renderer に置換** (`crates/app/src/sdf/pipeline.rs` + `renderer.rs` + `ui/viewer.rs` 大幅書き換え、~500 行 change) 生成 pipeline が MC/DC で作った `alice_sdf::mesh::Mesh` を `Arc<Mesh>` として `AppState::viewer_mesh` に流し、viewer は wgpu vertex/index buffer に upload して Phong lit で描画 viewer と Bambu Studio が **同一 mesh を表示** するので生成結果の確認が信頼できるようになった Z-up camera + drag orbit / scroll zoom / auto-frame reset 実装済 (以前の Y-up raymarching は camera / world axis 差異で viewer と 3MF が別 shape に見える混乱源だった) 依存 crate `lol_to_wgsl` + `raymarching.wgsl` (505 行) は削除、`MeshStats.preview_mesh: Option<Arc<Mesh>>` field 追加でパイプライン → viewer のデータフロー統一 depth attachment は egui render pass 制約で無し (front/back sort の軽微 artifact あり、offscreen render は将来 improvement)
+- ✅ **end-to-end 「入力 → 生成 → ファイル出力」完走** — `system_prompt.md` 全面書き換え (Z-up 慣習明示 + `rotate(90, 0, 0, cylinder(...))` for vertical hole + smartphone stand wedge example) `fix_prompt::LolParseError` variant + directive で parse 失敗時 retry を発動可能に (旧 `SafetyViolationKind::from_message` classifier で "LOL parse error" 未マッチ → 空 suffix → break の gap 修正) `max_retries` 1→2 (3 attempts 許容、worst case ~7 min) HTTP timeout 180→300s (system_prompt 拡張分の inference time 増加を吸収) `export_mesh` の Err を `.ok()` で silent 破棄していた bug 修正 (parse 失敗時に UI に「mesh export failed」を surface) 実測: `スマホスタンド、幅80mm、奥行60mm、高さ40mm、傾斜角65度、ケーブル穴 直径10mm` prompt で Bambu Studio 表示可能な wedge shape の 3MF が確実に出るところまで動作確認 (base + tilted back plate + vertical cable hole)
 
 ### 2026-08-07 完了項目 (本日実施済)
 
@@ -289,3 +294,5 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | **P2-1 Phase S1 完了** — CF Workers 側 Stripe scaffold (webhook + license issue + checkout + email) 実装、worker crate test 15 → 31 pass、docs/STRIPE_SETUP.md 新規 Phase S2 (app UI + verify wire) / S3 (production deploy) は次 session |
 | 2026-08-07 | **P2-1 Phase S2 完了** — worker checkout API を `plan` param に refactor + settings.rs License / Subscription UI 大幅拡張 (Upgrade to Pro / Enterprise mailto / Clear license / expiry 表示) 既存 `LICENSE_PUBLIC_KEY` + `apply_license` + DB `license_key` column を発見して再利用 (新規追加不要) test 244 → 253 pass |
 | 2026-08-07 | **CI 修正** — 4 job 全 green 化:  `cargo audit` は `.cargo/audit.toml` per-entry rationale 付き ignore list + Cargo.lock update で 12 vuln 解消 / `fmt` 独立 job 廃止して `clippy-test-doc` に merge (workspace path deps 解決 fail 回避) / `ALICE_ECO_TOKEN` GitHub secret 登録 (private ALICE-Bamboo checkout 通過) / Phase S2 追加 code の rustfmt 自動整形 |
+| 2026-08-07 | **end-to-end pipeline 完走まで到達** — LLM system_prompt を Z-up 慣習 + wedge example に刷新、`fix_prompt::LolParseError` variant で parse retry loop 完成、`max_retries` 1→2、HTTP timeout 180→300s、export silent Err bug 修正 実測 `スマホスタンド…` prompt で Bambu Studio 対応 3MF 完走 test 228 pass |
+| 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別 session で mesh 経路に refactor 予定) |

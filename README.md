@@ -107,7 +107,7 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 | GUI | Rust `eframe` + `egui` + `wgpu` (native desktop) |
 | LLM inference | ALICE-LLM embedded (wgpu compute shaders + GGUF K-quant + LOL_GBNF grammar constrained decoding) |
 | DSL parse / SDF / mesh | alice-lol / alice-sdf / alice-physics / alice-bamboo (path deps) |
-| 3D preview | alice-view (WebGPU/WASM) with fallback |
+| 3D preview | in-process wgpu **mesh** viewer (same `alice_sdf::mesh::Mesh` the exporter writes to 3MF — viewer / Bambu 見た目は一致) |
 | Optional P2P share | libp2p (mdns / gossipsub / kad) for free-tier upload to ALICE-LOL |
 | Local DB | rusqlite (project history / license state / tier / model choice) |
 | Payment | Stripe subscription (Test mode scaffold complete、Phase S3 で Live 切替) |
@@ -156,7 +156,7 @@ text-to-print/
 embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
 Stripe subscription 統合 backend + app UI 完成 (Test mode)
 
-- `cargo test --workspace`: **221 pass / 0 fail / 2 ignored**
+- `cargo test --workspace`: **228 pass / 0 fail / 2 ignored**
 - `cargo test --lib on crates/worker`: **32 pass / 0 fail**
 - `cargo clippy --workspace --all-targets -- -D warnings`: **0 own warnings**
 - `cargo check --target wasm32-unknown-unknown -p text-to-print-worker`: **green**
@@ -165,6 +165,8 @@ Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-08-08: **3D preview を mesh renderer に置換** (WGSL raymarching 廃止) 生成 pipeline が MC/DC で作った同一 `Mesh` を wgpu vertex/index buffer に upload して Phong lit で描画 viewer と Bambu Studio が同じ形状を表示するため生成結果の確認が信頼できるようになった (旧 raymarching だと Y-up world / camera artifact で違って見える混乱があった) `crates/app/src/sdf/` は名前は残るが中身は mesh pipeline
+- 2026-08-07: **end-to-end 完走まで到達** — LLM system_prompt を Z-up 慣習 + 適切な `rotate(90, 0, 0, cylinder(...))` を教える wedge example に刷新、`fix_prompt::LolParseError` variant + directive で parse 失敗時の retry loop を接続 (以前は空 suffix で silent break)、`max_retries` 1→2 + HTTP timeout 180→300s + export `.ok()` silent 破棄 bug 修正 現行 Qwen 3B (grammar OFF) で「スマホスタンド、幅80mm…」prompt から Bambu Studio 表示可能な wedge shape の 3MF が確実に出るところまで動作確認
 - 2026-08-07: **P2-1 Phase S1 + S2 完了** — Stripe subscription 統合 (CF Workers
   backend scaffold + app UI Upgrade section / Enter License Key / Grace period
   表示 / Enterprise mailto 導線) Test mode で完結、Live 切替は Phase S3

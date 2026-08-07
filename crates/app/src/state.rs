@@ -76,6 +76,17 @@ pub struct AppState {
     pub prompt_input: String,
     pub generation_status: GenerationStatus,
     pub current_lol: Option<String>,
+    /// Latest mesh built by the pipeline, ready for the on-screen preview
+    ///
+    /// Populated in `prompt.rs` right after `pipeline::export_mesh` returns
+    /// success The `Arc` lets the mesh cross the async task boundary
+    /// without copying vertices
+    pub viewer_mesh: Option<std::sync::Arc<alice_sdf::mesh::Mesh>>,
+    /// Monotonic version counter that increments each time `viewer_mesh` is
+    /// replaced The mesh preview UI compares this against its own
+    /// last-uploaded version to decide whether to re-push vertices to the
+    /// GPU
+    pub mesh_version: u64,
     /// General tier: 公開待ちの SDF (id, lol_source, prompt)
     pub pending_publish: Option<(String, String, String)>,
     pub history: Vec<GenerationRow>,
@@ -390,6 +401,8 @@ impl AppState {
             prompt_input: String::new(),
             generation_status: GenerationStatus::Idle,
             current_lol: None,
+            viewer_mesh: None,
+            mesh_version: 0,
             pending_publish: None,
             history,
             db,

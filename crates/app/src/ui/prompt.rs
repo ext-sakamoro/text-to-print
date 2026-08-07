@@ -954,6 +954,16 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                         Some((id.clone(), lol_source.clone(), state.prompt_input.clone()));
                 }
 
+                // Publish the just-generated mesh to the preview viewer The
+                // mesh already lives inside `mesh_stats.preview_mesh` (an
+                // `Arc<Mesh>`), so this is a cheap ref-count bump
+                if let Some(stats) = mesh_stats.as_ref()
+                    && let Some(mesh) = stats.preview_mesh.as_ref()
+                {
+                    state.viewer_mesh = Some(mesh.clone());
+                    state.mesh_version = state.mesh_version.wrapping_add(1);
+                }
+
                 state.generation_status = GenerationStatus::Done {
                     lol_source,
                     mesh_stats,

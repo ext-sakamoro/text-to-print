@@ -1,54 +1,112 @@
 use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
-use std::time::Instant;
+use glam::{Mat4, Vec3};
+use std::sync::{Arc, Mutex};
 
-use super::pipeline::{SdfPipeline, SdfUniforms};
+use super::pipeline::{MeshPipeline, MeshUniforms};
 
-/// egui CallbackResources に格納する SDF リソース
-pub struct SdfResources {
-    pub pipeline: SdfPipeline,
-    pub start_time: Instant,
-    pub camera_pos: [f32; 3],
-    pub camera_target: [f32; 3],
-    pub camera_up: [f32; 3],
-    pub camera_fov: f32,
-    /// scene_id を uniform に流す 0-99: built-in demo scene / 100:
-    /// dynamic SDF (`sdf_eval_dynamic` = LOL DSL 由来)
-    /// rebuild_with_wgsl 後は 100 に切替、初期は 100 (LOL 未読込時は
-    /// pipeline の sphere fallback が表示される)
-    pub scene_id: u32,
+/// Camera state shared between the UI (for orbit / dolly / reset) and the
+/// wgpu render callback (for view matrix)
+///
+/// Z-up world: matches Bambu Studio and the 3MF spec so the mesh preview
+/// shows the same orientation as the exported file
+#[derive(Debug, Clone)]
+pub struct Camera {
+    pub position: Vec3,
+    pub target: Vec3,
+    pub up: Vec3,
+    pub fov: f32,
+    pub near: f32,
+    pub far: f32,
 }
 
-impl SdfResources {
-    pub fn init(render_state: &egui_wgpu::RenderState) -> Self {
-        let device = &render_state.device;
-        let format = render_state.target_format;
-        let pipeline = SdfPipeline::new(device, format);
-
+impl Default for Camera {
+    fn default() -> Self {
         Self {
-            pipeline,
-            start_time: Instant::now(),
-            camera_pos: [0.0, 0.0, 5.0],
-            camera_target: [0.0, 0.0, 0.0],
-            camera_up: [0.0, 1.0, 0.0],
-            camera_fov: std::f32::consts::FRAC_PI_4,
-            // 2026-08-07 β: default 100 (dynamic) にすることで LOL DSL
-            // 由来 shader が正しく描画される 元 0 だと map_scene_0
-            // (Carved Sphere demo) が hardcode 表示される bug
-            scene_id: 100,
+            position: Vec3::new(200.0, -200.0, 200.0),
+            target: Vec3::new(0.0, 0.0, 30.0),
+            up: Vec3::Z,
+            fov: std::f32::consts::FRAC_PI_4,
+            near: 1.0,
+            far: 5000.0,
+        }
+    }
+}
+
+impl Camera {
+    /// Orbit around `target` in spherical coordinates with Z as up
+    pub fn orbit(&mut self, delta_yaw: f32, delta_pitch: f32) {
+        let offset = self.position - self.target;
+        let radius = offset.length().max(1e-3);
+        let mut yaw = offset.y.atan2(offset.x);
+        let mut pitch = (offset.z / radius).clamp(-1.0, 1.0).asin();
+
+        yaw += delta_yaw;
+        pitch = (pitch + delta_pitch).clamp(
+            -std::f32::consts::FRAC_PI_2 + 0.05,
+            std::f32::consts::FRAC_PI_2 - 0.05,
+        );
+
+        let cos_p = pitch.cos();
+        self.position = self.target
+            + Vec3::new(
+                radius * cos_p * yaw.cos(),
+                radius * cos_p * yaw.sin(),
+                radius * pitch.sin(),
+            );
+    }
+
+    /// Move along the view direction; positive = zoom in
+    pub fn dolly(&mut self, distance: f32) {
+        let dir = (self.target - self.position).normalize_or_zero();
+        let candidate = self.position + dir * distance;
+        // Preserve a minimum standoff so we never end up at the target
+        if (self.target - candidate).length() > 5.0 {
+            self.position = candidate;
         }
     }
 
-    pub fn rebuild_with_wgsl(&mut self, device: &wgpu::Device, wgsl: &str) {
-        self.pipeline = self.pipeline.rebuild_with_dynamic_sdf(device, wgsl);
-        // dynamic WGSL 差替直後は必ず scene_id=100 に (念のため)
-        self.scene_id = 100;
+    /// Frame the camera so `aabb_min..=aabb_max` fits the given aspect
+    pub fn frame(&mut self, min: Vec3, max: Vec3, aspect: f32) {
+        let center = (min + max) * 0.5;
+        let extent = max - min;
+        let max_dim = extent.x.max(extent.y).max(extent.z).max(1.0);
+        // fov half-angle × distance = half of vertical view -> use adjusted
+        // dim so wider aspects don't crop
+        let fit_dim = max_dim * 1.4 / aspect.clamp(0.5, 1.0);
+        let distance = fit_dim / (self.fov * 0.5).tan();
+        // Place camera looking down at 45° from the +X/-Y quadrant so the
+        // Z-up orientation is immediately readable (bed grid horizontal)
+        let dir = Vec3::new(1.0, -1.2, 0.9).normalize();
+        self.target = center;
+        self.position = center + dir * distance;
+        self.up = Vec3::Z;
     }
 }
 
-/// SDF レンダリング用の egui PaintCallback
-pub struct SdfRenderCallback;
+/// Resources stored in egui's per-frame `CallbackResources` map wgpu
+/// pipeline + uploaded mesh + camera snapshot The UI thread mutates the
+/// camera via `Arc<Mutex<Camera>>` and the render thread reads it inside
+/// `prepare()`
+pub struct MeshResources {
+    pub pipeline: MeshPipeline,
+    pub camera: Arc<Mutex<Camera>>,
+}
 
-impl CallbackTrait for SdfRenderCallback {
+impl MeshResources {
+    pub fn init(render_state: &egui_wgpu::RenderState) -> Self {
+        Self {
+            pipeline: MeshPipeline::new(&render_state.device, render_state.target_format),
+            camera: Arc::new(Mutex::new(Camera::default())),
+        }
+    }
+}
+
+/// egui paint callback that renders the currently uploaded mesh with a
+/// depth-tested Phong shader When no mesh is uploaded, the callback is a
+/// no-op and the caller's placeholder background remains visible
+pub struct MeshRenderCallback;
+
+impl CallbackTrait for MeshRenderCallback {
     fn prepare(
         &self,
         _device: &wgpu::Device,
@@ -57,51 +115,25 @@ impl CallbackTrait for SdfRenderCallback {
         _egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        if let Some(resources) = callback_resources.get::<SdfResources>() {
-            let time = resources.start_time.elapsed().as_secs_f32();
-            let [w, h] = screen_descriptor.size_in_pixels;
+        let Some(resources) = callback_resources.get_mut::<MeshResources>() else {
+            return Vec::new();
+        };
+        let [w, h] = screen_descriptor.size_in_pixels;
 
-            let uniforms = SdfUniforms {
-                resolution: [w as f32, h as f32],
-                time,
-                _pad0: 0.0,
-                camera_pos: [
-                    resources.camera_pos[0],
-                    resources.camera_pos[1],
-                    resources.camera_pos[2],
-                    0.0,
-                ],
-                camera_target: [
-                    resources.camera_target[0],
-                    resources.camera_target[1],
-                    resources.camera_target[2],
-                    resources.camera_fov,
-                ],
-                camera_up: [
-                    resources.camera_up[0],
-                    resources.camera_up[1],
-                    resources.camera_up[2],
-                    0.0,
-                ],
-                max_steps: 128,
-                max_distance: 100.0,
-                epsilon: 0.001,
-                flags: 2, // AO on
-                scene_id: resources.scene_id,
-                light_intensity: 1.0,
-                ambient_intensity: 0.15,
-                quality_flags: 1, // adaptive quality
-                light_dir: [0.5, 1.0, 0.3, 0.0],
-                bg_color: [0.02, 0.02, 0.05, 1.0],
-            };
-
-            queue.write_buffer(
-                &resources.pipeline.uniform_buffer,
-                0,
-                bytemuck::cast_slice(&[uniforms]),
-            );
-        }
-
+        let camera = resources
+            .camera
+            .lock()
+            .map(|c| c.clone())
+            .unwrap_or_default();
+        let aspect = (w as f32 / h.max(1) as f32).max(0.1);
+        let view = Mat4::look_at_rh(camera.position, camera.target, camera.up);
+        let proj = Mat4::perspective_rh(camera.fov, aspect, camera.near, camera.far);
+        let uniforms = MeshUniforms::from_camera(camera.position, proj * view);
+        queue.write_buffer(
+            &resources.pipeline.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniforms]),
+        );
         Vec::new()
     }
 
@@ -111,10 +143,16 @@ impl CallbackTrait for SdfRenderCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &CallbackResources,
     ) {
-        if let Some(resources) = callback_resources.get::<SdfResources>() {
-            render_pass.set_pipeline(&resources.pipeline.render_pipeline);
-            render_pass.set_bind_group(0, &resources.pipeline.bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
-        }
+        let Some(resources) = callback_resources.get::<MeshResources>() else {
+            return;
+        };
+        let Some(mesh) = &resources.pipeline.mesh else {
+            return;
+        };
+        render_pass.set_pipeline(&resources.pipeline.render_pipeline);
+        render_pass.set_bind_group(0, &resources.pipeline.bind_group, &[]);
+        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
     }
 }
