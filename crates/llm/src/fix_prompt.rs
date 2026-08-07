@@ -89,10 +89,13 @@ impl SafetyViolationKind {
             }
             Self::LolParseError => {
                 "The previous LOL DSL failed to parse Common mistakes to avoid:\n\
+                 - Output ONE single expression only — NEVER two shapes on separate lines\n\
+                 - Multiple shapes MUST be nested: holes = subtract(base, hole), combined solids = union(a, b)\n\
                  - rotate takes THREE angles then child: rotate(0, 0, 65, cylinder(...)) NOT rotate(65, ...)\n\
                  - translate takes THREE coords then child: translate(x, y, z, child) — always 4 args\n\
                  - NO operators: use subtract(a, b) NOT a / b, NOT a - b, NOT a + b\n\
-                 - Match every ( with exactly one ) — count them before closing"
+                 - Match every ( with exactly one ) — count them before closing\n\
+                 - Example (stand with cable hole): subtract(rotate(0, 0, 65, box3d(40, 30, 20)), translate(0, 0, -20, cylinder(5, 20)))"
             }
         }
     }

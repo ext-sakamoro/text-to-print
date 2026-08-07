@@ -203,11 +203,13 @@ pub async fn generate_with_grammar(
         "LLM inference start"
     );
 
-    // 180s HTTP timeout: alice-llm-server が生 hang しても 3 分で
-    // reqwest error 化して UI に surface できる (以前は timeout なしで
-    // 無限待ち → user 側 Cmd+Q しか escape なかった)
+    // 180s → 300s HTTP timeout (2026-08-07)
+    // 元 180s は iGPU + 3B model で system_prompt 2000 char 時の 90-125s に対する
+    // safety margin だったが、Z-up 慣習の system_prompt 拡張 (~2500 char) で
+    // inference が 180s を超えるケースが観測されたため 5 分に拡張
+    // 依然 生 hang は 300s で reqwest error 化する gate 有り
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
+        .timeout(std::time::Duration::from_secs(300))
         .build()?;
     let request = ChatRequest {
         model: model_id.to_string(),

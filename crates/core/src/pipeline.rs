@@ -253,6 +253,12 @@ fn export_3mf_via_bamboo(
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
 
+    // 2026-08-07 revert: 一律 Y-up→Z-up 変換を試みたが、hand-crafted skadis panel
+    // 等の Z-up 前提 LOL (rounded_box(150,150,2.5) 型 = Z が厚さ) を全て regress
+    // させるため撤回 真因は LOL grammar 内で Z-up と Y-up 慣習が混在すること、
+    // 修正は LLM 側 (system_prompt.md に Z-up 慣習明示) で対処 skadis / coin 等の
+    // hand-crafted example は変換なしで既に Bambu Z-up と一致する
+    //
     // Phase 5.4: Bambu template embedded 3MF (MakerWorld 対応)、素の 3MF から切替
     let name = output_path
         .file_stem()

@@ -739,12 +739,16 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
         // worst case 8-12 分待たされる 1 retry (2 attempt) までなら
         // 実用範囲内 (~5 分) empty response でも即 abort する新 gate も入れた
         // (crates/llm/src/backend.rs::generate_with_retry コメント参照)
+        //
+        // 2026-08-07 追加: 1 → 2 に拡張 (3 attempt 総計 ~5-7 分)
+        // LOL 単一 expression 縛りを LLM が破る multi-statement 誤りが
+        // 1 retry では吸収できないため試行機会を +1
         let result = backend::generate_with_retry(
             &backend,
             &inference_params,
             prompt::SYSTEM_PROMPT,
             &prompt_text,
-            1,
+            2,
             |response| {
                 let _ = tx_retry.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
                 let lol = pipeline::extract_lol(response)
@@ -786,6 +790,11 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     parse_start.elapsed(),
                 ));
 
+                // v0.1.0-beta.1 fix: `stats_result.ok()` は export Err を silent
+                // 破棄して UI に「生成完了」を偽装していた 実際は LOL parse
+                // fail 等で 3MF 未生成なのに Success が飛ぶ 修正: pipeline_error
+                // に真の error を捕捉して後段で Failure 分岐する
+                let mut pipeline_error: Option<String> = None;
                 let mesh_stats = if can_download {
                     let _ = std::fs::create_dir_all(&output_dir);
                     let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Mesh));
@@ -813,7 +822,14 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
 
                     let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Export));
                     let export_start = Instant::now();
-                    let out = stats_result.ok();
+                    let out = match stats_result {
+                        Ok(stats) => Some(stats),
+                        Err(e) => {
+                            tracing::error!(error = %e, "mesh export failed");
+                            pipeline_error = Some(format!("mesh export failed: {e}"));
+                            None
+                        }
+                    };
                     let _ = tx.send(GenerationMessage::PhaseDone(
                         GenerationPhase::Export,
                         export_start.elapsed(),
@@ -883,13 +899,17 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     None
                 };
 
-                let _ = tx.send(GenerationMessage::Success {
-                    id,
-                    lol_source: lol,
-                    mesh_stats: mesh_stats.map(Box::new),
-                    retry_count,
-                    share_dry_run,
-                });
+                if let Some(err) = pipeline_error {
+                    let _ = tx.send(GenerationMessage::Failure { id, error: err });
+                } else {
+                    let _ = tx.send(GenerationMessage::Success {
+                        id,
+                        lol_source: lol,
+                        mesh_stats: mesh_stats.map(Box::new),
+                        retry_count,
+                        share_dry_run,
+                    });
+                }
             }
             Err(e) => {
                 let _ = tx.send(GenerationMessage::Failure {
