@@ -156,7 +156,7 @@ pub struct SidecarProcess {
 impl SidecarProcess {
     /// sidecar を起動し、`/health` が応答するまで待つ
     ///
-    /// stderr は piped で取得し、直近 [`STDERR_TAIL_MAX_LINES`] 行を保持
+    /// stderr は piped で取得し、直近 `STDERR_TAIL_MAX_LINES` 行を保持
     /// health check timeout や early exit 時にこのバッファを error msg に
     /// 含めて surface する 親コンソールにも `[sidecar]` prefix 付きで
     /// echo するので tracing subscriber と併せて cross-reference 可能
@@ -231,7 +231,7 @@ impl SidecarProcess {
     }
 
     /// Snapshot of the most recent stderr lines (up to
-    /// [`STDERR_TAIL_MAX_LINES`]) — useful for surfacing sidecar
+    /// `STDERR_TAIL_MAX_LINES`) — useful for surfacing sidecar
     /// failures to the UI without keeping a live subscriber
     pub fn recent_stderr(&self) -> Vec<String> {
         self.stderr_tail

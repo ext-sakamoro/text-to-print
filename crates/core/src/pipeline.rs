@@ -400,7 +400,7 @@ pub struct MetadataInputs<'a> {
 /// [`alice_bamboo::safety::safety_validate`] against a default `"PLA"`
 /// material, and returns the raw safety violation messages Meant to be
 /// used as the `safety_check` closure passed to
-/// [`text_to_print_llm::backend::generate_with_retry`]
+/// `text_to_print_llm::backend::generate_with_retry`
 ///
 /// Behavior:
 /// - **LOL parse error** returns a single-message violation vector so the
@@ -410,7 +410,7 @@ pub struct MetadataInputs<'a> {
 /// - **`safety_validate.is_safe == false`** returns
 ///   `safety_validate.messages` verbatim The messages already come from
 ///   `alice_bamboo::safety::SafetyReport` so
-///   [`text_to_print_llm::fix_prompt::SafetyViolationKind::from_message`]
+///   `text_to_print_llm::fix_prompt::SafetyViolationKind::from_message`
 ///   can classify them into `fix_directive` instructions
 ///
 /// This helper deliberately skips the mesh build (marching cubes) so it

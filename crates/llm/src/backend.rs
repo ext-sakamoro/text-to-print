@@ -93,7 +93,7 @@ pub struct RetryResult {
 ///
 /// # Errors
 ///
-/// Any transport or inference error from the underlying [`LlmBackend`]
+/// Any transport or inference error from the underlying [`crate::backend_kind::LlmBackend`]
 /// call terminates the loop and is returned to the caller unchanged
 pub async fn generate_with_retry<F>(
     backend: &crate::backend_kind::LlmBackend,
