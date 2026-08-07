@@ -1,0 +1,51 @@
+# cargo-audit config (RustSec advisory database policy)
+#
+# Read by `cargo audit` locally and by the `cargo-audit` invocation in
+# `.github/workflows/ci.yml`. Every entry in `ignore` must document why
+# it is safe / unavoidable for this project — plain `RUSTSEC-*` id
+# without a rationale is a code smell to be cleaned up in review.
+#
+# Re-audit checklist (run once per quarter):
+# 1. `cargo update` — pulls any transitive patches that landed since
+# 2. `cargo audit` — see which of the below have upstream fixes now
+# 3. Remove ignore entries whose fix is unblocked
+# 4. For libp2p 0.54 → 0.55+ upgrade see `ROADMAP.md` P1 gap
+
+[advisories]
+
+# `unmaintained` / `unsound` advisories are still useful signals but not
+# outright vulnerabilities — surface them without failing the build
+informational_warnings = ["unmaintained", "unsound", "notice"]
+
+ignore = [
+    # ── libp2p 0.54 transitive chain (P1 upgrade candidate) ─────────
+    #
+    # crates/network pins libp2p 0.54 as the top-level P2P dep. The
+    # advisories below all resolve when libp2p is bumped to >= 0.55
+    # (which brings hickory 0.26, quinn 0.11.15, rustls-webpki 0.103,
+    # ring 0.17, quick-xml 0.41). The upgrade is a P1-6 (or new) task
+    # gated by an libp2p API surface review + share endpoint e2e retest.
+
+    "RUSTSEC-2026-0119",  # hickory-proto v0.24  ← libp2p-mdns 0.46 ← libp2p 0.54
+    "RUSTSEC-2026-0194",  # quick-xml v0.30      ← libp2p chain
+    "RUSTSEC-2026-0195",  # quick-xml v0.30      ← libp2p chain
+    "RUSTSEC-2025-0009",  # ring v0.16           ← rcgen 0.11 ← libp2p-tls 0.5 ← libp2p 0.54
+    "RUSTSEC-2026-0098",  # rustls-webpki v0.101 ← libp2p-tls 0.5 ← libp2p 0.54
+    "RUSTSEC-2026-0099",  # rustls-webpki v0.101 ← libp2p-tls 0.5 ← libp2p 0.54
+    "RUSTSEC-2026-0104",  # rustls-webpki v0.101 ← libp2p-tls 0.5 ← libp2p 0.54
+    "RUSTSEC-2026-0002",  # lru v0.12            ← libp2p-identify / libp2p-swarm
+
+    # ── upstream ALICE-* / wgpu / egui font stack ───────────────────
+    #
+    # Not fixable from text-to-print alone — need upstream crate updates
+    # or replacement. Tracked upstream but not blocking release.
+
+    "RUSTSEC-2024-0384",  # instant v0.1     unmaintained, transitive via wgpu / winit
+    "RUSTSEC-2024-0436",  # paste v1.0       unmaintained, via metal → wgpu-hal 24 (GPU 必須)
+    "RUSTSEC-2025-0010",  # ring v0.16       unmaintained, same chain as RUSTSEC-2025-0009
+    "RUSTSEC-2025-0141",  # bincode v1.3     unmaintained, via alice-sdf → alice-bamboo
+    "RUSTSEC-2026-0192",  # ttf-parser v0.25 unmaintained, via egui / font stack
+    "RUSTSEC-2026-0186",  # memmap2 v0.9     unsound, via alice-llm (mmap GGUF pattern)
+    "RUSTSEC-2026-0190",  # anyhow v1.0.104  unsound Error::downcast_mut, wait for 1.0.105+
+    "RUSTSEC-2026-0221",  # event-listener   unsound !Send tag via StackSlot, libp2p chain
+]

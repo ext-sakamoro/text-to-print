@@ -12,26 +12,25 @@ env:
 
 jobs:
   # Security audit (#40): scan Cargo.lock against the RustSec advisory
-  # database (`rustsec/advisory-db`) Runs quickly (<20s) because it does
-  # not compile the workspace — pure lockfile audit Runs on Ubuntu only
-  # since the lockfile is OS-neutral
+  # database Runs quickly (<20s) — pure lockfile audit, no compile
   #
-  # `rustsec/audit-check@v2` reads `Cargo.lock` and posts findings as a
-  # GitHub Check + fails the job when a matching advisory exists
+  # Uses `cargo audit` directly instead of `rustsec/audit-check@v2` so
+  # the ignore list in `.cargo/audit.toml` (with per-entry rationale)
+  # is respected identically to local `cargo audit` invocations Every
+  # entry there must document why the vulnerable dep is unavoidable
+  # (typically pinned by libp2p 0.54 / wgpu / ALICE-* upstreams)
   audit:
     name: cargo audit
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Required for `rustsec/audit-check` to post its GitHub Check summary
-      checks: write
-      # Optional: post GH annotations on the offending Cargo.lock lines
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit (honours .cargo/audit.toml ignore list)
+        run: cargo audit
 
   # Formatting is safe on any OS because it runs on source alone and does
   # not need the path-dependency ALICE-* sibling checkout dance
@@ -56,6 +55,15 @@ jobs:
   # `ALICE_ECO_TOKEN` secret Without the token the private-repo checkout
   # steps fail and the job as a whole surfaces as red — that is the
   # intentional signal that the workflow needs one-time DevOps setup
+  #
+  # ── ALICE_ECO_TOKEN 設定手順 ────────────────────────────
+  # 1. https://github.com/settings/tokens?type=beta で Fine-grained PAT 発行
+  #    - Resource owner: `ext-sakamoro`
+  #    - Repository access: `ext-sakamoro/ALICE-Bamboo` (最低限)
+  #    - Repository permissions: `Contents: Read-only`
+  # 2. https://github.com/ext-sakamoro/text-to-print/settings/secrets/actions
+  #    に "New repository secret" で `ALICE_ECO_TOKEN` = 発行した PAT を登録
+  # 3. 次 push で clippy-test-doc job が checkout ステップを通過することを確認
   clippy-test-doc:
     strategy:
       fail-fast: false
