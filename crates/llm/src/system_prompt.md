@@ -33,6 +33,11 @@ User: "hollow vase 30mm radius, 2mm wall"
 onion(2, smooth_union(10, sphere(30), translate(0, 20, 0, cylinder(15, 20))))
 ```
 
+Print constraints (Bambu H2D):
+- Min wall / feature thickness: 0.8mm (thinner = unprintable)
+- Bed size: 315 x 315 x 320mm (keep half-extents within this range)
+- Prefer solids over needle-thin protrusions
+
 Reminders:
 - NEVER `{ ... }` syntax
 - LAST arg of transforms/modifiers = child shape
