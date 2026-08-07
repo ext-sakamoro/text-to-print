@@ -23,6 +23,29 @@ serde_json = "1"
 sha2 = "0.10"
 hex = "0.4"
 
+# ── Stripe integration (Phase S1) ───────────────────────────────────
+# License issuance uses the same Ed25519 payload/signature JSON format as
+# `text_to_print_core::license` so that keys signed here verify with the
+# existing `LicenseVerifier` on the desktop app (design B independent
+# implementation, no core crate wasm32 gymnastics)
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+# Utc timestamps for LicensePayload / DB rows Need `wasmbind` for
+# `Utc::now()` to work under wasm32-unknown-unknown (js Date fallback)
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "wasmbind"] }
+# License id + Stripe idempotency key generation `js` feature enables
+# wasm-friendly randomness (js Date + Math.random fallback via getrandom)
+uuid = { version = "1", features = ["v4", "js", "serde"] }
+# Stripe webhook signature verification (HMAC-SHA256 over signed payload)
+hmac = "0.12"
+# License key base64 encoding (mirrors LicenseKey::to_base64 in core)
+base64 = "0.22"
+# getrandom js feature needed by uuid v4 + ed25519-dalek verifying flows
+getrandom = { version = "0.2", features = ["js"] }
+# Constant-time comparison for Stripe signature check
+subtle = { version = "2", default-features = false }
+# URL-encoding for Stripe REST body (application/x-www-form-urlencoded)
+urlencoding = "2"
+
 [profile.release]
 opt-level = "s"
 lto = true

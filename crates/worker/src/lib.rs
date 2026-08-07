@@ -25,8 +25,12 @@ use worker::{
     event, Context, Env, Request, Response, Result as WorkerResult, RouteContext, Router,
 };
 
+mod checkout;
+mod email;
+mod license_issue;
 mod rate_limit;
 mod share_handler;
+mod stripe_webhook;
 mod validate;
 
 /// Wire schema for a LoRA share upload (mirrors
@@ -95,10 +99,20 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> WorkerResult<Respons
     router
         .get("/health", |_, _| Response::ok("ok"))
         .post_async("/api/share", handle_share)
+        .post_async("/stripe/webhook", handle_stripe_webhook)
+        .post_async("/stripe/checkout-session", handle_checkout_session)
         .run(req, env)
         .await
 }
 
 async fn handle_share(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
     share_handler::handle(&mut req, &ctx).await
+}
+
+async fn handle_stripe_webhook(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
+    stripe_webhook::handle(&mut req, &ctx).await
+}
+
+async fn handle_checkout_session(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
+    checkout::handle(&mut req, &ctx).await
 }

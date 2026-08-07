@@ -154,17 +154,49 @@ P1-1〜P1-7 完了後:
 
 ## P2 — v1.0.0 商用 (Paid tier + LoRA flywheel、数週〜数ヶ月想定)
 
-### P2-1: Paid tier 実装
+### P2-1: Paid tier 実装 (Stripe 統合)
 
-現状: tier enum + gate 表示のみ、実 payment layer は `legacy-saas/` に archive
+**設計決定** (2026-08-07 確定):
+- Payment provider: **Stripe** (test → live 切替 env 変数 1 個)
+- Backend: **CF Workers** (`crates/worker` 拡張、libp2p-independent)
+- Delivery: **Email** (Resend API 経由、license key 添付)
+- Product: **Free ¥0** (LoRA share) / **Pro ¥3,000/mo + ¥30,000/yr** / **Enterprise 問合せ (Stripe 外)**
+- License: **Ed25519 署名** (worker で issue、既存 `crates/core/src/license.rs` verify と wire format 互換)
+- Grace: subscription_end + **3 day grace** → `TierState::Grace` → Free rollback
 
-- [ ] Payment provider 選定 (Stripe / Paddle / LemonSqueezy 等) — user 判断案件
-- [ ] License key 生成 / 検証 pipeline (現状 `gen-license-key` binary + `text-to-print-core::license` module 部分実装済、要拡張)
-- [ ] Paid tier 選択時の payment flow (Web checkout → license key issued → app 内 activate)
-- [ ] License 有効性の定期 verify (offline grace period 設定)
-- [ ] Free / Paid 切替時の migration (opt-in share の cleanup)
+#### Phase S1 ✅ (2026-08-07 完了、Backend scaffold)
 
-**受入基準**: Paid tier user が payment → license → 完全 offline mode で使える
+- ✅ `crates/worker/Cargo.toml` に Stripe / Ed25519 / uuid / chrono / hmac / base64 依存追加
+- ✅ `migrations/0002_stripe.sql` (subscribers + licenses + webhook_events 3 table)
+- ✅ `crates/worker/src/license_issue.rs` (Ed25519 signer、wire format `text_to_print_core::license::LicenseKey` 互換、8 unit test pass)
+- ✅ `crates/worker/src/stripe_webhook.rs` (`POST /stripe/webhook`、HMAC-SHA256 signature verify、`checkout.session.completed` / `customer.subscription.{updated,deleted}` dispatch、idempotency via `webhook_events` table、7 unit test pass)
+- ✅ `crates/worker/src/checkout.rs` (`POST /stripe/checkout-session`、Stripe REST API 経由 `mode=subscription` セッション生成、3 unit test pass)
+- ✅ `crates/worker/src/email.rs` (Resend API 経由 license email 送信、RESEND_API_KEY 未設定時は log-only fallback、2 unit test pass)
+- ✅ `wrangler.toml` に secrets 定義 (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / LICENSE_SIGNING_KEY_HEX / PRICE_ID_PRO_{MONTHLY,YEARLY} / RESEND_API_KEY)
+- ✅ `docs/STRIPE_SETUP.md` 新規 (Stripe CLI / D1 / Ed25519 生成 / secrets 登録 / local dev / e2e 手順)
+- ✅ **cargo test --lib on crates/worker: 31 pass / 0 fail** (既存 15 + Stripe 追加 20)
+- ✅ **cargo check --target wasm32-unknown-unknown: green** (CI `check-wasm-worker` job で自動検証)
+- ✅ **cargo clippy --target wasm32-unknown-unknown -- -D warnings: 0 warnings**
+
+#### Phase S2 (次 session、~3-4h scope)
+
+- [ ] `crates/core/src/license_pubkey.rs` 新規: Ed25519 public key 埋込 (Step 3 生成 output より)
+- [ ] `crates/app/src/ui/settings.rs` に "Upgrade to Paid" section 追加
+  - "Buy Monthly ¥3,000/mo" / "Buy Yearly ¥30,000/yr" ボタン → `reqwest::blocking` で `/stripe/checkout-session` → browser open
+  - "Enter License Key" text field + Verify ボタン → `LicenseVerifier::verify` → `db.set_license` (新規)
+- [ ] `crates/core/src/db.rs` に license 保存 method 追加 (`profiles.license_key TEXT` column + `set_license` / `get_license` / `clear_license`)
+- [ ] Enterprise 用「お問い合わせ」ボタン (mailto:enterprise@alicelaw.net or web form URL open)
+- [ ] Free / Paid tier 切替 UX + Grace period 表示
+
+#### Phase S3 (次々 session、~2h scope)
+
+- [ ] Live mode 切替 (`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `RESEND_API_KEY` を live 版に差替)
+- [ ] Production `wrangler deploy` + custom domain (text-to-print.alicelaw.net) route 設定
+- [ ] Landing page (`checkout/success`, `checkout/cancel`) を Cloudflare Pages or extoria.co.jp に配置
+- [ ] Stripe Dashboard で live webhook endpoint 登録 → whsec_ を live secret に登録
+- [ ] 実 test card ではなく実 credit card で 1 件 subscribe → email 受信 → app verify e2e 確認
+
+**受入基準**: 実 Stripe live 課金で subscribe → Email 受信 → app で verify → Tier::Pro 有効化 → 課金停止で 3 day grace → Free rollback までの loop が完走
 
 ### P2-2: LoRA re-training flywheel 自動化
 
@@ -246,3 +278,4 @@ P2-1〜P2-5 + P2-7 完了後:
 |--|--|
 | 2026-08-07 | 初版作成 (Phase 5.7 完了時点、cargo test 207/207 pass) |
 | 2026-08-07 | legacy-saas/ 削除 + UI phase state machine test 追加 + CI wasm32 job 追加 + license.rs prod unwrap 1 件 refactor 完了 + P2-7 (datasets audit script) 追加 |
+| 2026-08-07 | **P2-1 Phase S1 完了** — CF Workers 側 Stripe scaffold (webhook + license issue + checkout + email) 実装、worker crate test 15 → 31 pass、docs/STRIPE_SETUP.md 新規 Phase S2 (app UI + verify wire) / S3 (production deploy) は次 session |

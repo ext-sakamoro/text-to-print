@@ -27,3 +27,24 @@ IP_HASH_SALT = "dev-salt-change-in-production"
 # desktop app; bump after real traffic data.
 PER_UUID_HOURLY = "10"
 PER_IP_HOURLY = "100"
+
+# ── Stripe integration (Phase S1) ───────────────────────────────────
+# Non-secret vars only. All 5 secrets below go through
+# `wrangler secret put NAME` after `wrangler login`. See
+# `docs/STRIPE_SETUP.md` for the full setup dance
+#
+#   STRIPE_SECRET_KEY         sk_test_... (Test) / sk_live_... (Live)
+#   STRIPE_WEBHOOK_SECRET     whsec_...  (from `stripe listen` or dashboard)
+#   LICENSE_SIGNING_KEY_HEX   64-char hex of Ed25519 secret (`gen-license-key`)
+#   RESEND_API_KEY            re_... (optional; if unset, email is logged only)
+#   PRICE_ID_PRO_MONTHLY      price_... (Pro monthly subscription)
+#   PRICE_ID_PRO_YEARLY       price_... (optional; Pro yearly subscription)
+#
+# Public / non-secret defaults — override per env by dropping in the
+# appropriate [env.production.vars] block once you have the domain
+
+# `Metadata/plate_no_light_1.png` 用 landing page が無くても 200 OK は返す
+# 想定 (静的 asset 追加は release blocker ではない)
+LICENSE_FROM_EMAIL = "no-reply@text-to-print.alicelaw.net"
+CHECKOUT_SUCCESS_URL = "https://text-to-print.alicelaw.net/checkout/success"
+CHECKOUT_CANCEL_URL = "https://text-to-print.alicelaw.net/checkout/cancel"
