@@ -20,7 +20,7 @@ pub fn show(ui: &mut Ui) {
 
     ui.label(format!("Version: v{} BETA", env!("CARGO_PKG_VERSION")));
     ui.colored_label(
-        egui::Color32::LIGHT_YELLOW,
+        ui.style().visuals.warn_fg_color,
         "BETA バージョンのため、text-to-print のリポジトリは Private となっています",
     );
     ui.add_space(8.0);

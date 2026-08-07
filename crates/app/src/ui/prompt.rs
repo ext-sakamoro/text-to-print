@@ -190,7 +190,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
     }
 
     if !state.can_generate() && !is_generating {
-        ui.colored_label(egui::Color32::YELLOW, "本日の生成上限に達しました");
+        let warn_color = ui.style().visuals.warn_fg_color;
+        ui.colored_label(warn_color, "本日の生成上限に達しました");
     }
 
     ui.add_space(8.0);
@@ -236,10 +237,11 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
                     ));
                 }
                 if let Some(safety) = &stats.safety_summary {
+                    let warn_color = ui.style().visuals.warn_fg_color;
                     let color = if safety.is_safe {
                         egui::Color32::GREEN
                     } else {
-                        egui::Color32::YELLOW
+                        warn_color
                     };
                     ui.colored_label(
                         color,
@@ -251,7 +253,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
                         ),
                     );
                     for msg in &safety.messages {
-                        ui.colored_label(egui::Color32::YELLOW, format!("  {msg}"));
+                        ui.colored_label(warn_color, format!("  {msg}"));
                     }
                 }
             }
@@ -288,7 +290,10 @@ fn show_model_download(ui: &mut Ui, state: &AppState) {
     let progress = state.model_progress.borrow().clone();
     match progress.status {
         text_to_print_llm::downloader::DownloadStatus::Downloading => {
-            ui.colored_label(egui::Color32::YELLOW, "LLM モデルをダウンロード中...");
+            // theme-adaptive warn color (light/dark 両テーマで readable、
+            // egui native YELLOW は light theme で contrast 不足)
+            let warn_color = ui.style().visuals.warn_fg_color;
+            ui.colored_label(warn_color, "LLM モデルをダウンロード中...");
             if let Some(total) = progress.total_bytes {
                 #[allow(clippy::cast_precision_loss)]
                 let pct = progress.downloaded_bytes as f32 / total as f32;

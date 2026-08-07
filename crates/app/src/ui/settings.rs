@@ -84,7 +84,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.colored_label(color, label);
         });
         ui.colored_label(
-            egui::Color32::LIGHT_YELLOW,
+            ui.style().visuals.warn_fg_color,
             "BETA バージョンのためプランを選択することができません",
         );
 
@@ -106,7 +106,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 ui.label("Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)");
             } else {
                 ui.colored_label(
-                    egui::Color32::LIGHT_YELLOW,
+                    ui.style().visuals.warn_fg_color,
                     "Pro subscription is coming in v0.2.0 (Beta では unavailable)",
                 );
                 ui.label(
@@ -140,7 +140,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             });
 
             if PAID_UI_ENABLED && !email_ok && !settings.checkout_email.is_empty() {
-                ui.colored_label(egui::Color32::YELLOW, "有効な email 形式で入力してください");
+                ui.colored_label(
+                    ui.style().visuals.warn_fg_color,
+                    "有効な email 形式で入力してください",
+                );
             }
             if let Some((msg, ok)) = &settings.checkout_message {
                 let color = if *ok {
@@ -273,7 +276,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         // to place the file if they have it
         if state.llm_config.model_choice.requires_manual_placement() {
             ui.colored_label(
-                egui::Color32::YELLOW,
+                ui.style().visuals.warn_fg_color,
                 format!(
                     "手動配置要: HF repo 非公開のため {} を models_dir に配置",
                     state.llm_config.model_choice.default_filename()

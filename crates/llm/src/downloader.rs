@@ -130,7 +130,11 @@ mod tests {
         // (Apple M3 iGPU 制約対策で 7B → 3B ダウンサイズ) enum 名は保持、
         // filename のみ 3B 版に変更
         let p = model_path(Path::new("/tmp/models"), ModelChoice::Qwen35_4B);
-        assert!(p.to_str().unwrap().ends_with("qwen2.5-3b-instruct-q4_k_m.gguf"));
+        assert!(
+            p.to_str()
+                .unwrap()
+                .ends_with("qwen2.5-3b-instruct-q4_k_m.gguf")
+        );
 
         let p2 = model_path(Path::new("/tmp/models"), ModelChoice::Gemma2_27B);
         assert!(p2.to_str().unwrap().ends_with("gemma-2-27b-it-q3_k_l.gguf"));

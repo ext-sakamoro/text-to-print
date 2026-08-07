@@ -212,7 +212,10 @@ impl eframe::App for App {
                     && info.has_update
                 {
                     ui.separator();
-                    ui.colored_label(egui::Color32::YELLOW, format!("v{} available", info.latest));
+                    ui.colored_label(
+                        ui.style().visuals.warn_fg_color,
+                        format!("v{} available", info.latest),
+                    );
                     if ui.small_button("Download").clicked() {
                         let _ = open::that(&info.download_url);
                     }
