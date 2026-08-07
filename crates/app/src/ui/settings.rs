@@ -151,10 +151,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.label(egui::RichText::new("Enterprise plan").strong());
             ui.horizontal(|ui| {
                 ui.label("複数ユーザー / 商用 / カスタム機能:");
-                if ui.button("問合わせ").clicked() {
-                    if let Err(e) = open::that(ENTERPRISE_MAILTO) {
-                        settings.checkout_message = Some((format!("メーラー起動失敗: {e}"), false));
-                    }
+                if ui.button("問合わせ").clicked()
+                    && let Err(e) = open::that(ENTERPRISE_MAILTO)
+                {
+                    settings.checkout_message = Some((format!("メーラー起動失敗: {e}"), false));
                 }
             });
 

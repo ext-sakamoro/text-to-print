@@ -33,7 +33,7 @@ impl SdfCache {
     }
 
     pub fn put(&mut self, sdf: CachedSdf) -> Result<()> {
-        let sdf_path = self.cache_dir.join(format!("{}.lol", &sdf.id));
+        let sdf_path = self.cache_dir.join(format!("{}.lol", sdf.id));
         std::fs::write(&sdf_path, &sdf.lol_source)?;
         self.index.insert(sdf.id.clone(), sdf);
         self.flush_index()?;
