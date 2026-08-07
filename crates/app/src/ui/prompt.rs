@@ -133,10 +133,16 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
 
     let limits = state.tier.limits();
     let usage = state.daily_usage();
-    ui.label(format!(
-        "本日の生成: {} / {} 回",
-        usage, limits.daily_generations
-    ));
+    if limits.daily_generations == u32::MAX {
+        // v0.1.0-beta.1: Free tier restriction 撤廃、'/ 4294967295' 表示
+        // は醜いので usage 件数のみ表示
+        ui.label(format!("本日の生成: {usage} 回 (β 制限なし)"));
+    } else {
+        ui.label(format!(
+            "本日の生成: {} / {} 回",
+            usage, limits.daily_generations
+        ));
+    }
 
     ui.add_space(4.0);
     ui.label("3D モデルの説明を入力 (Enter で生成 / Shift+Enter で改行):");

@@ -198,7 +198,13 @@ impl eframe::App for App {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let usage = self.state.daily_usage();
                     let limit = self.state.tier.limits().daily_generations;
-                    ui.label(format!("{:?} | {}/{}", self.state.tier, usage, limit));
+                    let label = if limit == u32::MAX {
+                        // v0.1.0-beta.1: 制限撤廃時は '4294967295' 表示を回避
+                        format!("{:?} | {} 回", self.state.tier, usage)
+                    } else {
+                        format!("{:?} | {}/{}", self.state.tier, usage, limit)
+                    };
+                    ui.label(label);
                 });
             });
         });

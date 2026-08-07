@@ -112,10 +112,15 @@ impl Tier {
     pub fn limits(self) -> TierLimits {
         match self {
             Self::Free => TierLimits {
-                daily_generations: 5,
-                can_download: false,
+                // v0.1.0-beta.1 (2026-08-07): Paid tier UI が grayed out で
+                // upgrade path が無い状態のため、Free の制限を全撤廃
+                // (daily=5 は user 遭遇済、can_download=false は 3MF 保存 block、
+                // max_quality=Preview は解像度低で見栄え悪化)
+                // 商用 (v1.0) 移行時に Paid tier 実装と併せて Preview 制限復活
+                daily_generations: u32::MAX,
+                can_download: true,
                 force_public: false,
-                max_quality: Quality::Preview,
+                max_quality: Quality::Ultra,
             },
             Self::General => TierLimits {
                 daily_generations: 30,
@@ -145,11 +150,13 @@ mod tests {
 
     #[test]
     fn free_tier_limits() {
+        // v0.1.0-beta.1 (2026-08-07): Free tier restriction 全撤廃
+        // (Paid tier UI grayed out で upgrade 不能な期間中の暫定措置)
         let l = Tier::Free.limits();
-        assert_eq!(l.daily_generations, 5);
-        assert!(!l.can_download);
+        assert_eq!(l.daily_generations, u32::MAX);
+        assert!(l.can_download);
         assert!(!l.force_public);
-        assert_eq!(l.max_quality, Quality::Preview);
+        assert_eq!(l.max_quality, Quality::Ultra);
     }
 
     #[test]
