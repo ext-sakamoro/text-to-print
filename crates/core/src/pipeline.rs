@@ -566,19 +566,79 @@ pub fn export_mesh_color4(
 pub fn extract_lol(llm_response: &str) -> Option<String> {
     // 1. ```lol ... ``` (canonical)
     if let Some(extracted) = extract_fenced(llm_response, "```lol") {
-        return Some(extracted);
+        return Some(balance_parens(&extracted));
     }
     // 2. ```rust / ```code / bare ``` (LLM が fence tag を省略/変更した場合)
     for fence in ["```rust", "```code", "```lol\n", "```"] {
         if let Some(extracted) = extract_fenced(llm_response, fence) {
-            return Some(extracted);
+            return Some(balance_parens(&extracted));
         }
     }
     // 3. JSON `{"code": "..."}` or `{"lol": "..."}` wrap
     if let Some(extracted) = extract_json_code(llm_response) {
-        return Some(extracted);
+        return Some(balance_parens(&extracted));
     }
     None
+}
+
+/// LLM 出力の paren balance 自動修復
+///
+/// Qwen 2.5 3B / 小型 LLM は nested paren の close 数を 1-2 個外す
+/// 実測傾向あり (2026-08-07 iGPU + 3B model で trailing `)` 過剰 fail)
+///
+/// 修復方針:
+/// - `)` 過剰 (close > open): 末尾の余分な `)` を strip
+/// - `(` 過剰 (open > close): 不足分の `)` を末尾に append
+/// - equal: 無変更
+///
+/// LOL DSL は string literal を持たないので naive count で十分
+/// LOL 文法違反自体は救えない (`translate(0 0 0 sphere(5))` のような
+/// comma 抜けは balance でも救えず、parser で reject)
+pub fn balance_parens(source: &str) -> String {
+    let trimmed = source.trim();
+    let open = trimmed.chars().filter(|c| *c == '(').count();
+    let close = trimmed.chars().filter(|c| *c == ')').count();
+
+    match open.cmp(&close) {
+        std::cmp::Ordering::Equal => trimmed.to_string(),
+        std::cmp::Ordering::Less => {
+            // close 過剰: 末尾から (close - open) 個の `)` を落とす
+            // 末尾 whitespace / 途中 `)` に挟まれた non-`)` は保持
+            let excess = close - open;
+            let mut removed = 0_usize;
+            let rescued: String = trimmed
+                .chars()
+                .rev()
+                .filter(|c| {
+                    if *c == ')' && removed < excess {
+                        removed += 1;
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
+            tracing::warn!(
+                excess_close = excess,
+                "balance_parens: stripped {} trailing ')' from LLM output",
+                excess
+            );
+            rescued
+        }
+        std::cmp::Ordering::Greater => {
+            // open 過剰: 末尾に (open - close) 個の `)` を追加
+            let missing = open - close;
+            tracing::warn!(
+                missing_close = missing,
+                "balance_parens: appended {} ')' to LLM output",
+                missing
+            );
+            format!("{trimmed}{}", ")".repeat(missing))
+        }
+    }
 }
 
 fn extract_fenced(text: &str, fence: &str) -> Option<String> {
@@ -652,6 +712,48 @@ mod tests {
     #[test]
     fn test_extract_lol_no_block() {
         assert_eq!(extract_lol("no code here"), None);
+    }
+
+    #[test]
+    fn balance_parens_equal_returns_input_trimmed() {
+        assert_eq!(balance_parens("sphere(1.0)"), "sphere(1.0)");
+        assert_eq!(balance_parens("  sphere(1.0)  "), "sphere(1.0)");
+    }
+
+    #[test]
+    fn balance_parens_strips_excess_trailing_close() {
+        // 2026-08-07 実測 Qwen 2.5 3B iGPU 出力に近い pattern (open=5, close=7)
+        let input =
+            "translate(0, 0, 2, subtract(box3d(50, 50, 4), round(2, cylinder(2.5, 20)))))";
+        let rescued = balance_parens(input);
+        let open = rescued.chars().filter(|c| *c == '(').count();
+        let close = rescued.chars().filter(|c| *c == ')').count();
+        assert_eq!(open, close, "rescued output must be balanced");
+        assert_eq!(open, 5);
+    }
+
+    #[test]
+    fn balance_parens_appends_missing_close() {
+        let input = "subtract(box3d(10, 10, 10), sphere(5)";
+        let rescued = balance_parens(input);
+        let open = rescued.chars().filter(|c| *c == '(').count();
+        let close = rescued.chars().filter(|c| *c == ')').count();
+        assert_eq!(open, close);
+        assert!(rescued.ends_with("))"));
+    }
+
+    #[test]
+    fn balance_parens_preserves_interior_close_when_stripping() {
+        // 末尾に )) )) が並んでいても excess 分だけ落とす
+        let input = "union(a(), b())"; // balanced
+        assert_eq!(balance_parens(input), "union(a(), b())");
+    }
+
+    #[test]
+    fn extract_lol_applies_balance_on_fenced_output() {
+        let response = "```lol\nsphere(1.0))\n```"; // 1 excess close
+        let extracted = extract_lol(response).unwrap();
+        assert_eq!(extracted, "sphere(1.0)");
     }
 
     #[test]

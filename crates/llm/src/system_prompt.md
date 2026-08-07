@@ -42,3 +42,4 @@ Reminders:
 - NEVER `{ ... }` syntax
 - LAST arg of transforms/modifiers = child shape
 - Use subtract for holes, NOT intersection
+- Match every `(` with exactly one `)` — count them before closing

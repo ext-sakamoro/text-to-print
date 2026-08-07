@@ -747,7 +747,8 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
             1,
             |response| {
                 let _ = tx_retry.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
-                let lol = pipeline::extract_lol(response).unwrap_or_else(|| response.to_string());
+                let lol = pipeline::extract_lol(response)
+                    .unwrap_or_else(|| pipeline::balance_parens(response));
                 pipeline::safety_check_lol(&lol)
             },
         )
@@ -773,7 +774,8 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                 );
                 let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Parse));
                 let parse_start = Instant::now();
-                let lol = pipeline::extract_lol(&response).unwrap_or_else(|| response.clone());
+                let lol = pipeline::extract_lol(&response)
+                    .unwrap_or_else(|| pipeline::balance_parens(&response));
                 tracing::info!(
                     extracted_len = lol.len(),
                     extracted_preview = %lol.chars().take(200).collect::<String>(),
