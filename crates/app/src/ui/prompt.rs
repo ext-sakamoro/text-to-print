@@ -186,6 +186,9 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
         state.prompt_focused_once = true;
     }
 
+    ui.add_space(4.0);
+    show_prompt_templates(ui, state, is_generating);
+
     ui.add_space(8.0);
 
     if ui
@@ -941,4 +944,96 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
             }
         }
     }
+}
+
+/// テンプレート prompt を prompt 入力欄に注入する UI section
+///
+/// 3 カテゴリ (実用品 / DIY / ゲーム・装飾) 各 4-5 template
+/// ボタンをクリックすると `state.prompt_input` に text を書き込む
+/// user は数値を修正して生成 生成中は disabled
+fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
+    ui.collapsing("テンプレート (クリックで prompt に挿入)", |ui| {
+        ui.add_enabled_ui(!is_generating, |ui| {
+            const CATEGORIES: &[(&str, &[(&str, &str)])] = &[
+                (
+                    "実用品",
+                    &[
+                        ("ネジ M6", "M6 の六角ボルト、頭径 10mm、頭厚 4mm、ネジ部長さ 25mm、ネジ径 6mm"),
+                        (
+                            "L字フック",
+                            "L字型のフック、長辺 60mm、短辺 40mm、幅 15mm、厚さ 5mm、両端に直径 5mm のネジ穴",
+                        ),
+                        ("ワッシャー", "ワッシャー、外径 20mm、内径 8mm、厚さ 2mm"),
+                        (
+                            "L字ブラケット",
+                            "L字ブラケット、辺 50mm × 50mm、幅 30mm、厚さ 4mm、両辺に直径 5mm のネジ穴を 2 つずつ",
+                        ),
+                        (
+                            "スペーサー",
+                            "円柱型スペーサー、外径 12mm、内径 4mm、高さ 15mm",
+                        ),
+                    ],
+                ),
+                (
+                    "DIY / インテリア",
+                    &[
+                        (
+                            "壁掛けフック",
+                            "壁掛け用フック、ベース板 40mm × 60mm × 5mm、フック部分 30mm 突き出し、ネジ穴 2 個 (直径 5mm)",
+                        ),
+                        (
+                            "取っ手 (ノブ)",
+                            "ドロワーノブ、ヘッド直径 30mm、高さ 20mm、ネジ穴 M4 深さ 12mm",
+                        ),
+                        (
+                            "スマホスタンド",
+                            "スマホスタンド、幅 80mm、奥行 60mm、高さ 40mm、傾斜角 65 度、ケーブル穴 直径 10mm",
+                        ),
+                        (
+                            "コースター",
+                            "円形コースター、直径 90mm、厚さ 4mm、縁 2mm 立ち上がり",
+                        ),
+                        (
+                            "植木鉢",
+                            "円柱型植木鉢、外径 80mm、高さ 100mm、壁厚 3mm、底に排水穴 5mm × 4 個",
+                        ),
+                    ],
+                ),
+                (
+                    "ゲーム / 装飾",
+                    &[
+                        (
+                            "椅子",
+                            "シンプルな椅子、座面 40mm × 40mm × 4mm、脚 4 本 (角柱 4mm × 4mm × 40mm)、背もたれ 40mm × 45mm × 4mm",
+                        ),
+                        (
+                            "テーブル",
+                            "四角いテーブル、天板 80mm × 60mm × 5mm、脚 4 本 (角柱 5mm × 5mm × 30mm)",
+                        ),
+                        ("本棚", "本棚、幅 60mm、高さ 80mm、奥行 20mm、棚板 3 枚、板厚 3mm"),
+                        (
+                            "剣",
+                            "ファンタジー風の剣、刃長 100mm、刃幅 15mm、刃厚 3mm、鍔 30mm × 8mm、柄 40mm × 10mm",
+                        ),
+                        (
+                            "宝箱",
+                            "宝箱、本体 60mm × 40mm × 30mm、蓋 60mm × 40mm × 15mm (アーチ状)、金具 4 個",
+                        ),
+                    ],
+                ),
+            ];
+            for (cat_name, items) in CATEGORIES {
+                ui.label(egui::RichText::new(*cat_name).strong());
+                ui.horizontal_wrapped(|ui| {
+                    for (label, template) in *items {
+                        if ui.button(*label).clicked() {
+                            state.prompt_input = (*template).to_string();
+                            state.prompt_focused_once = false;
+                        }
+                    }
+                });
+                ui.add_space(2.0);
+            }
+        });
+    });
 }

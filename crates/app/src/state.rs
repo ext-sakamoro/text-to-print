@@ -283,6 +283,48 @@ impl AppState {
                     .await;
             });
         }
+        // Sidecar warm-up: healthy 検知後に background で dummy 1-token
+        // request 送出 Metal shader compile + buffer alloc が初回のみ
+        // ~50-100s 走る問題を、user が prompt 打ち込む前に済ませておく
+        // fire-and-forget、失敗は log のみ (実 request 時に retry される)
+        {
+            let mut sidecar_rx_for_warmup = sidecar_rx.clone();
+            let endpoint = llm_config.endpoint.clone();
+            let model_id = llm_config.model_choice.model_id().to_string();
+            runtime.spawn(async move {
+                // Running になるまで待つ
+                loop {
+                    if sidecar_rx_for_warmup.borrow().is_running() {
+                        break;
+                    }
+                    if sidecar_rx_for_warmup.changed().await.is_err() {
+                        return;
+                    }
+                }
+                tracing::info!("sidecar warm-up starting (background dummy request)");
+                let started = std::time::Instant::now();
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(300))
+                    .build()
+                    .ok();
+                if let Some(client) = client {
+                    let body = serde_json::json!({
+                        "model": model_id,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": 1,
+                        "temperature": 0.7,
+                    });
+                    match client.post(&endpoint).json(&body).send().await {
+                        Ok(resp) => tracing::info!(
+                            elapsed_ms = started.elapsed().as_millis() as u64,
+                            status = %resp.status(),
+                            "sidecar warm-up complete"
+                        ),
+                        Err(e) => tracing::warn!("sidecar warm-up failed: {e}"),
+                    }
+                }
+            });
+        }
 
         // Stage 5: real share upload sweep — retry any queued payloads
         // from prior sessions Delayed 5s to let the sidecar + UI settle
