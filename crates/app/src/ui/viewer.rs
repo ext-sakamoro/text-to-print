@@ -39,8 +39,7 @@ impl SdfViewer {
                 {
                     self.camera.target = center;
                     // +Z 方向から見下ろす (front view)
-                    self.camera.position =
-                        glam::Vec3::new(center.x, center.y, center.z + distance);
+                    self.camera.position = glam::Vec3::new(center.x, center.y, center.z + distance);
                     tracing::info!(
                         camera_pos = ?self.camera.position,
                         camera_target = ?self.camera.target,

@@ -723,8 +723,7 @@ mod tests {
     #[test]
     fn balance_parens_strips_excess_trailing_close() {
         // 2026-08-07 実測 Qwen 2.5 3B iGPU 出力に近い pattern (open=5, close=7)
-        let input =
-            "translate(0, 0, 2, subtract(box3d(50, 50, 4), round(2, cylinder(2.5, 20)))))";
+        let input = "translate(0, 0, 2, subtract(box3d(50, 50, 4), round(2, cylinder(2.5, 20)))))";
         let rescued = balance_parens(input);
         let open = rescued.chars().filter(|c| *c == '(').count();
         let close = rescued.chars().filter(|c| *c == ')').count();

@@ -35,6 +35,14 @@ pub enum SafetyViolationKind {
     BeamOverloaded,
     /// Overhang ratio exceeds the 30 % informal budget
     OverhangExcessive,
+    /// LOL DSL failed to parse (Stage 8 syntax-fix retry hook)
+    ///
+    /// `safety_check_lol` surfaces `"LOL parse error: ..."` when the
+    /// alice-lol runtime parser rejects the LLM output When Grammar OFF
+    /// (default in v0.1.0-beta.1 for iGPU performance), this variant
+    /// enables the retry loop to feed a concrete syntax reminder back to
+    /// the LLM instead of `break`-ing out with the malformed output
+    LolParseError,
 }
 
 impl SafetyViolationKind {
@@ -49,6 +57,7 @@ impl SafetyViolationKind {
             Self::ThermalNearGlassTransition => "operating temp near Tg",
             Self::BeamOverloaded => "beam bending overload",
             Self::OverhangExcessive => "overhang exceeds budget",
+            Self::LolParseError => "LOL DSL syntax error",
         }
     }
 
@@ -78,6 +87,13 @@ impl SafetyViolationKind {
                 "Reduce steep overhangs (>45°) or add chamfers / fillets so support material is \
                  minimised — target < 30 % overhang area"
             }
+            Self::LolParseError => {
+                "The previous LOL DSL failed to parse Common mistakes to avoid:\n\
+                 - rotate takes THREE angles then child: rotate(0, 0, 65, cylinder(...)) NOT rotate(65, ...)\n\
+                 - translate takes THREE coords then child: translate(x, y, z, child) — always 4 args\n\
+                 - NO operators: use subtract(a, b) NOT a / b, NOT a - b, NOT a + b\n\
+                 - Match every ( with exactly one ) — count them before closing"
+            }
         }
     }
 
@@ -89,6 +105,13 @@ impl SafetyViolationKind {
     #[must_use]
     pub fn from_message(msg: &str) -> Option<Self> {
         let lower = msg.to_lowercase();
+        // LOL parse error precedes safety patterns so the syntax-fix retry
+        // engages before any thermal / warp classifier can steal the match
+        // (safety_check_lol short-circuits on parse failure, so `lol parse
+        // error: ...` is the sole message when this fires)
+        if lower.starts_with("lol parse error") {
+            return Some(Self::LolParseError);
+        }
         if lower.contains("critical") && lower.contains("warp") {
             Some(Self::WarpCritical)
         } else if lower.contains("high") && lower.contains("warp") {
@@ -225,9 +248,28 @@ mod tests {
             SafetyViolationKind::ThermalNearGlassTransition,
             SafetyViolationKind::BeamOverloaded,
             SafetyViolationKind::OverhangExcessive,
+            SafetyViolationKind::LolParseError,
         ] {
             assert!(!k.label().is_empty());
             assert!(!k.fix_directive().is_empty());
         }
+    }
+
+    #[test]
+    fn lol_parse_error_message_classified() {
+        let msg = "LOL parse error: expected number, got Some(Ident(\"translate\"))".to_string();
+        assert_eq!(
+            SafetyViolationKind::from_message(&msg),
+            Some(SafetyViolationKind::LolParseError)
+        );
+    }
+
+    #[test]
+    fn lol_parse_error_fix_directive_lists_common_mistakes() {
+        let out = fix_prompt_for_violations(&[SafetyViolationKind::LolParseError]);
+        assert!(out.contains("rotate takes THREE angles"));
+        assert!(out.contains("translate takes THREE coords"));
+        assert!(out.contains("NO operators"));
+        assert!(out.contains("subtract(a, b)"));
     }
 }

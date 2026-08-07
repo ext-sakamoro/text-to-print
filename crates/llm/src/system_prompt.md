@@ -43,3 +43,6 @@ Reminders:
 - LAST arg of transforms/modifiers = child shape
 - Use subtract for holes, NOT intersection
 - Match every `(` with exactly one `)` — count them before closing
+- rotate takes THREE angles then child: `rotate(0, 0, 65, cylinder(...))` NOT `rotate(65, ...)`
+- translate takes THREE coords then child: `translate(x, y, z, child)` — always 4 args
+- NO operators: use `subtract(a, b)` NOT `a / b`, NOT `a - b`, NOT `a + b`
