@@ -265,8 +265,9 @@ impl Database {
     }
 
     /// Fetch the persisted `backend_kind` slug for the given profile
-    /// Missing / unknown rows fall back to `"Sidecar"` so pre-3-C.6 DBs
-    /// read as the pre-existing behaviour
+    /// Missing / unknown rows fall back to `"Embedded"` (v0.1.0-beta.1
+    /// default 変更、alice-llm-server binary 不要で OOB 起動可能な方) 詳細
+    /// は migrate() の該当 ALTER TABLE コメント参照
     pub fn get_backend_kind(&self, profile_id: &str) -> Result<String> {
         let value: String = self
             .conn
@@ -275,7 +276,7 @@ impl Database {
                 [profile_id],
                 |row| row.get(0),
             )
-            .unwrap_or_else(|_| "Sidecar".to_string());
+            .unwrap_or_else(|_| "Embedded".to_string());
         Ok(value)
     }
 
@@ -431,10 +432,12 @@ mod tests {
     }
 
     #[test]
-    fn backend_kind_defaults_to_sidecar() {
+    fn backend_kind_defaults_to_embedded() {
+        // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
+        // alice-llm-server binary 別途 install 不要の OOB 起動 UX 優先
         let db = test_db();
         db.get_or_create_profile("user1").unwrap();
-        assert_eq!(db.get_backend_kind("user1").unwrap(), "Sidecar");
+        assert_eq!(db.get_backend_kind("user1").unwrap(), "Embedded");
     }
 
     #[test]
@@ -448,9 +451,11 @@ mod tests {
     }
 
     #[test]
-    fn backend_kind_unknown_profile_falls_back_to_sidecar() {
+    fn backend_kind_unknown_profile_falls_back_to_embedded() {
+        // v0.1.0-beta.1: default 変更に追随、`get_backend_kind` の
+        // `unwrap_or_else` fallback も Embedded に揃えた
         let db = test_db();
-        assert_eq!(db.get_backend_kind("nonexistent").unwrap(), "Sidecar");
+        assert_eq!(db.get_backend_kind("nonexistent").unwrap(), "Embedded");
     }
 
     #[test]

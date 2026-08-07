@@ -357,14 +357,21 @@ pub async fn run_auto_spawn(
 /// preferred から up to `max_attempts` 個の port を試して最初に bind できた
 /// ものを返す 全部塞がっていたら None (呼び出し側で preferred fallback)
 ///
-/// 実装: `std::net::TcpListener` で 127.0.0.1:port を bind 試行 成功したら
-/// 即 close して port 番号を返す (bind から close までの間に他 process が
-/// grab する TOCTOU race は理論的に残るが、port scan の一般的な pattern
-/// として許容)
+/// 実装 (2026-08-07 修正): `TcpListener::bind` を **`0.0.0.0`** で試行
+/// (all-interfaces、sidecar と同じ bind address) 127.0.0.1 だけで判定
+/// すると、他 process が `0.0.0.0` or `[::]` wildcard で LISTEN 中の場合
+/// (例: `python -m http.server` が port 8000 を IPv6 wildcard で占有) に
+/// FREE と誤判定 → sidecar が同 port を bind 試行して panic する事案
+/// (2026-08-07、user 環境 Python HTTP server との conflict) を修正
+///
+/// TOCTOU race (bind から close 〜 sidecar spawn の間で他 process が
+/// grab) は理論的に残るが、port scan の一般的 pattern として許容
 pub fn find_free_port_starting_at(preferred: u16, max_attempts: u16) -> Option<u16> {
     for i in 0..max_attempts {
         let candidate = preferred.checked_add(i)?;
-        if std::net::TcpListener::bind(("127.0.0.1", candidate)).is_ok() {
+        // 0.0.0.0 で bind 試行 sidecar (alice-llm-server) の実 bind address
+        // と一致させることで cross-address conflict も検出できる
+        if std::net::TcpListener::bind(("0.0.0.0", candidate)).is_ok() {
             return Some(candidate);
         }
     }
