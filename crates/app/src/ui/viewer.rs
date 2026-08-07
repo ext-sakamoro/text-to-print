@@ -31,6 +31,22 @@ impl SdfViewer {
             Ok(wgsl) => {
                 self.pending_wgsl = Some(wgsl);
                 self.has_sdf = true;
+                // Auto-frame camera: LOL → SdfNode → tight AABB →
+                // camera を全体が入る距離に配置 (元は camera (0,0,5)
+                // hardcode で 20mm cube に対して内部視点 = 見えない)
+                if let Ok(sdf) = alice_bamboo::lol_to_sdf(lol_source) {
+                    if let Some((center, distance)) = auto_frame_from_sdf(&sdf, self.camera.fov) {
+                        self.camera.target = center;
+                        // +Z 方向から見下ろす (front view)
+                        self.camera.position =
+                            glam::Vec3::new(center.x, center.y, center.z + distance);
+                        tracing::info!(
+                            camera_pos = ?self.camera.position,
+                            camera_target = ?self.camera.target,
+                            "camera auto-framed to LOL AABB"
+                        );
+                    }
+                }
                 tracing::info!("WGSL shader generated for SDF preview");
             }
             Err(e) => {
@@ -42,6 +58,32 @@ impl SdfViewer {
             }
         }
     }
+}
+
+/// SDF AABB を計算して camera 配置に必要な (center, distance) を返す
+///
+/// `alice_bamboo::export_to_3mf` と同じ `TightAabbConfig` を使うため、
+/// pipeline が MeshRepair でカバーする境界と一致 return `None` は
+/// AABB 空 / 計算失敗を意味し、caller は camera を触らない
+fn auto_frame_from_sdf(sdf: &alice_bamboo::SdfNode, fov: f32) -> Option<(glam::Vec3, f32)> {
+    // export pipeline (crates/core/src/pipeline.rs::export_3mf_via_bamboo)
+    // と同 config を使い、preview / mesh 出力の一貫性を保つ
+    let cfg = alice_sdf::tight_aabb::TightAabbConfig {
+        initial_half_size: 500.0,
+        bisection_iterations: 16,
+        coarse_subdivisions: 8,
+    };
+    let aabb = alice_sdf::tight_aabb::compute_tight_aabb_with_config(sdf, &cfg);
+    let center = (aabb.min + aabb.max) * 0.5;
+    let extent = aabb.max - aabb.min;
+    let max_dim = extent.x.max(extent.y).max(extent.z);
+    if !max_dim.is_finite() || max_dim <= 0.0 {
+        return None;
+    }
+    // fov 半角の tan × distance = 視野の半分寸法
+    // margin 1.4x で全体が視野に入る + 余白
+    let distance = (max_dim * 1.4) / (fov * 0.5).tan();
+    Some((center, distance))
 }
 
 pub fn show(ui: &mut Ui, state: &AppState, viewer: &mut SdfViewer) {

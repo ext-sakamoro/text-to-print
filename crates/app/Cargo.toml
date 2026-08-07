@@ -72,6 +72,10 @@ chrono = { workspace = true }
 open = "5"
 alice-view = { workspace = true }
 alice-bamboo = { workspace = true }
+# viewer.rs::auto_frame_from_sdf で tight_aabb::compute_tight_aabb_with_config
+# を直呼びして camera を LOL の AABB に合わせる用途 (alice-bamboo 経由
+# だと re-export されていない tight_aabb module に直接アクセス要)
+alice-sdf = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 sys-locale = "0.3"
 reqwest = { version = "0.12", features = ["json"] }

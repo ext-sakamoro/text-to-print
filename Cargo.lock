@@ -6380,6 +6380,7 @@ name = "text-to-print"
 version = "0.1.0"
 dependencies = [
  "alice-bamboo",
+ "alice-sdf",
  "alice-view",
  "anyhow",
  "bytemuck",
