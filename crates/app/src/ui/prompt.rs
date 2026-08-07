@@ -753,9 +753,24 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
 
         match result {
             Ok((response, retry_count)) => {
+                // v0.1.0-beta.1: LLM 出力を diag log 化 (extract_lol が
+                // 失敗した時に何を出力していたか特定するため、head 500 char
+                // だけ tracing に流す 個人情報は含まないが、prompt から
+                // 逆算可能なので shared LoRA training 対象からは除外)
+                let preview: String = response.chars().take(500).collect();
+                tracing::info!(
+                    total_len = response.len(),
+                    preview = %preview,
+                    "LLM raw response (first 500 chars)"
+                );
                 let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Parse));
                 let parse_start = Instant::now();
                 let lol = pipeline::extract_lol(&response).unwrap_or_else(|| response.clone());
+                tracing::info!(
+                    extracted_len = lol.len(),
+                    extracted_preview = %lol.chars().take(200).collect::<String>(),
+                    "LOL extracted from LLM response"
+                );
                 let _ = tx.send(GenerationMessage::PhaseDone(
                     GenerationPhase::Parse,
                     parse_start.elapsed(),

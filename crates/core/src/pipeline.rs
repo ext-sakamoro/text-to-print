@@ -555,11 +555,59 @@ pub fn export_mesh_color4(
 }
 
 /// LOL ソースからコードブロックを抽出
+///
+/// v0.1.0-beta.1 (2026-08-07): grammar constrained decoding OFF 時、
+/// LLM は自由 format で返すため fence tag が多様 (`lol` / `rust` / `code`
+/// / 無し / json wrap) 対応:
+///   1. ` ```lol ` block (system prompt が要求する canonical form)
+///   2. ` ```rust ` / ` ``` ` (fence tag なし) block
+///   3. JSON `{"code": "..."}` wrap の抽出
+///   4. どれも無ければ raw を返し、caller の `parse_lol` に判定を委ねる
 pub fn extract_lol(llm_response: &str) -> Option<String> {
-    let start = llm_response.find("```lol")?;
-    let code_start = llm_response[start..].find('\n')? + start + 1;
-    let end = llm_response[code_start..].find("```")? + code_start;
-    Some(llm_response[code_start..end].trim().to_string())
+    // 1. ```lol ... ``` (canonical)
+    if let Some(extracted) = extract_fenced(llm_response, "```lol") {
+        return Some(extracted);
+    }
+    // 2. ```rust / ```code / bare ``` (LLM が fence tag を省略/変更した場合)
+    for fence in ["```rust", "```code", "```lol\n", "```"] {
+        if let Some(extracted) = extract_fenced(llm_response, fence) {
+            return Some(extracted);
+        }
+    }
+    // 3. JSON `{"code": "..."}` or `{"lol": "..."}` wrap
+    if let Some(extracted) = extract_json_code(llm_response) {
+        return Some(extracted);
+    }
+    None
+}
+
+fn extract_fenced(text: &str, fence: &str) -> Option<String> {
+    let start = text.find(fence)?;
+    let code_start = text[start + fence.len()..]
+        .find('\n')
+        .map(|i| i + start + fence.len() + 1)?;
+    let end = text[code_start..].find("```")? + code_start;
+    Some(text[code_start..end].trim().to_string())
+}
+
+/// JSON `{"code": "..."}` / `{"lol": "..."}` から LOL DSL を抽出
+///
+/// Qwen 3B が Text-to-CAD prompt に対して JSON wrap で返してくる pattern
+/// (system prompt に反するが実測で発生) の救済
+fn extract_json_code(text: &str) -> Option<String> {
+    let brace_start = text.find('{')?;
+    let brace_end = text.rfind('}')?;
+    if brace_end <= brace_start {
+        return None;
+    }
+    let json_slice = &text[brace_start..=brace_end];
+    let value: serde_json::Value = serde_json::from_str(json_slice).ok()?;
+    for key in ["code", "lol", "dsl", "output", "result"] {
+        if let Some(v) = value.get(key).and_then(|v| v.as_str()) {
+            return Some(v.trim().to_string());
+        }
+    }
+    None
 }
 
 /// LOL → WGSL シェーダー生成（SDF プレビュー用）
