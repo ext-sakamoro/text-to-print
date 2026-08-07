@@ -114,7 +114,10 @@ impl Default for SidecarConfig {
             port: 8000,
             hybrid: false,
             health_poll_interval: Duration::from_millis(500),
-            health_timeout: Duration::from_secs(60),
+            // 300s (5 min) — first-time boot needs to page in the ~4.7 GB
+            // GGUF via mmap and finish tokenizer parse; 60s was too tight
+            // on slow disks and left users with only the timeout message
+            health_timeout: Duration::from_secs(300),
         }
     }
 }
@@ -132,15 +135,31 @@ impl SidecarConfig {
     }
 }
 
+/// Rolling buffer of the child's most recent stderr lines Captured for
+/// error diagnostics — surfaced when the sidecar dies early or fails
+/// its health check so users see the actual reason instead of the
+/// generic timeout
+type StderrTail = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<String>>>;
+
+const STDERR_TAIL_MAX_LINES: usize = 40;
+
 /// 起動中の sidecar プロセス。Drop 時に kill される
 #[derive(Debug)]
 pub struct SidecarProcess {
     child: Child,
     config: SidecarConfig,
+    /// Keep the tail alive alongside the child so operators can inspect
+    /// via [`Self::recent_stderr`] after the sidecar becomes healthy
+    stderr_tail: StderrTail,
 }
 
 impl SidecarProcess {
     /// sidecar を起動し、`/health` が応答するまで待つ
+    ///
+    /// stderr は piped で取得し、直近 [`STDERR_TAIL_MAX_LINES`] 行を保持
+    /// health check timeout や early exit 時にこのバッファを error msg に
+    /// 含めて surface する 親コンソールにも `[sidecar]` prefix 付きで
+    /// echo するので tracing subscriber と併せて cross-reference 可能
     pub async fn spawn(config: SidecarConfig) -> Result<Self> {
         let bin = resolve_bin_path(&config);
 
@@ -159,7 +178,11 @@ impl SidecarProcess {
         if config.hybrid {
             cmd.arg("--hybrid");
         }
-        // 子プロセスの stdout/stderr は継承 (デバッグ用ログを親コンソールへ)
+        // stdout は継承 (少量 log)、stderr は piped で capture して
+        // 直近 STDERR_TAIL_MAX_LINES 行を保持 早期 exit / health timeout
+        // 時にこれを error msg に含めることで生 error を surface できる
+        cmd.stdout(std::process::Stdio::inherit());
+        cmd.stderr(std::process::Stdio::piped());
         cmd.kill_on_drop(true);
 
         info!(
@@ -170,16 +193,67 @@ impl SidecarProcess {
             "spawning alice-llm-server sidecar"
         );
 
-        let child = cmd
+        let mut child = cmd
             .spawn()
             .with_context(|| format!("failed to spawn sidecar binary: {}", bin.display()))?;
 
-        let sidecar = Self { child, config };
+        let stderr_tail: StderrTail = std::sync::Arc::new(std::sync::Mutex::new(
+            std::collections::VecDeque::with_capacity(STDERR_TAIL_MAX_LINES),
+        ));
+
+        if let Some(stderr) = child.stderr.take() {
+            let tail = stderr_tail.clone();
+            tokio::spawn(async move {
+                use tokio::io::{AsyncBufReadExt, BufReader};
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    // Mirror to parent stderr with prefix so terminal
+                    // debuggers see it in real time (tracing subscriber
+                    // + parent shell both work)
+                    eprintln!("[sidecar] {line}");
+                    if let Ok(mut buf) = tail.lock() {
+                        if buf.len() >= STDERR_TAIL_MAX_LINES {
+                            buf.pop_front();
+                        }
+                        buf.push_back(line);
+                    }
+                }
+            });
+        }
+
+        let mut sidecar = Self {
+            child,
+            config,
+            stderr_tail,
+        };
         sidecar.wait_healthy().await?;
         Ok(sidecar)
     }
 
-    async fn wait_healthy(&self) -> Result<()> {
+    /// Snapshot of the most recent stderr lines (up to
+    /// [`STDERR_TAIL_MAX_LINES`]) — useful for surfacing sidecar
+    /// failures to the UI without keeping a live subscriber
+    pub fn recent_stderr(&self) -> Vec<String> {
+        self.stderr_tail
+            .lock()
+            .map(|buf| buf.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn stderr_snapshot_for_error(&self) -> String {
+        let lines = self.recent_stderr();
+        if lines.is_empty() {
+            "(sidecar produced no stderr output)".to_string()
+        } else {
+            format!(
+                "--- sidecar stderr (last {}) ---\n{}",
+                lines.len(),
+                lines.join("\n")
+            )
+        }
+    }
+
+    async fn wait_healthy(&mut self) -> Result<()> {
         let deadline = tokio::time::Instant::now() + self.config.health_timeout;
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))
@@ -187,10 +261,20 @@ impl SidecarProcess {
         let url = self.config.health_endpoint();
 
         loop {
+            // Detect early exit — surface the actual exit status + stderr
+            // instead of waiting the full timeout for a dead process
+            if let Ok(Some(status)) = self.child.try_wait() {
+                bail!(
+                    "sidecar exited before becoming healthy (status: {})\n{}",
+                    status,
+                    self.stderr_snapshot_for_error()
+                );
+            }
             if tokio::time::Instant::now() >= deadline {
                 bail!(
-                    "sidecar failed to become healthy within {:?}",
-                    self.config.health_timeout
+                    "sidecar failed to become healthy within {:?}\n{}",
+                    self.config.health_timeout,
+                    self.stderr_snapshot_for_error()
                 );
             }
             match client.get(&url).send().await {
