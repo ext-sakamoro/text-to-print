@@ -1,6 +1,9 @@
 //! Model 選択 (`alice-llm-server` sidecar 対象モデル)
 //!
-//! - **Qwen 3.5-4B Q4_K_M** (~2.4GB、推奨、Mac/Windows/Linux 全対応)
+//! - **Qwen 2.5-3B-Instruct Q4_K_M** (~2 GB、推奨、Mac/Windows/Linux 全対応)
+//!   v0.1.0-beta.1 (2026-08-07): Qwen 3.5-4B (公式未 publish) の substitute
+//!   として 7B → 3B にダウンサイズ Apple M3 iGPU (limited memory) での
+//!   prompt processing latency を軽減 (10-15 分 → 数十秒 target)
 //! - **Gemma 2 27B Q3_K_L** (~14GB、GPU 12GB+ or RAM 24GB+ 推奨、Bonsai 実
 //!   PrismML fork が publish 済まで Gemma family 代替として提供)
 
@@ -55,7 +58,9 @@ impl ModelChoice {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Qwen35_4B => "Qwen 3.5-4B (Q4_K_M, ~2.4GB)",
+            // 2026-08-07 β: 7B → 3B に substitute (Qwen35_4B enum 名は
+            // DB persisted なので保持、実 model のみ差替)
+            Self::Qwen35_4B => "Qwen 2.5-3B-Instruct (Q4_K_M, ~2 GB)",
             Self::Gemma2_27B => "Gemma 2 27B (Q3_K_L, ~14GB)",
             Self::Bonsai27B => "Bonsai 27B (Q1_0, ~7GB, manual)",
         }
@@ -65,7 +70,10 @@ impl ModelChoice {
     #[must_use]
     pub const fn default_filename(self) -> &'static str {
         match self {
-            Self::Qwen35_4B => "qwen3.5-4b-q4_k_m.gguf",
+            // 2026-08-07 β: filename も 3B 版に変更 (7B の orphan file は
+            // ~/Library/Application Support/net.alicelaw.text-to-print/models/
+            // qwen3.5-4b-q4_k_m.gguf に残るので手動削除推奨、~5 GB 空き回復)
+            Self::Qwen35_4B => "qwen2.5-3b-instruct-q4_k_m.gguf",
             Self::Gemma2_27B => "gemma-2-27b-it-q3_k_l.gguf",
             Self::Bonsai27B => "bonsai-27b-q1_0.gguf",
         }
@@ -88,14 +96,14 @@ impl ModelChoice {
     pub const fn default_hf_ref(self) -> (&'static str, &'static str) {
         match self {
             Self::Qwen35_4B => (
-                // 2026-08-07: Qwen 公式 repo (Qwen/Qwen2.5-7B-Instruct-GGUF) の
-                // q4_k_m は 2 分割配布 (00001-of-00002 / 00002-of-00002) のみで
-                // 単一 file がなく現行 downloader が 404 で停止していた
-                // bartowski 版は同 model を single file (4.68 GB) で提供、CDN
-                // 200 OK 確認済 downloader 側の split-merge 対応を入れるまで
-                // こちらを使用
-                "bartowski/Qwen2.5-7B-Instruct-GGUF",
-                "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+                // 2026-08-07 β: 7B → 3B ダウンサイズ Apple M3 iGPU で 7B
+                // Q4_K_M + LOL_GBNF grammar constrained decoding は prompt
+                // processing に 10 分以上かかる事案 (user 実測 9 分で 0%)
+                // 3B は同じ Qwen 官方 repo で single file (~2 GB) 提供、
+                // prompt processing 数十秒 target Qwen 3.5-4B が公式 publish
+                // 済次第再検討 (enum 名 Qwen35_4B は DB persisted なので保持)
+                "Qwen/Qwen2.5-3B-Instruct-GGUF",
+                "qwen2.5-3b-instruct-q4_k_m.gguf",
             ),
             Self::Gemma2_27B => (
                 "bartowski/gemma-2-27b-it-GGUF",
