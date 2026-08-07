@@ -2,6 +2,12 @@
 
 text-to-print の release automation 手順 (Stage 10 T10.2 + T10.3 対応)
 
+## リリースまでの残タスク
+
+v0.1.0 β release / v0.1.0 GA / v1.0.0 商用 それぞれの受入基準と残タスクは **[`../ROADMAP.md`](../ROADMAP.md)** に集約 本 doc はリリース automation の実行手順 (secrets / signing / tag push) に集中する
+
+release tag を切る前に ROADMAP.md 該当 milestone (v0.1.0 β / v0.1.0 GA / v1.0.0) の受入基準が全て pass しているか確認する
+
 `.github/workflows/release.yml` は `v*` tag push でトリガーされ、以下を実行する:
 
 1. 4 target ビルド (aarch64/x86_64 macOS, x86_64 Linux, x86_64 Windows)

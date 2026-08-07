@@ -137,6 +137,9 @@ text-to-print/
 Mac mini + Cloudflare Tunnel + Supabase + Stripe Now refactoring toward a
 single-binary desktop app with embedded ALICE-LLM
 
+Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
+commercial release are in [`ROADMAP.md`](ROADMAP.md)
+
 Recent changes:
 - 2026-07-29: renamed `3dvbgaran` → `text-to-print` SaaS layer moved to
   `legacy-saas/` Standalone-first roadmap
