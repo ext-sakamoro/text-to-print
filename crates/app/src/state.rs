@@ -193,7 +193,9 @@ impl AppState {
             &db.get_execution_mode(&profile_id)
                 .unwrap_or_else(|_| "Cpu".to_string()),
         );
-        let enforce_lol_grammar = db.get_enforce_lol_grammar(&profile_id).unwrap_or(true);
+        // v0.1.0-beta.1 (2026-08-07): default を true → false に変更
+        // (詳細は db.rs::get_enforce_lol_grammar コメント参照)
+        let enforce_lol_grammar = db.get_enforce_lol_grammar(&profile_id).unwrap_or(false);
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
 

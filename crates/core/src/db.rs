@@ -129,11 +129,16 @@ impl Database {
             [],
         );
         // Stage 3-C.14: `enforce_lol_grammar` gates the LOL GBNF being
-        // sent along with every generation request Default `1` (on) so
-        // out-of-the-box output is guaranteed to be parseable Users can
-        // toggle it off in Settings when debugging free-form output
+        // sent along with every generation request
+        //
+        // v0.1.0-beta.1 (2026-08-07): default を `1` → `0` に変更
+        // alice-llm-server の grammar constrained decoding が Apple M3
+        // iGPU + 3B model でも 20 token / 60s 以上と実用不能 (user 実測)
+        // Grammar OFF なら LLM 自由出力 + parse 失敗時 retry loop で救済
+        // Users can toggle it back on in Settings when sidecar-side が
+        // 高速化されたら on default に戻す
         let _ = self.conn.execute(
-            "ALTER TABLE profiles ADD COLUMN enforce_lol_grammar INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE profiles ADD COLUMN enforce_lol_grammar INTEGER NOT NULL DEFAULT 0",
             [],
         );
         Ok(())
@@ -313,9 +318,12 @@ impl Database {
         Ok(())
     }
 
-    /// Stage 3-C.14: fetch the LOL GBNF enforcement toggle Missing rows
-    /// return `true` so new profiles get grammar-constrained output by
-    /// default (the LOL DSL grammar is what alice-lol expects downstream)
+    /// Stage 3-C.14: fetch the LOL GBNF enforcement toggle
+    ///
+    /// v0.1.0-beta.1 (2026-08-07): default を `true` → `false` に変更
+    /// alice-llm-server の grammar constrained decoding が Apple M3 iGPU
+    /// で 20 token / 60s 以上と実用不能な遅さ (user 実測)
+    /// grammar OFF なら LLM 自由出力 + parse 失敗時 retry loop で救済
     pub fn get_enforce_lol_grammar(&self, profile_id: &str) -> Result<bool> {
         let value: i64 = self
             .conn
@@ -324,7 +332,7 @@ impl Database {
                 [profile_id],
                 |row| row.get(0),
             )
-            .unwrap_or(1);
+            .unwrap_or(0);
         Ok(value != 0)
     }
 
@@ -482,10 +490,13 @@ mod tests {
     }
 
     #[test]
-    fn enforce_lol_grammar_defaults_to_true() {
+    fn enforce_lol_grammar_defaults_to_false() {
+        // v0.1.0-beta.1 (2026-08-07): default を true → false に変更
+        // (alice-llm-server grammar constrained decoding が iGPU で実用不能な
+        // 遅さのため、free-form + retry loop 救済で切替)
         let db = test_db();
         db.get_or_create_profile("user1").unwrap();
-        assert!(db.get_enforce_lol_grammar("user1").unwrap());
+        assert!(!db.get_enforce_lol_grammar("user1").unwrap());
     }
 
     #[test]
@@ -499,9 +510,10 @@ mod tests {
     }
 
     #[test]
-    fn enforce_lol_grammar_unknown_profile_returns_true() {
+    fn enforce_lol_grammar_unknown_profile_returns_false() {
+        // v0.1.0-beta.1: default 変更に追随
         let db = test_db();
-        assert!(db.get_enforce_lol_grammar("nonexistent").unwrap());
+        assert!(!db.get_enforce_lol_grammar("nonexistent").unwrap());
     }
 
     #[test]
