@@ -180,10 +180,19 @@ pub async fn generate_with_grammar(
         model = %model_id,
         endpoint = %config.endpoint,
         grammar_set = grammar.is_some(),
-        "LLM inference"
+        max_tokens = config.max_tokens,
+        temperature = config.temperature,
+        system_prompt_len = system_prompt.len(),
+        user_prompt_len = user_prompt.len(),
+        "LLM inference start"
     );
 
-    let client = reqwest::Client::new();
+    // 180s HTTP timeout: alice-llm-server が生 hang しても 3 分で
+    // reqwest error 化して UI に surface できる (以前は timeout なしで
+    // 無限待ち → user 側 Cmd+Q しか escape なかった)
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .build()?;
     let request = ChatRequest {
         model: model_id.to_string(),
         messages: vec![
@@ -201,7 +210,14 @@ pub async fn generate_with_grammar(
         grammar: grammar.map(str::to_string),
     };
 
+    let started = std::time::Instant::now();
     let response = client.post(&config.endpoint).json(&request).send().await?;
+    let elapsed_ms = started.elapsed().as_millis();
+    info!(
+        elapsed_ms,
+        status = %response.status(),
+        "LLM inference response received"
+    );
 
     if !response.status().is_success() {
         let status = response.status();
