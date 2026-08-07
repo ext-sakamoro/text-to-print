@@ -88,7 +88,9 @@ impl LicenseVerifier {
         if public_key.len() != PUBLIC_KEY_LENGTH {
             bail!("invalid public key length: {}", public_key.len());
         }
-        let bytes: [u8; PUBLIC_KEY_LENGTH] = public_key.try_into().unwrap();
+        let bytes: [u8; PUBLIC_KEY_LENGTH] = public_key
+            .try_into()
+            .expect("length guarded by preceding check");
         Self::new(&bytes)
     }
 

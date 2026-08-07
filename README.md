@@ -106,9 +106,9 @@ generating LOL DSL over time Paid tier is fully offline
 
 | Format | Path | Producer | Use |
 |--|--|--|--|
-| **3MF** | `alice_bamboo::export_to_3mf` (safety + overhang analysis) | Bambu Lab AMS / Prusa slicer | Standard FDM print |
-| **STL** | `alice_lol::print_export::lol_to_stl` | Any slicer | Legacy pipelines |
-| **FBX** | `alice_lol::print_export::lol_to_fbx` | 3D animation / game engines | Non-print exchange |
+| **3MF (MakerWorld 対応)** | `alice_bamboo::bambu_3mf::export_bambu_3mf` (template embed、12-file zip、Phase 5.7) | Bambu Lab AMS / MakerWorld 直接 upload | Standard FDM print |
+| **STL** | `alice_bamboo::print_export::lol_to_stl` (Stage 4 集約後) | Any slicer | Legacy pipelines |
+| **FBX** | `alice_bamboo::print_export::lol_to_fbx` (Stage 4 集約後) | 3D animation / game engines | Non-print exchange |
 | **STEP** | `alice_sdf::io::step::export_step` | Fusion 360 / FreeCAD / SolidWorks | CAD editing round-trip |
 | **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | Direct-to-printer | Skip Bambu Studio |
 | **3MF (4-color)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
@@ -120,31 +120,35 @@ text-to-print/
 ├── crates/
 │   ├── app/       - Rust desktop GUI (egui + wgpu, main entry)
 │   ├── core/      - LOL → mesh export pipeline, license state
-│   ├── llm/       - ALICE-LLM sidecar integration + system prompt
-│   └── network/   - libp2p P2P share (free-tier upload)
+│   ├── llm/       - ALICE-LLM sidecar + embedded backend integration
+│   ├── network/   - libp2p P2P share (free-tier upload)
+│   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint,
+│                    workspace 除外、`wrangler deploy` で運用)
 ├── datasets/      - LoRA training data (523+ samples, growing)
 ├── scripts/       - LoRA training / dataset generation
-├── assets/        - static resources
-├── docs/          - design documents
-└── legacy-saas/   - SaaS-era code archived 2026-07-29 (Cloudflare Tunnel +
-                    Supabase + Stripe + Next.js frontend + Rust API gateway)
-                    kept for historical reference and possible commercial revival
+├── assets/        - static resources (NotoSansJP.ttf 等)
+└── docs/          - design / release / share docs + ROADMAP.md
 ```
 
 ## Status
 
-**Standalone pivot in progress** (2026-07-29) Previously deployed as a SaaS on
-Mac mini + Cloudflare Tunnel + Supabase + Stripe Now refactoring toward a
-single-binary desktop app with embedded ALICE-LLM
+**Standalone desktop app** (v0.1.0 β 準備中) core パイプライン (text prompt →
+embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
+cargo test workspace 207/207 pass
 
 Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
-- 2026-07-29: renamed `3dvbgaran` → `text-to-print` SaaS layer moved to
-  `legacy-saas/` Standalone-first roadmap
-- 2026-04-22: LoRA training pipeline (Paperspace A6000/A100) + 523 sample
-  training set
+- 2026-08-07: `legacy-saas/` 削除 (SaaS-era code retired)、UI phase state
+  machine tests 追加、`crates/worker` の wasm32 CI check 追加
+- 2026-08-06: Phase 5.7 完了 (`alice_bamboo::bambu_3mf::export_bambu_3mf`、
+  Rust から MakerWorld 対応 3MF 直接生成)
+- 2026-08-01: Stage 4 完了 (alice-lol → alice-bamboo 集約) + Stage 5
+  (Freemium tier share/private opt-in) + Stage 3-C.11 (LOL_GBNF grammar
+  constrained decoding)
+- 2026-07-29: renamed `3dvbgaran` → `text-to-print` standalone pivot
+- 2026-04-22: LoRA training pipeline (Paperspace A6000/A100) + 523 sample set
 - 2026-04-18: Rust desktop app Phase 1-2 (egui + wgpu + libp2p)
 
 ## Build
@@ -204,9 +208,12 @@ scripts/train_lora.py --config configs/lora_qwen3_5_4b.yaml
 - [ALICE-Physics](https://github.com/ext-sakamoro/ALICE-Physics) —
   deterministic 128-bit fixed-point physics engine (print-safety verification)
 
-## Legacy SaaS layer
+## History
 
-The pre-2026-07-29 SaaS deployment (Cloudflare Tunnel + Supabase Auth +
-Stripe Billing + Next.js frontend + Rust API gateway + inference worker +
-Kubernetes/Docker deploy configs) is preserved under [`legacy-saas/`](legacy-saas/)
-See [`legacy-saas/README.md`](legacy-saas/README.md) for the pivot rationale
+- 2026-07-29 standalone pivot: The project was previously a SaaS deployment
+  (Cloudflare Tunnel + Supabase Auth + Stripe Billing + Next.js frontend +
+  Rust API gateway) The SaaS layer has been retired in favor of the
+  single-binary desktop app documented above
+- 2026-08-07: `legacy-saas/` directory removed from the repository If a
+  future Paid tier requires server-side payment / license issuance, it will
+  be built fresh rather than reviving the retired SaaS code

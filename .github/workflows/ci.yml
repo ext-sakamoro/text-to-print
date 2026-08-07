@@ -126,3 +126,26 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --workspace --no-deps
+
+  # wasm32 build check for `crates/worker` (Cloudflare Workers upload backend)
+  #
+  # `crates/worker` は workspace から除外されている (wasm32-only + edition 2021)
+  # ため main clippy-test-doc job では検証されない この job が無いと deploy 直前
+  # まで壊れが surface しないので、fast wasm build check だけ実施する
+  #
+  # Ubuntu 単体で十分 (wasm target は OS 非依存) `wrangler deploy` は本 job で
+  # 実行せず、check pass 後に手動で trigger する運用
+  check-wasm-worker:
+    name: check-wasm (crates/worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/worker
+      - name: cargo check --target wasm32-unknown-unknown
+        working-directory: crates/worker
+        run: cargo check --target wasm32-unknown-unknown --release

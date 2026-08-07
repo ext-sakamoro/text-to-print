@@ -2,7 +2,18 @@
 
 target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
-現状 (2026-08-07): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace 207/207 pass) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+現状 (2026-08-07): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace **213**/213 pass、UI phase state machine test 追加後、+7 test) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+
+### 2026-08-07 完了項目 (本日実施済)
+
+- ✅ **legacy-saas/ 完全削除** (2.6 GB uncompressed、tracked file 83 個) 復活時は fresh 実装方針
+- ✅ **UI phase state machine test 追加** (`crates/app/src/state.rs::tests`、+7 test: `phase_all_covers_five_phases_in_order` / `phase_label_stable_for_ui` / `phase_progress_default_is_empty` / `phase_progress_marks_completed_phase` / `phase_progress_full_pipeline_flow` / `phase_progress_reset_clears_all_state` / `phase_progress_idempotent_reset`)
+- ✅ **CI `check-wasm-worker` job 追加** (`crates/worker` の wasm32 build を CI 側で fail fast 検知)
+- ✅ **`crates/worker` の pre-existing wasm32 build エラー 2 件を修正** (上記 CI 追加で顕在化した副次成果)
+  - `Cargo.toml`: `worker = "0.5"` → `worker = { version = "0.5", features = ["d1"] }` (D1Database / Env::d1 は feature gate)
+  - `share_handler.rs`: `Date::new(&DateInit::Millis(x))` → `Date::new(DateInit::Millis(x))` (worker 0.5 で by-value API)
+  - `cargo check --target wasm32-unknown-unknown` green 確認 P1-5 (share endpoint CF Workers deploy) の実 blocker が 1 つ解消
+- ✅ **`.unwrap()` audit 完了** — 全 224 unwrap のうち production は license.rs L91 の 1 件のみ (invariant guard 済、`.expect("length guarded by preceding check")` に refactor 済) 他 223 件は全て `#[cfg(test)]` 内、refactor 不要
 
 ## Milestone 全景
 
@@ -197,11 +208,23 @@ Windows Defender SmartScreen 回避 (`docs/RELEASE.md` §Windows Authenticode �
 
 ### P2-6: v1.0.0 商用 tag
 
-P2-1〜P2-5 完了後:
+P2-1〜P2-5 + P2-7 完了後:
 
 - [ ] `git tag v1.0.0` + Paid tier open 開始
 
 **受入基準**: 最初の Paid tier 課金成功 + Free tier LoRA flywheel 1 サイクル完走
+
+### P2-7: datasets 拡大 + LOL primitive 網羅 audit script (別 session 実行想定)
+
+現状 523 sample を数千 sample に拡大 + LOL DSL 全 primitive カバレッジを systematic に verify
+
+- [ ] `scripts/audit_lol_coverage.py` 新規: ALICE-LOL/LLM_REFERENCE.md から primitive 一覧を parse → `datasets/lol_train.jsonl` の各 sample から primitive 使用を抽出 → gap 表出力
+- [ ] gap 表を元に合成 sample 生成 (edge case: nested CSG / repeat_finite / thin plate / dual contouring 経路 / hardsurface 24 primitive / SKADIS system 7 accessory)
+- [ ] fine-tune 再実行 (Paperspace A6000/A100) + blind eval で品質改善確認
+
+**受入基準**: LOL DSL primitive カバレッジ 100% (全 primitive が最低 3 sample で登場) + sample 総数 2000+ + blind eval で MakerWorld 対応 3MF 生成成功率 90%+
+
+**別 session 実行注意**: 本タスクは Paperspace 課金 + 数時間の training + eval 手作業を含むので、時間 / 予算を確保してから着手する P2-1 (Stripe) と同じく separate execution 想定
 
 ---
 
@@ -209,11 +232,11 @@ P2-1〜P2-5 完了後:
 
 以下は user 判断待ちで、この Roadmap の scope 内で決定してから着手する:
 
-1. **Paid tier の payment provider**: Stripe (実装 mature、手数料 3.6%) vs Paddle (Merchant of Record、税務対応込) vs LemonSqueezy vs 独自
+1. **Paid tier の payment provider**: Stripe (実装 mature、手数料 3.6%) vs Paddle (Merchant of Record、税務対応込) vs LemonSqueezy vs 独自 (P2-1 で実装、判断は別 session で実行想定)
 2. **Bonsai27B GGUF 公開判断**: HF public か、Paid tier 専用か、そもそも撤去か
 3. **CF Workers 依存の範囲**: share endpoint + crash collector を CF に置く前提で確定するか、AWS / Vercel 等の alternative 検討
 4. **LoRA training 主体**: text-to-print 内 or ALICE-LLM 側 or 別 repo で分離
-5. **legacy-saas/ の扱い**: Paid tier で復活させるか、完全削除するか
+5. ~~**legacy-saas/ の扱い**~~ ✅ 2026-08-07 完全削除 (復活時は fresh 実装)
 
 ---
 
@@ -222,3 +245,4 @@ P2-1〜P2-5 完了後:
 | date | change |
 |--|--|
 | 2026-08-07 | 初版作成 (Phase 5.7 完了時点、cargo test 207/207 pass) |
+| 2026-08-07 | legacy-saas/ 削除 + UI phase state machine test 追加 + CI wasm32 job 追加 + license.rs prod unwrap 1 件 refactor 完了 + P2-7 (datasets audit script) 追加 |

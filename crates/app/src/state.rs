@@ -694,7 +694,8 @@ fn spawn_embedded_load(
 
 #[cfg(test)]
 mod tests {
-    use super::default_sidecar_port;
+    use super::{default_sidecar_port, GenerationPhase, PhaseProgress};
+    use std::time::Duration;
 
     #[test]
     fn port_from_localhost_endpoint() {
@@ -713,5 +714,108 @@ mod tests {
         assert_eq!(default_sidecar_port("http://localhost/v1/x"), 8000);
         assert_eq!(default_sidecar_port(""), 8000);
         assert_eq!(default_sidecar_port("garbage"), 8000);
+    }
+
+    // ────────────────────────────────────────────────────────
+    // Generation phase state-machine tests
+    //
+    // UI 側で表示する 5 phase の進捗 (Llm → Parse → Mesh → Safety → Export)
+    // を pure state (egui / DB / tokio 非依存) で verify する 実 pipeline は
+    // `crates/core/tests/e2e_pipeline.rs` で E2E 通過を確認しているため、
+    // ここは phase transition の invariant (順序 / 冪等 / reset) のみ担保
+    // ────────────────────────────────────────────────────────
+
+    #[test]
+    fn phase_all_covers_five_phases_in_order() {
+        assert_eq!(GenerationPhase::ALL.len(), 5);
+        assert_eq!(GenerationPhase::ALL[0], GenerationPhase::Llm);
+        assert_eq!(GenerationPhase::ALL[1], GenerationPhase::Parse);
+        assert_eq!(GenerationPhase::ALL[2], GenerationPhase::Mesh);
+        assert_eq!(GenerationPhase::ALL[3], GenerationPhase::Safety);
+        assert_eq!(GenerationPhase::ALL[4], GenerationPhase::Export);
+    }
+
+    #[test]
+    fn phase_label_stable_for_ui() {
+        assert_eq!(GenerationPhase::Llm.label(), "LLM");
+        assert_eq!(GenerationPhase::Parse.label(), "parse");
+        assert_eq!(GenerationPhase::Mesh.label(), "mesh");
+        assert_eq!(GenerationPhase::Safety.label(), "safety");
+        assert_eq!(GenerationPhase::Export.label(), "export");
+    }
+
+    #[test]
+    fn phase_progress_default_is_empty() {
+        let p = PhaseProgress::default();
+        assert!(p.current.is_none());
+        assert!(p.completed.is_empty());
+        assert_eq!(p.retry_count, 0);
+        for phase in GenerationPhase::ALL {
+            assert!(!p.is_done(phase), "{} should not be done initially", phase.label());
+            assert!(p.latency_of(phase).is_none());
+        }
+    }
+
+    #[test]
+    fn phase_progress_marks_completed_phase() {
+        let mut p = PhaseProgress {
+            current: Some(GenerationPhase::Llm),
+            completed: vec![(GenerationPhase::Llm, Duration::from_millis(120))],
+            retry_count: 0,
+        };
+        p.current = Some(GenerationPhase::Parse);
+        assert!(p.is_done(GenerationPhase::Llm));
+        assert!(!p.is_done(GenerationPhase::Parse));
+        assert_eq!(p.latency_of(GenerationPhase::Llm), Some(Duration::from_millis(120)));
+        assert!(p.latency_of(GenerationPhase::Parse).is_none());
+    }
+
+    #[test]
+    fn phase_progress_full_pipeline_flow() {
+        let latencies = [80, 5, 340, 15, 40];
+        let completed: Vec<_> = GenerationPhase::ALL
+            .iter()
+            .zip(latencies)
+            .map(|(phase, ms)| (*phase, Duration::from_millis(ms)))
+            .collect();
+        let p = PhaseProgress {
+            current: Some(GenerationPhase::Export),
+            completed,
+            retry_count: 2,
+        };
+        for (phase, ms) in GenerationPhase::ALL.iter().zip(latencies) {
+            assert!(p.is_done(*phase));
+            assert_eq!(p.latency_of(*phase), Some(Duration::from_millis(ms)));
+        }
+        assert_eq!(p.retry_count, 2);
+    }
+
+    #[test]
+    fn phase_progress_reset_clears_all_state() {
+        let mut p = PhaseProgress {
+            current: Some(GenerationPhase::Mesh),
+            completed: vec![
+                (GenerationPhase::Llm, Duration::from_millis(1)),
+                (GenerationPhase::Parse, Duration::from_millis(2)),
+            ],
+            retry_count: 3,
+        };
+        p.reset();
+        assert!(p.current.is_none());
+        assert!(p.completed.is_empty());
+        assert_eq!(p.retry_count, 0);
+        for phase in GenerationPhase::ALL {
+            assert!(!p.is_done(phase));
+        }
+    }
+
+    #[test]
+    fn phase_progress_idempotent_reset() {
+        let mut p = PhaseProgress::default();
+        p.reset();
+        p.reset();
+        assert!(p.current.is_none());
+        assert!(p.completed.is_empty());
+        assert_eq!(p.retry_count, 0);
     }
 }

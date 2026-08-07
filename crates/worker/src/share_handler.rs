@@ -45,7 +45,7 @@ pub async fn handle(req: &mut Request, ctx: &RouteContext<()>) -> WorkerResult<R
         let ms = now.as_millis();
         let ms_per_hour: u64 = 60 * 60 * 1000;
         let end_ms = ms - (ms % ms_per_hour) + ms_per_hour;
-        Date::new(&worker::DateInit::Millis(end_ms)).to_string()
+        Date::new(worker::DateInit::Millis(end_ms)).to_string()
     };
 
     let db = ctx.env.d1("SHARES_DB")?;

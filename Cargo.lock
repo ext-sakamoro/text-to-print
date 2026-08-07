@@ -186,6 +186,7 @@ dependencies = [
  "glam",
  "image",
  "rayon",
+ "zip",
 ]
 
 [[package]]
