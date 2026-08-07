@@ -81,26 +81,40 @@ Submission workflow:
 3. Save into `docs/images/` with the exact names referenced above
 4. Open a PR: `feat(docs): README screenshots + demo GIF`
 
-## Freemium tier
+## Pricing
+
+個人向け tool として最小構成 全て Stripe subscription で管理 (Phase S1/S2 実装済、
+S3 で Live 切替 → 課金開始)
 
 | Tier | Price | Sharing behavior |
 |--|--|--|
-| **Free** | 0 | Generated LOL DSL + 3MF files opt-in shared with ALICE-LOL project (fuels LoRA fine-tune improvements for everyone) |
-| **Paid** | (planned) | Generated LOL DSL + 3MF files stay local, nothing uploaded |
+| **Free** | ¥0 | 生成した LOL DSL + 3MF を opt-in で ALICE-LOL プロジェクトに共有 (LoRA 学習データに寄与、全 user が恩恵) |
+| **Pro Monthly** | ¥3,000/月 | 完全 offline (LoRA 共有 OFF 強制)、無制限生成 |
+| **Pro Yearly** | ¥30,000/年 (-17%) | 同 Monthly、年払い割引 |
+| **Enterprise** | 要問合わせ | 複数 user / 商用 / カスタム機能 対応 mailto:enterprise@alicelaw.net |
 
-Free tier contributions grow the LoRA training set so the model gets better at
-generating LOL DSL over time Paid tier is fully offline
+Free contribution が LoRA training set を育て、model の生成品質が全 user に還元される
+flywheel Paid tier は privacy 保証 (完全 offline、生成物は local のみ)
+
+License は Ed25519 署名で client 側 offline verify、subscription 解約 3 日後の grace
+period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無料枠
+(`crates/worker`) + Resend 経由 email 配信 全 Rust
 
 ## Tech stack
 
 | Layer | Technology |
 |--|--|
 | GUI | Rust `eframe` + `egui` + `wgpu` (native desktop) |
-| LLM inference | ALICE-LLM embedded (wgpu compute shaders + GGUF K-quant) |
+| LLM inference | ALICE-LLM embedded (wgpu compute shaders + GGUF K-quant + LOL_GBNF grammar constrained decoding) |
 | DSL parse / SDF / mesh | alice-lol / alice-sdf / alice-physics / alice-bamboo (path deps) |
 | 3D preview | alice-view (WebGPU/WASM) with fallback |
 | Optional P2P share | libp2p (mdns / gossipsub / kad) for free-tier upload to ALICE-LOL |
-| Local DB | rusqlite (project history / license state) |
+| Local DB | rusqlite (project history / license state / tier / model choice) |
+| Payment | Stripe subscription (Test mode scaffold complete、Phase S3 で Live 切替) |
+| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license issuance) |
+| License | Ed25519 (`ed25519-dalek`、`text_to_print_core::license` client-side offline verify) |
+| Email | Resend API (license delivery、backend 未設定時は log-only fallback) |
+| Auto-update | GitHub Releases + `self-update` (crates/app/src/updater.rs) |
 
 ## Export formats
 
@@ -118,35 +132,51 @@ generating LOL DSL over time Paid tier is fully offline
 ```
 text-to-print/
 ├── crates/
-│   ├── app/       - Rust desktop GUI (egui + wgpu, main entry)
-│   ├── core/      - LOL → mesh export pipeline, license state
-│   ├── llm/       - ALICE-LLM sidecar + embedded backend integration
-│   ├── network/   - libp2p P2P share (free-tier upload)
-│   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint,
+│   ├── app/       - Rust desktop GUI (egui + wgpu、main entry、Settings に
+│   │                Upgrade / License 入力 UI 実装済)
+│   ├── core/      - LOL → mesh export pipeline、Ed25519 license
+│   │                verify、tier 管理、rusqlite persist
+│   ├── llm/       - Sidecar + Embedded backend (Qwen3.5-4B / Gemma2-27B /
+│   │                Bonsai27B) + LOL_GBNF grammar constrained decoding
+│   ├── network/   - libp2p P2P share (free-tier upload の client 側)
+│   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint +
+│                    Stripe webhook + license issuance + Resend email、
 │                    workspace 除外、`wrangler deploy` で運用)
 ├── datasets/      - LoRA training data (523+ samples, growing)
 ├── scripts/       - LoRA training / dataset generation
 ├── assets/        - static resources (NotoSansJP.ttf 等)
-└── docs/          - design / release / share docs + ROADMAP.md
+├── docs/          - design / release / share / STRIPE_SETUP / images
+├── ROADMAP.md     - v0.1.0 β / GA / v1.0.0 商用 の milestone breakdown
+└── .cargo/        - audit.toml (cargo audit ignore list、per-entry rationale 付き)
 ```
 
 ## Status
 
 **Standalone desktop app** (v0.1.0 β 準備中) core パイプライン (text prompt →
 embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
-cargo test workspace 207/207 pass
+Stripe subscription 統合 backend + app UI 完成 (Test mode)
+
+- `cargo test --workspace`: **221 pass / 0 fail / 2 ignored**
+- `cargo test --lib on crates/worker`: **32 pass / 0 fail**
+- `cargo clippy --workspace --all-targets -- -D warnings`: **0 own warnings**
+- `cargo check --target wasm32-unknown-unknown -p text-to-print-worker`: **green**
 
 Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
-- 2026-08-07: `legacy-saas/` 削除 (SaaS-era code retired)、UI phase state
-  machine tests 追加、`crates/worker` の wasm32 CI check 追加
-- 2026-08-06: Phase 5.7 完了 (`alice_bamboo::bambu_3mf::export_bambu_3mf`、
-  Rust から MakerWorld 対応 3MF 直接生成)
-- 2026-08-01: Stage 4 完了 (alice-lol → alice-bamboo 集約) + Stage 5
-  (Freemium tier share/private opt-in) + Stage 3-C.11 (LOL_GBNF grammar
-  constrained decoding)
+- 2026-08-07: **P2-1 Phase S1 + S2 完了** — Stripe subscription 統合 (CF Workers
+  backend scaffold + app UI Upgrade section / Enter License Key / Grace period
+  表示 / Enterprise mailto 導線) Test mode で完結、Live 切替は Phase S3
+- 2026-08-07: CI 修正 (`cargo audit` rationale 付き ignore list `.cargo/audit.toml`、
+  `fmt` job を `clippy-test-doc` に merge、`ALICE_ECO_TOKEN` secret 登録手順明記)
+- 2026-08-07: `legacy-saas/` 完全削除 (2.6 GB uncompressed、tracked 91 file)、
+  復活時は fresh 実装方針
+- 2026-08-07: UI phase state machine test 追加、`crates/worker` の wasm32 CI check 追加
+- 2026-08-06: Phase 5.7 完了 (`alice_bamboo::bambu_3mf::export_bambu_3mf`、Rust
+  から MakerWorld 対応 12-file zip 3MF 直接生成、template embed)
+- 2026-08-01: Stage 4 完了 (alice-lol → alice-bamboo 集約) + Stage 5 (Freemium
+  share/private opt-in) + Stage 3-C.11 (LOL_GBNF grammar constrained decoding)
 - 2026-07-29: renamed `3dvbgaran` → `text-to-print` standalone pivot
 - 2026-04-22: LoRA training pipeline (Paperspace A6000/A100) + 523 sample set
 - 2026-04-18: Rust desktop app Phase 1-2 (egui + wgpu + libp2p)
