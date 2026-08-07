@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::model::ModelChoice;
 
