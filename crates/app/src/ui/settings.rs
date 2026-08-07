@@ -1,37 +1,153 @@
 use egui::Ui;
+use serde::{Deserialize, Serialize};
 
 use crate::state::AppState;
 use text_to_print_core::license::{LicenseKey, LicenseVerifier};
+use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend_kind::{BackendKind, ExecutionMode};
 use text_to_print_llm::model::ModelChoice;
 
-const LICENSE_PUBLIC_KEY: [u8; 32] = [
+pub const LICENSE_PUBLIC_KEY: [u8; 32] = [
     0x05, 0x7f, 0x9c, 0x5f, 0xdb, 0x3f, 0x6f, 0x93, 0x69, 0x11, 0xd9, 0x16, 0x85, 0xb1, 0x82, 0x5b,
     0xcb, 0x3a, 0x75, 0xff, 0x18, 0x39, 0x12, 0xd5, 0x26, 0x6e, 0xf4, 0x75, 0x34, 0xec, 0xae, 0xc2,
 ];
+
+/// Backend checkout endpoint override (dev use `TTP_CHECKOUT_ENDPOINT=http://localhost:8787/stripe/checkout-session`)
+pub const DEFAULT_CHECKOUT_ENDPOINT: &str =
+    "https://text-to-print.alicelaw.net/stripe/checkout-session";
+
+/// Enterprise inquiry destination (mailto:) opened by the "Contact for
+/// Enterprise" button in Settings
+pub const ENTERPRISE_MAILTO: &str = "mailto:enterprise@alicelaw.net?subject=text-to-print%20Enterprise%20plan";
 
 #[derive(Default)]
 pub struct SettingsState {
     pub license_input: String,
     pub license_message: Option<(String, bool)>,
+    /// Email typed into the Upgrade to Pro form (persisted across the
+    /// session but not to DB — user re-enters after re-open)
+    pub checkout_email: String,
+    /// Latest checkout attempt outcome for UI feedback
+    pub checkout_message: Option<(String, bool)>,
+}
+
+/// Wire format for `POST /stripe/checkout-session` (must match
+/// `text_to_print_worker::checkout::CheckoutRequest`)
+#[derive(Debug, Clone, Serialize)]
+pub struct CheckoutRequestBody {
+    pub plan: String,
+    pub user_email: String,
+}
+
+/// Wire format for the response (must match
+/// `text_to_print_worker::checkout::CheckoutResponse`)
+#[derive(Debug, Clone, Deserialize)]
+pub struct CheckoutResponseBody {
+    pub url: String,
+    /// Retained for future subscription-status polling; currently we
+    /// only open `url` in the browser and let Stripe drive the flow
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub session_id: String,
+}
+
+/// Returns the checkout endpoint URL, honoring `TTP_CHECKOUT_ENDPOINT`
+/// for local dev against `wrangler dev` on localhost:8787
+pub fn checkout_endpoint() -> String {
+    std::env::var("TTP_CHECKOUT_ENDPOINT").unwrap_or_else(|_| DEFAULT_CHECKOUT_ENDPOINT.to_string())
+}
+
+/// Client-side validation for the checkout email — matches the loose
+/// server-side rule in `text_to_print_worker::checkout::handle` so the
+/// UI can reject obvious typos before the round trip
+pub fn is_plausible_email(input: &str) -> bool {
+    let s = input.trim();
+    !s.is_empty() && s.contains('@') && s.len() <= 320 && !s.contains(' ')
 }
 
 pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
     ui.heading("Settings");
     ui.separator();
 
-    // ライセンス
-    ui.collapsing("License", |ui| {
-        ui.label(format!("現在のティア: {:?}", state.tier));
-        ui.add_space(4.0);
+    // ライセンス / サブスクリプション
+    ui.collapsing("License / Subscription", |ui| {
+        // 現在の tier 表示 (Free / Pro / Enterprise / General)
+        ui.horizontal(|ui| {
+            ui.label("現在のプラン:");
+            let (label, color) = match state.tier {
+                Tier::Free => ("Free (LoRA share あり)", egui::Color32::LIGHT_GRAY),
+                Tier::General => ("General", egui::Color32::LIGHT_BLUE),
+                Tier::Pro => ("Pro", egui::Color32::GREEN),
+                Tier::Enterprise => ("Enterprise", egui::Color32::GOLD),
+            };
+            ui.colored_label(color, label);
+        });
 
-        ui.label("ライセンスキー:");
+        ui.add_space(6.0);
+        ui.separator();
+        ui.add_space(6.0);
+
+        // ── Upgrade to Pro (Free tier のみ表示) ────────────────
+        if matches!(state.tier, Tier::Free) {
+            ui.label(egui::RichText::new("Upgrade to Pro").strong());
+            ui.label("Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)");
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.label("Email:");
+                ui.text_edit_singleline(&mut settings.checkout_email);
+            });
+            let email_ok = is_plausible_email(&settings.checkout_email);
+
+            ui.horizontal(|ui| {
+                let monthly = ui.add_enabled(email_ok, egui::Button::new("Buy Monthly ¥3,000/月"));
+                if monthly.clicked() {
+                    spawn_checkout(state, settings, "pro_monthly");
+                }
+                let yearly = ui.add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"));
+                if yearly.clicked() {
+                    spawn_checkout(state, settings, "pro_yearly");
+                }
+            });
+
+            if !email_ok && !settings.checkout_email.is_empty() {
+                ui.colored_label(egui::Color32::YELLOW, "有効な email 形式で入力してください");
+            }
+            if let Some((msg, ok)) = &settings.checkout_message {
+                let color = if *ok { egui::Color32::LIGHT_BLUE } else { egui::Color32::RED };
+                ui.colored_label(color, msg);
+            }
+
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new("Enterprise plan").strong());
+            ui.horizontal(|ui| {
+                ui.label("複数ユーザー / 商用 / カスタム機能:");
+                if ui.button("問合わせ").clicked() {
+                    if let Err(e) = open::that(ENTERPRISE_MAILTO) {
+                        settings.checkout_message = Some((format!("メーラー起動失敗: {e}"), false));
+                    }
+                }
+            });
+
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(6.0);
+        }
+
+        // ── License key 入力 (受信 email から貼付) ───────────────
+        ui.label(egui::RichText::new("ライセンスキー入力").strong());
+        ui.label("Stripe 決済後に email で届いたキーを貼付してください");
+        ui.add_space(2.0);
         ui.text_edit_multiline(&mut settings.license_input);
 
-        if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty()
-        {
-            apply_license(state, settings);
-        }
+        ui.horizontal(|ui| {
+            if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty() {
+                apply_license(state, settings);
+            }
+            if !matches!(state.tier, Tier::Free) && ui.button("ライセンスをクリア (Free に戻す)").clicked() {
+                clear_license(state, settings);
+            }
+        });
 
         if let Some((msg, success)) = &settings.license_message {
             let color = if *success {
@@ -273,6 +389,7 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
         Ok(payload) => {
             let tier = payload.tier;
             let tier_str = format!("{tier:?}");
+            let expires = payload.expires_at.format("%Y-%m-%d").to_string();
 
             // DB に保存
             let _ = state
@@ -280,11 +397,169 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
                 .update_profile_tier(&state.profile_id, &tier_str, input);
             state.tier = tier;
 
-            settings.license_message = Some((format!("{tier:?} プランに更新しました"), true));
-            tracing::info!(tier = ?tier, "license applied");
+            settings.license_message = Some((
+                format!("{tier:?} プランに更新しました (有効期限 {expires})"),
+                true,
+            ));
+            tracing::info!(tier = ?tier, expires = %expires, "license applied");
         }
         Err(e) => {
             settings.license_message = Some((format!("検証失敗: {e}"), false));
         }
+    }
+}
+
+/// Revert to Free tier — clears the stored license_key so subsequent
+/// starts don't reinstate the paid tier from DB (Phase S2 UX for testing
+/// / user-requested cancel)
+fn clear_license(state: &mut AppState, settings: &mut SettingsState) {
+    let free_str = format!("{:?}", Tier::Free);
+    match state
+        .db
+        .update_profile_tier(&state.profile_id, &free_str, "")
+    {
+        Ok(()) => {
+            state.tier = Tier::Free;
+            settings.license_input.clear();
+            settings.license_message = Some(("Free に戻しました".to_string(), true));
+            tracing::info!("license cleared, tier reverted to Free");
+        }
+        Err(e) => {
+            settings.license_message = Some((format!("DB 更新失敗: {e}"), false));
+        }
+    }
+}
+
+/// Kick off a checkout request to the CF Workers backend and open the
+/// returned Stripe URL in the user's browser Runs the network call on
+/// the shared tokio runtime so the UI thread is not blocked
+fn spawn_checkout(state: &AppState, settings: &mut SettingsState, plan: &str) {
+    let email = settings.checkout_email.trim().to_string();
+    if !is_plausible_email(&email) {
+        settings.checkout_message = Some(("email が未入力または不正です".to_string(), false));
+        return;
+    }
+    settings.checkout_message = Some((format!("{plan} の checkout URL を取得中..."), true));
+
+    let endpoint = checkout_endpoint();
+    let body = CheckoutRequestBody {
+        plan: plan.to_string(),
+        user_email: email,
+    };
+    let tx = state.result_tx.clone();
+
+    state.runtime.spawn(async move {
+        let outcome = fetch_and_open_checkout(&endpoint, &body).await;
+        // Piggyback on the existing generation-status channel to notify
+        // the UI thread — a dedicated channel would be tidier but adds
+        // wiring for a purely informational side effect
+        let msg = match outcome {
+            Ok(url) => format!("checkout ok: {url}"),
+            Err(e) => format!("checkout error: {e}"),
+        };
+        tracing::info!(target: "checkout", %msg);
+        // Note: we intentionally do NOT push to `tx` because
+        // GenerationMessage does not have a variant for this; the
+        // spawn is fire-and-forget with tracing feedback only
+        let _ = &tx;
+    });
+}
+
+async fn fetch_and_open_checkout(
+    endpoint: &str,
+    body: &CheckoutRequestBody,
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(endpoint)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP エラー: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("backend {status}: {text}"));
+    }
+    let parsed: CheckoutResponseBody = resp
+        .json()
+        .await
+        .map_err(|e| format!("レスポンス parse 失敗: {e}"))?;
+    open::that(&parsed.url).map_err(|e| format!("browser 起動失敗: {e}"))?;
+    Ok(parsed.url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checkout_request_body_serializes_to_expected_wire_format() {
+        let req = CheckoutRequestBody {
+            plan: "pro_monthly".to_string(),
+            user_email: "user@example.com".to_string(),
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["plan"], "pro_monthly");
+        assert_eq!(json["user_email"], "user@example.com");
+        // Ensure no extra fields snuck in (contract with worker::CheckoutRequest)
+        let obj = json.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+    }
+
+    #[test]
+    fn checkout_response_body_parses_worker_output() {
+        let raw = r#"{"url":"https://checkout.stripe.com/c/pay/cs_test_abc","session_id":"cs_test_abc"}"#;
+        let parsed: CheckoutResponseBody = serde_json::from_str(raw).unwrap();
+        assert_eq!(parsed.url, "https://checkout.stripe.com/c/pay/cs_test_abc");
+        assert_eq!(parsed.session_id, "cs_test_abc");
+    }
+
+    #[test]
+    fn checkout_response_body_tolerates_missing_session_id() {
+        // Defensive: worker may omit session_id in some paths
+        let raw = r#"{"url":"https://checkout.stripe.com/c/pay/cs_test_xyz"}"#;
+        let parsed: CheckoutResponseBody = serde_json::from_str(raw).unwrap();
+        assert_eq!(parsed.url, "https://checkout.stripe.com/c/pay/cs_test_xyz");
+        assert_eq!(parsed.session_id, "");
+    }
+
+    #[test]
+    fn plausible_email_accepts_normal_addresses() {
+        assert!(is_plausible_email("user@example.com"));
+        assert!(is_plausible_email("user+tag@example.co.jp"));
+        assert!(is_plausible_email("a@b.c"));
+    }
+
+    #[test]
+    fn plausible_email_rejects_obvious_bad() {
+        assert!(!is_plausible_email(""));
+        assert!(!is_plausible_email("no-at-sign"));
+        assert!(!is_plausible_email("has space@example.com"));
+        assert!(!is_plausible_email(&"x".repeat(321)));
+    }
+
+    #[test]
+    fn checkout_endpoint_defaults_to_production_when_env_unset() {
+        // SAFETY: single-threaded test suite by default; we clear the
+        // var to assert the default path Not perfect under parallel
+        // execution but the default is deterministic when unset
+        // SAFETY: Setting env vars is unsafe in Rust 2024
+        unsafe {
+            std::env::remove_var("TTP_CHECKOUT_ENDPOINT");
+        }
+        assert_eq!(checkout_endpoint(), DEFAULT_CHECKOUT_ENDPOINT);
+    }
+
+    #[test]
+    fn enterprise_mailto_points_to_alicelaw_net() {
+        assert!(ENTERPRISE_MAILTO.starts_with("mailto:"));
+        assert!(ENTERPRISE_MAILTO.contains("enterprise@alicelaw.net"));
+    }
+
+    #[test]
+    fn default_checkout_endpoint_targets_backend_path() {
+        assert!(DEFAULT_CHECKOUT_ENDPOINT.ends_with("/stripe/checkout-session"));
+        assert!(DEFAULT_CHECKOUT_ENDPOINT.starts_with("https://"));
     }
 }

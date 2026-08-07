@@ -160,12 +160,20 @@ echo -n "whsec_XXXX" | wrangler secret put STRIPE_WEBHOOK_SECRET
 
 ### 7-1: checkout session 作成 API 呼出し
 
+Client は plan 名 (`pro_monthly` / `pro_yearly`) のみ渡し、backend が env vars 経由で
+Stripe price ID を lookup する Client 側で price ID を知る必要なし
+
 ```bash
 curl -X POST http://localhost:8787/stripe/checkout-session \
   -H "Content-Type: application/json" \
-  -d '{"price_id":"price_XXXXXXXXXXXXXX","user_email":"you@example.com"}'
+  -d '{"plan":"pro_monthly","user_email":"you@example.com"}'
 # → { "url": "https://checkout.stripe.com/c/pay/cs_test_...", "session_id": "cs_test_..." }
 ```
+
+App 側 (Phase S2 実装済) では Settings > License / Subscription section の
+"Buy Monthly / Buy Yearly" ボタンから同じ endpoint を呼び出す 環境変数
+`TTP_CHECKOUT_ENDPOINT=http://localhost:8787/stripe/checkout-session`
+を設定すれば local dev backend に向く (未設定時は production URL)
 
 ### 7-2: Checkout URL を browser で開く → Stripe test card で支払い
 

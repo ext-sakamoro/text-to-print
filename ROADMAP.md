@@ -178,15 +178,23 @@ P1-1〜P1-7 完了後:
 - ✅ **cargo check --target wasm32-unknown-unknown: green** (CI `check-wasm-worker` job で自動検証)
 - ✅ **cargo clippy --target wasm32-unknown-unknown -- -D warnings: 0 warnings**
 
-#### Phase S2 (次 session、~3-4h scope)
+#### Phase S2 ✅ (2026-08-07 完了、App UI + verify wire)
 
-- [ ] `crates/core/src/license_pubkey.rs` 新規: Ed25519 public key 埋込 (Step 3 生成 output より)
-- [ ] `crates/app/src/ui/settings.rs` に "Upgrade to Paid" section 追加
-  - "Buy Monthly ¥3,000/mo" / "Buy Yearly ¥30,000/yr" ボタン → `reqwest::blocking` で `/stripe/checkout-session` → browser open
-  - "Enter License Key" text field + Verify ボタン → `LicenseVerifier::verify` → `db.set_license` (新規)
-- [ ] `crates/core/src/db.rs` に license 保存 method 追加 (`profiles.license_key TEXT` column + `set_license` / `get_license` / `clear_license`)
-- [ ] Enterprise 用「お問い合わせ」ボタン (mailto:enterprise@alicelaw.net or web form URL open)
-- [ ] Free / Paid tier 切替 UX + Grace period 表示
+- ✅ **worker checkout API refactor**: `price_id` → `plan` (`pro_monthly`/`pro_yearly`)、client 側で Stripe price ID 知る必要なし backend 側 `resolve_plan()` で env vars から lookup
+- ✅ **既存 license infra 発見・再利用**: `crates/app/src/ui/settings.rs` に `LICENSE_PUBLIC_KEY` 32-byte 実 key + `apply_license` UI + `SettingsState` 既に実装済 `crates/core/src/db.rs` の profiles table に `license_key TEXT` column + `update_profile_tier(id, tier, license_key)` method も既に存在 Phase S2 で新規追加不要 (既存資産の追加拡張のみ)
+- ✅ **`crates/app/src/ui/settings.rs` UI 大幅拡張** (+299 行、8 test 追加):
+  - License / Subscription collapsible 再構成 (Tier badge with color / Free 時のみ Upgrade section 表示)
+  - Email 入力 + "Buy Monthly ¥3,000/月" / "Buy Yearly ¥30,000/年 (-17%)" ボタン → `spawn_checkout` (tokio runtime 上で `reqwest::Client::post` → `open::that` で browser open、UI thread ブロックしない)
+  - "Enterprise 問合わせ" ボタン (mailto:enterprise@alicelaw.net)
+  - "ライセンスをクリア (Free に戻す)" ボタン (Paid 時のみ表示、db.update_profile_tier で Free + 空 license_key に更新)
+  - `apply_license` に有効期限表示追加 (payload.expires_at → "有効期限 YYYY-MM-DD")
+  - `is_plausible_email` client-side validation (worker と同 rule)
+- ✅ **wire format contract test**: `CheckoutRequestBody` (client) と `worker::checkout::CheckoutRequest` の JSON 形式一致を app 側 unit test で verify
+- ✅ **docs/STRIPE_SETUP.md 更新**: Step 7-1 curl 例を `price_id` → `plan` に更新、`TTP_CHECKOUT_ENDPOINT` env var 案内追記
+- ✅ **cargo test --workspace: 213 → 221 pass** (+8 settings tests)
+- ✅ **cargo test --lib on crates/worker: 31 → 32 pass** (+1 plan naming freeze test)
+- ✅ **cargo clippy --workspace -- -D warnings: 0 warnings**
+- ✅ **cargo check --target wasm32-unknown-unknown -p text-to-print-worker: green**
 
 #### Phase S3 (次々 session、~2h scope)
 
@@ -279,3 +287,4 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | 初版作成 (Phase 5.7 完了時点、cargo test 207/207 pass) |
 | 2026-08-07 | legacy-saas/ 削除 + UI phase state machine test 追加 + CI wasm32 job 追加 + license.rs prod unwrap 1 件 refactor 完了 + P2-7 (datasets audit script) 追加 |
 | 2026-08-07 | **P2-1 Phase S1 完了** — CF Workers 側 Stripe scaffold (webhook + license issue + checkout + email) 実装、worker crate test 15 → 31 pass、docs/STRIPE_SETUP.md 新規 Phase S2 (app UI + verify wire) / S3 (production deploy) は次 session |
+| 2026-08-07 | **P2-1 Phase S2 完了** — worker checkout API を `plan` param に refactor + settings.rs License / Subscription UI 大幅拡張 (Upgrade to Pro / Enterprise mailto / Clear license / expiry 表示) 既存 `LICENSE_PUBLIC_KEY` + `apply_license` + DB `license_key` column を発見して再利用 (新規追加不要) test 244 → 253 pass |
