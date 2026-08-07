@@ -167,9 +167,9 @@ pub struct InferenceParams {
 impl Default for InferenceParams {
     fn default() -> Self {
         Self {
-            // v0.1.0-beta.1 (2026-08-07): 2048 → 512 (LOL DSL は compact、
-            // 遅い LLM で無駄に待たされる問題対策) 詳細 LlmConfig::default
-            max_tokens: 512,
+            // v0.1.0-beta.1 (2026-08-07): 2048 → 512 → 256
+            // 詳細 LlmConfig::default コメント参照
+            max_tokens: 256,
             temperature: 0.7,
             top_k: 40,
             grammar: None,

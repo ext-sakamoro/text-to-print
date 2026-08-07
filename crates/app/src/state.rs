@@ -308,17 +308,26 @@ impl AppState {
                     .build()
                     .ok();
                 if let Some(client) = client {
+                    // 現実的な payload で warm-up: max_tokens=1 だと Metal
+                    // shader の一部 pipeline が compile されず初回本番 request
+                    // で遅延する (user 実測 warm-up 2s 後の本 request 155s)
+                    // 対策: 実 LOL DSL 生成に近い payload (short prompt +
+                    // max_tokens 50) で warm-up、shader の generation path
+                    // まで compile 済にする
                     let body = serde_json::json!({
                         "model": model_id,
-                        "messages": [{"role": "user", "content": "hi"}],
-                        "max_tokens": 1,
+                        "messages": [{
+                            "role": "user",
+                            "content": "Output a 10mm sphere in LOL DSL: sphere(5)"
+                        }],
+                        "max_tokens": 50,
                         "temperature": 0.7,
                     });
                     match client.post(&endpoint).json(&body).send().await {
                         Ok(resp) => tracing::info!(
                             elapsed_ms = started.elapsed().as_millis() as u64,
                             status = %resp.status(),
-                            "sidecar warm-up complete"
+                            "sidecar warm-up complete (realistic payload)"
                         ),
                         Err(e) => tracing::warn!("sidecar warm-up failed: {e}"),
                     }

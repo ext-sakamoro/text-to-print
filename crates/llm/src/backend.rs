@@ -25,11 +25,12 @@ impl Default for LlmConfig {
         Self {
             endpoint: "http://localhost:8000/v1/chat/completions".to_string(),
             model_choice: ModelChoice::default(),
-            // v0.1.0-beta.1 (2026-08-07): 2048 → 512
-            // LOL DSL は compact (typical `box3d(20, 20, 20)` で ~15 tok、
-            // subtract + rotate 込みでも 50-150 tok) 2048 は over-budget で
-            // 遅い LLM で無駄に生成待たされる 512 でも十分マージン
-            max_tokens: 512,
+            // v0.1.0-beta.1 (2026-08-07): 2048 → 512 → 256
+            // LOL DSL は compact (typical box3d ~15 tok、subtract+rotate
+            // ~50-150 tok) 256 で十分マージン、iGPU の遅い生成で無駄待ち
+            // 削減 大きい output (複雑な union chain 等) が欲しい user は
+            // Settings UI (Stage 8 想定) で上書き可能に将来する
+            max_tokens: 256,
             temperature: 0.7,
         }
     }
