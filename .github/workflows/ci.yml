@@ -92,12 +92,21 @@ jobs:
           repository: ext-sakamoro/ALICE-Physics
           path: ALICE-Physics
 
-      # Private repo (Bamboo) — requires `ALICE_ECO_TOKEN` secret
+      # Private repos (Bamboo / Print) — requires `ALICE_ECO_TOKEN` secret
+      # ALICE-Bamboo は alice-print を path dep で参照するので、両方
+      # checkout しないと workspace 解決が fail する PAT の Repository
+      # access は両 repo を include している必要あり
       - name: Checkout ALICE-Bamboo (private)
         uses: actions/checkout@v4
         with:
           repository: ext-sakamoro/ALICE-Bamboo
           path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - name: Checkout ALICE-Print (private)
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
           token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
