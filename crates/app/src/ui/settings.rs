@@ -83,6 +83,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             };
             ui.colored_label(color, label);
         });
+        ui.colored_label(
+            egui::Color32::LIGHT_YELLOW,
+            "BETA バージョンのためプランを選択することができません",
+        );
 
         ui.add_space(6.0);
         ui.separator();

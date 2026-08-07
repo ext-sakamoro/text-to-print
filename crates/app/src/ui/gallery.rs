@@ -76,7 +76,7 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
                         &sdf.author_did[..12.min(sdf.author_did.len())],
                         &sdf.author_did[sdf.author_did.len().saturating_sub(6)..]
                     ));
-                    ui.label(format!("Created: {}", &sdf.created_at));
+                    ui.label(format!("Created: {}", sdf.created_at));
 
                     ui.add_space(8.0);
                     ui.label("LOL ソース:");

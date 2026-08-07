@@ -88,8 +88,14 @@ impl ModelChoice {
     pub const fn default_hf_ref(self) -> (&'static str, &'static str) {
         match self {
             Self::Qwen35_4B => (
-                "Qwen/Qwen2.5-7B-Instruct-GGUF",
-                "qwen2.5-7b-instruct-q4_k_m.gguf",
+                // 2026-08-07: Qwen 公式 repo (Qwen/Qwen2.5-7B-Instruct-GGUF) の
+                // q4_k_m は 2 分割配布 (00001-of-00002 / 00002-of-00002) のみで
+                // 単一 file がなく現行 downloader が 404 で停止していた
+                // bartowski 版は同 model を single file (4.68 GB) で提供、CDN
+                // 200 OK 確認済 downloader 側の split-merge 対応を入れるまで
+                // こちらを使用
+                "bartowski/Qwen2.5-7B-Instruct-GGUF",
+                "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
             ),
             Self::Gemma2_27B => (
                 "bartowski/gemma-2-27b-it-GGUF",

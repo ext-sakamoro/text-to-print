@@ -6,21 +6,28 @@
 
 use egui::Ui;
 
-/// Ko-fi supporter link Points at the shared Secret-Treasure-Chest Ko-fi
-/// (see `~/CLAUDE.md` §Secret-Treasure-Chest for provenance)
-pub const KOFI_URL: &str = "https://ko-fi.com/secrettreasurechest";
+/// Ko-fi supporter link — points at the public Ko-fi account under
+/// Moroya Sakamoto ` ko-fi.com/sakamoro `
+///
+/// **Do NOT** use `ko-fi.com/secrettreasurechest`; that is the STC
+/// anonymous side account (adult-only). See personal memory
+/// `reference_ko-fi_accounts.md` for the 2-account split rationale
+pub const KOFI_URL: &str = "https://ko-fi.com/sakamoro";
 
 pub fn show(ui: &mut Ui) {
     ui.heading("About text-to-print");
     ui.separator();
 
-    ui.label(format!("Version: v{}", env!("CARGO_PKG_VERSION")));
+    ui.label(format!("Version: v{} BETA", env!("CARGO_PKG_VERSION")));
+    ui.colored_label(
+        egui::Color32::LIGHT_YELLOW,
+        "BETA バージョンのため、text-to-print のリポジトリは Private となっています",
+    );
     ui.add_space(8.0);
 
     ui.label(
         "text-to-print は自然言語プロンプトから LOL DSL を生成し、Bambu Lab 3MF を作成する \
-         スタンドアローン desktop アプリケーションです ALICE-Eco-System (ALICE-SDF / \
-         ALICE-LOL / ALICE-Bamboo / ALICE-Physics / ALICE-LLM) を統合しています",
+         スタンドアローン desktop アプリケーションです",
     );
     ui.add_space(12.0);
 
@@ -38,12 +45,11 @@ pub fn show(ui: &mut Ui) {
     ui.collapsing("Credits", |ui| {
         ui.label("Author: Moroya Sakamoto <sakamoro@alicelaw.net>");
         ui.label("License: MIT");
-        ui.label("Repository: https://github.com/ext-sakamoro/text-to-print");
+        ui.label("Repository: https://github.com/ext-sakamoro/text-to-print (Private during BETA)");
         ui.add_space(4.0);
-        ui.label("Depends on:");
-        ui.label("  · alice-sdf / alice-lol / alice-view (ALICE-Eco-System)");
-        ui.label("  · alice-bamboo / alice-physics (Stage 4)");
-        ui.label("  · alice-llm (embedded inference)");
+        // 3rd party OSS deps のみ列挙 (ALICE-* internal deps は同 author 内で
+        // 「Depends on」の意味付けが薄いので削除)
+        ui.label("Third-party OSS:");
         ui.label("  · egui / eframe / wgpu (GUI)");
         ui.label("  · libp2p (P2P share)");
     });
@@ -54,8 +60,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn kofi_url_is_https() {
+    fn kofi_url_points_to_public_sakamoro_account() {
+        // Guard against accidental swap to the STC 18+ side account
+        // (`ko-fi.com/secrettreasurechest`) — see personal memory
+        // `reference_ko-fi_accounts.md`
         assert!(KOFI_URL.starts_with("https://"));
-        assert!(KOFI_URL.contains("ko-fi.com"));
+        assert_eq!(KOFI_URL, "https://ko-fi.com/sakamoro");
+        assert!(!KOFI_URL.contains("secrettreasurechest"));
     }
 }
