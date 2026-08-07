@@ -34,18 +34,18 @@ impl SdfViewer {
                 // Auto-frame camera: LOL → SdfNode → tight AABB →
                 // camera を全体が入る距離に配置 (元は camera (0,0,5)
                 // hardcode で 20mm cube に対して内部視点 = 見えない)
-                if let Ok(sdf) = alice_bamboo::lol_to_sdf(lol_source) {
-                    if let Some((center, distance)) = auto_frame_from_sdf(&sdf, self.camera.fov) {
-                        self.camera.target = center;
-                        // +Z 方向から見下ろす (front view)
-                        self.camera.position =
-                            glam::Vec3::new(center.x, center.y, center.z + distance);
-                        tracing::info!(
-                            camera_pos = ?self.camera.position,
-                            camera_target = ?self.camera.target,
-                            "camera auto-framed to LOL AABB"
-                        );
-                    }
+                if let Ok(sdf) = alice_bamboo::lol_to_sdf(lol_source)
+                    && let Some((center, distance)) = auto_frame_from_sdf(&sdf, self.camera.fov)
+                {
+                    self.camera.target = center;
+                    // +Z 方向から見下ろす (front view)
+                    self.camera.position =
+                        glam::Vec3::new(center.x, center.y, center.z + distance);
+                    tracing::info!(
+                        camera_pos = ?self.camera.position,
+                        camera_target = ?self.camera.target,
+                        "camera auto-framed to LOL AABB"
+                    );
                 }
                 tracing::info!("WGSL shader generated for SDF preview");
             }
