@@ -32,22 +32,6 @@ jobs:
       - name: cargo audit (honours .cargo/audit.toml ignore list)
         run: cargo audit
 
-  # Formatting is safe on any OS because it runs on source alone and does
-  # not need the path-dependency ALICE-* sibling checkout dance
-  fmt:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: cargo fmt --check
-        run: cargo fmt --all -- --check
-
   # clippy / test / doc need the six ALICE-* sibling repos side-by-side
   # (matches the workspace path deps) Public Project-ALICE repos are
   # cloned unauthenticated; private ext-sakamoro repos require a PAT with
@@ -118,11 +102,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: text-to-print
+
+      # fmt を clippy と同 job に merge (2026-08-07): 独立 `fmt` job は
+      # workspace path deps (ALICE-Bamboo private) の checkout なしで
+      # Windows で `cargo fmt --all` が manifest 解決 fail していた
+      # ALICE-* 全て揃った状態なら fmt/clippy/test 全部素直に流れる
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
 
       - name: cargo clippy (workspace, all targets)
         run: cargo clippy --workspace --all-targets -- -D warnings

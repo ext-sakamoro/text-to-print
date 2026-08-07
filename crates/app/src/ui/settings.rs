@@ -18,7 +18,8 @@ pub const DEFAULT_CHECKOUT_ENDPOINT: &str =
 
 /// Enterprise inquiry destination (mailto:) opened by the "Contact for
 /// Enterprise" button in Settings
-pub const ENTERPRISE_MAILTO: &str = "mailto:enterprise@alicelaw.net?subject=text-to-print%20Enterprise%20plan";
+pub const ENTERPRISE_MAILTO: &str =
+    "mailto:enterprise@alicelaw.net?subject=text-to-print%20Enterprise%20plan";
 
 #[derive(Default)]
 pub struct SettingsState {
@@ -104,7 +105,8 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 if monthly.clicked() {
                     spawn_checkout(state, settings, "pro_monthly");
                 }
-                let yearly = ui.add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"));
+                let yearly =
+                    ui.add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"));
                 if yearly.clicked() {
                     spawn_checkout(state, settings, "pro_yearly");
                 }
@@ -114,7 +116,11 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 ui.colored_label(egui::Color32::YELLOW, "有効な email 形式で入力してください");
             }
             if let Some((msg, ok)) = &settings.checkout_message {
-                let color = if *ok { egui::Color32::LIGHT_BLUE } else { egui::Color32::RED };
+                let color = if *ok {
+                    egui::Color32::LIGHT_BLUE
+                } else {
+                    egui::Color32::RED
+                };
                 ui.colored_label(color, msg);
             }
 
@@ -141,10 +147,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         ui.text_edit_multiline(&mut settings.license_input);
 
         ui.horizontal(|ui| {
-            if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty() {
+            if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty()
+            {
                 apply_license(state, settings);
             }
-            if !matches!(state.tier, Tier::Free) && ui.button("ライセンスをクリア (Free に戻す)").clicked() {
+            if !matches!(state.tier, Tier::Free)
+                && ui.button("ライセンスをクリア (Free に戻す)").clicked()
+            {
                 clear_license(state, settings);
             }
         });
@@ -509,7 +518,8 @@ mod tests {
 
     #[test]
     fn checkout_response_body_parses_worker_output() {
-        let raw = r#"{"url":"https://checkout.stripe.com/c/pay/cs_test_abc","session_id":"cs_test_abc"}"#;
+        let raw =
+            r#"{"url":"https://checkout.stripe.com/c/pay/cs_test_abc","session_id":"cs_test_abc"}"#;
         let parsed: CheckoutResponseBody = serde_json::from_str(raw).unwrap();
         assert_eq!(parsed.url, "https://checkout.stripe.com/c/pay/cs_test_abc");
         assert_eq!(parsed.session_id, "cs_test_abc");

@@ -694,7 +694,7 @@ fn spawn_embedded_load(
 
 #[cfg(test)]
 mod tests {
-    use super::{default_sidecar_port, GenerationPhase, PhaseProgress};
+    use super::{GenerationPhase, PhaseProgress, default_sidecar_port};
     use std::time::Duration;
 
     #[test]
@@ -751,7 +751,11 @@ mod tests {
         assert!(p.completed.is_empty());
         assert_eq!(p.retry_count, 0);
         for phase in GenerationPhase::ALL {
-            assert!(!p.is_done(phase), "{} should not be done initially", phase.label());
+            assert!(
+                !p.is_done(phase),
+                "{} should not be done initially",
+                phase.label()
+            );
             assert!(p.latency_of(phase).is_none());
         }
     }
@@ -766,7 +770,10 @@ mod tests {
         p.current = Some(GenerationPhase::Parse);
         assert!(p.is_done(GenerationPhase::Llm));
         assert!(!p.is_done(GenerationPhase::Parse));
-        assert_eq!(p.latency_of(GenerationPhase::Llm), Some(Duration::from_millis(120)));
+        assert_eq!(
+            p.latency_of(GenerationPhase::Llm),
+            Some(Duration::from_millis(120))
+        );
         assert!(p.latency_of(GenerationPhase::Parse).is_none());
     }
 
