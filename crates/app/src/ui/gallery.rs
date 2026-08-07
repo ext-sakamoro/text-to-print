@@ -19,18 +19,21 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
 
     if sdfs.is_empty() {
         ui.add_space(16.0);
-        ui.label("まだ公開 SDF がありません");
-        ui.label("General tier ユーザーの生成データがここに表示されます");
+        ui.label("まだ公開されている 3D モデルがありません");
+        ui.label("公開された生成データがここに表示されます");
 
         ui.add_space(8.0);
-        ui.label(format!("DAG ノード数: {}", node.dag_node_count()));
+        ui.label(format!(
+            "ネットワーク上のノード数: {}",
+            node.dag_node_count()
+        ));
         return;
     }
 
     ui.horizontal(|ui| {
-        ui.label(format!("{} 件の公開 SDF", sdfs.len()));
+        ui.label(format!("{} 件の公開 3D モデル", sdfs.len()));
         ui.label("|");
-        ui.label(format!("DAG: {} ノード", node.dag_node_count()));
+        ui.label(format!("ネットワーク: {} ノード", node.dag_node_count()));
     });
 
     ui.add_space(4.0);
@@ -119,7 +122,7 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
                     gallery.selected_id = None;
                 }
             } else {
-                ui.label("SDF を選択してください");
+                ui.label("3D モデルを選択してください");
             }
         });
     });

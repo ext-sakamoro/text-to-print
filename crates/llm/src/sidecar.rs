@@ -330,6 +330,9 @@ pub async fn run_auto_spawn(
     status_tx: tokio::sync::watch::Sender<SidecarStatus>,
 ) {
     let _ = status_tx.send(SidecarStatus::Starting);
+    // Port は caller (state.rs) 側で事前 free port scan 済み client の
+    // LlmConfig.endpoint も同じ port に同期更新される (client → sidecar
+    // 経路の一貫性保証のため authoritative は caller に置く)
     let cfg = SidecarConfig {
         model_path,
         port,
@@ -349,6 +352,23 @@ pub async fn run_auto_spawn(
             let _ = status_tx.send(SidecarStatus::Error(msg));
         }
     }
+}
+
+/// preferred から up to `max_attempts` 個の port を試して最初に bind できた
+/// ものを返す 全部塞がっていたら None (呼び出し側で preferred fallback)
+///
+/// 実装: `std::net::TcpListener` で 127.0.0.1:port を bind 試行 成功したら
+/// 即 close して port 番号を返す (bind から close までの間に他 process が
+/// grab する TOCTOU race は理論的に残るが、port scan の一般的な pattern
+/// として許容)
+pub fn find_free_port_starting_at(preferred: u16, max_attempts: u16) -> Option<u16> {
+    for i in 0..max_attempts {
+        let candidate = preferred.checked_add(i)?;
+        if std::net::TcpListener::bind(("127.0.0.1", candidate)).is_ok() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

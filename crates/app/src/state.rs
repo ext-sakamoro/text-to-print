@@ -237,11 +237,31 @@ impl AppState {
         }
 
         // sidecar auto-spawn: model DL 完了を待ってから `alice-llm-server` を起動
+        // 2026-08-07: preferred port 8000 は user 環境で Python HTTP server 等が
+        // 良く塞ぐため、事前 free port scan 済 chosen port は LlmConfig の
+        // endpoint も同期更新 client → sidecar 疎通が確実になる
         let (sidecar_tx, sidecar_rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
+        let default_llm_config = LlmConfig::default();
+        let preferred_port = default_sidecar_port(&default_llm_config.endpoint);
+        let chosen_port =
+            text_to_print_llm::sidecar::find_free_port_starting_at(preferred_port, 16)
+                .unwrap_or(preferred_port);
+        let llm_config = if chosen_port == preferred_port {
+            default_llm_config
+        } else {
+            tracing::info!(
+                preferred = preferred_port,
+                chosen = chosen_port,
+                "sidecar preferred port in use, endpoint updated"
+            );
+            LlmConfig {
+                endpoint: format!("http://localhost:{chosen_port}/v1/chat/completions"),
+                ..default_llm_config
+            }
+        };
         {
             let models_dir_for_sidecar = models_dir.clone();
             let mut model_progress_rx = progress_rx.clone();
-            let sidecar_port = default_sidecar_port(&LlmConfig::default().endpoint);
             runtime.spawn(async move {
                 // model DL の完了を待つ (model_ready なら DownloadStatus::Complete で初期化済)
                 while !matches!(
@@ -257,7 +277,7 @@ impl AppState {
                     &models_dir_for_sidecar,
                     initial_choice,
                 );
-                text_to_print_llm::sidecar::run_auto_spawn(model_path, sidecar_port, sidecar_tx)
+                text_to_print_llm::sidecar::run_auto_spawn(model_path, chosen_port, sidecar_tx)
                     .await;
             });
         }
@@ -313,7 +333,7 @@ impl AppState {
         Self {
             data_dir,
             tier,
-            llm_config: LlmConfig::default(),
+            llm_config,
             prompt_input: String::new(),
             generation_status: GenerationStatus::Idle,
             current_lol: None,

@@ -143,14 +143,14 @@ impl T {
     // Gallery
     pub fn no_public_sdf(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "まだ公開 SDF がありません",
-            Lang::En => "No public SDFs yet",
+            Lang::Ja => "まだ公開されている 3D モデルがありません",
+            Lang::En => "No public models yet",
         }
     }
     pub fn public_sdf_on_network(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "P2P ネットワーク上の公開 SDF",
-            Lang::En => "Public SDFs on P2P network",
+            Lang::Ja => "P2P ネットワーク上の公開 3D モデル",
+            Lang::En => "Public models on P2P network",
         }
     }
     pub fn fork_remix(l: Lang) -> &'static str {
@@ -167,8 +167,8 @@ impl T {
     }
     pub fn select_sdf(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "SDF を選択してください",
-            Lang::En => "Select an SDF",
+            Lang::Ja => "3D モデルを選択してください",
+            Lang::En => "Select a model",
         }
     }
     pub fn detail(l: Lang) -> &'static str {
