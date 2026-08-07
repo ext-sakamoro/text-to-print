@@ -11,6 +11,11 @@ pub struct SdfResources {
     pub camera_target: [f32; 3],
     pub camera_up: [f32; 3],
     pub camera_fov: f32,
+    /// scene_id を uniform に流す 0-99: built-in demo scene / 100:
+    /// dynamic SDF (`sdf_eval_dynamic` = LOL DSL 由来)
+    /// rebuild_with_wgsl 後は 100 に切替、初期は 100 (LOL 未読込時は
+    /// pipeline の sphere fallback が表示される)
+    pub scene_id: u32,
 }
 
 impl SdfResources {
@@ -26,11 +31,17 @@ impl SdfResources {
             camera_target: [0.0, 0.0, 0.0],
             camera_up: [0.0, 1.0, 0.0],
             camera_fov: std::f32::consts::FRAC_PI_4,
+            // 2026-08-07 β: default 100 (dynamic) にすることで LOL DSL
+            // 由来 shader が正しく描画される 元 0 だと map_scene_0
+            // (Carved Sphere demo) が hardcode 表示される bug
+            scene_id: 100,
         }
     }
 
     pub fn rebuild_with_wgsl(&mut self, device: &wgpu::Device, wgsl: &str) {
         self.pipeline = self.pipeline.rebuild_with_dynamic_sdf(device, wgsl);
+        // dynamic WGSL 差替直後は必ず scene_id=100 に (念のため)
+        self.scene_id = 100;
     }
 }
 
@@ -76,7 +87,7 @@ impl CallbackTrait for SdfRenderCallback {
                 max_distance: 100.0,
                 epsilon: 0.001,
                 flags: 2, // AO on
-                scene_id: 0,
+                scene_id: resources.scene_id,
                 light_intensity: 1.0,
                 ambient_intensity: 0.15,
                 quality_flags: 1, // adaptive quality
