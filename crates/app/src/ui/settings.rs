@@ -89,30 +89,53 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
         ui.add_space(6.0);
 
         // ── Upgrade to Pro (Free tier のみ表示) ────────────────
+        //
+        // v0.1.0 β release では Paid tier UI は disabled 表示 (Coming
+        // soon) Stripe backend deploy (Phase S3) 完了後に PAID_UI_ENABLED
+        // を true に変えるだけで購入 flow 復活 Enterprise mailto と
+        // License key 入力欄は generalized use case なので β 段階でも
+        // 有効化 (既存 license holder が activate できる経路を残す)
+        const PAID_UI_ENABLED: bool = false;
         if matches!(state.tier, Tier::Free) {
             ui.label(egui::RichText::new("Upgrade to Pro").strong());
-            ui.label("Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)");
+            if PAID_UI_ENABLED {
+                ui.label("Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)");
+            } else {
+                ui.colored_label(
+                    egui::Color32::LIGHT_YELLOW,
+                    "Pro subscription is coming in v0.2.0 (Beta では unavailable)",
+                );
+                ui.label(
+                    "計画: 個人向け Pro プラン ¥3,000/月 or ¥30,000/年 (完全 offline + 無制限生成)",
+                );
+            }
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
                 ui.label("Email:");
-                ui.text_edit_singleline(&mut settings.checkout_email);
+                ui.add_enabled(
+                    PAID_UI_ENABLED,
+                    egui::TextEdit::singleline(&mut settings.checkout_email),
+                );
             });
-            let email_ok = is_plausible_email(&settings.checkout_email);
+            let email_ok = PAID_UI_ENABLED && is_plausible_email(&settings.checkout_email);
 
             ui.horizontal(|ui| {
-                let monthly = ui.add_enabled(email_ok, egui::Button::new("Buy Monthly ¥3,000/月"));
+                let monthly = ui
+                    .add_enabled(email_ok, egui::Button::new("Buy Monthly ¥3,000/月"))
+                    .on_disabled_hover_text("Coming soon in v0.2.0");
                 if monthly.clicked() {
                     spawn_checkout(state, settings, "pro_monthly");
                 }
-                let yearly =
-                    ui.add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"));
+                let yearly = ui
+                    .add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"))
+                    .on_disabled_hover_text("Coming soon in v0.2.0");
                 if yearly.clicked() {
                     spawn_checkout(state, settings, "pro_yearly");
                 }
             });
 
-            if !email_ok && !settings.checkout_email.is_empty() {
+            if PAID_UI_ENABLED && !email_ok && !settings.checkout_email.is_empty() {
                 ui.colored_label(egui::Color32::YELLOW, "有効な email 形式で入力してください");
             }
             if let Some((msg, ok)) = &settings.checkout_message {
