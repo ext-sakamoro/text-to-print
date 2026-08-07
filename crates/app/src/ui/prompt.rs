@@ -734,12 +734,17 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
         // progress indicator visualises the retries instead of pretending the
         // very first attempt succeeded.
         let tx_retry = tx.clone();
+        // v0.1.0-beta.1 (2026-08-07): max_retries 3 → 1 に削減
+        // 1 回の LLM inference が iGPU で 2-3 分かかるため、3 retry では
+        // worst case 8-12 分待たされる 1 retry (2 attempt) までなら
+        // 実用範囲内 (~5 分) empty response でも即 abort する新 gate も入れた
+        // (crates/llm/src/backend.rs::generate_with_retry コメント参照)
         let result = backend::generate_with_retry(
             &backend,
             &inference_params,
             prompt::SYSTEM_PROMPT,
             &prompt_text,
-            3,
+            1,
             |response| {
                 let _ = tx_retry.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
                 let lol = pipeline::extract_lol(response).unwrap_or_else(|| response.to_string());

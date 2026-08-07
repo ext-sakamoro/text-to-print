@@ -120,6 +120,21 @@ where
             .await?;
         last_content = content.clone();
 
+        // v0.1.0-beta.1: empty response 検知 alice-llm-server が retry で
+        // 3 分待って何も返さないケースあり (2026-08-07 実測) この場合
+        // safety_check 呼んでも fix_prompt が同じ empty を生む無限ループ
+        // なので即打ち切って明示 error 返す
+        if content.trim().is_empty() {
+            warn!(
+                attempt,
+                "LLM returned empty response — aborting retry loop (likely sidecar bug)"
+            );
+            bail!(
+                "LLM returned empty response (attempt {attempt}, elapsed retries: {retry_count}) \
+                 — try re-prompting with a clearer / shorter instruction"
+            );
+        }
+
         let violations = safety_check(&content);
         if violations.is_empty() {
             return Ok(RetryResult {
