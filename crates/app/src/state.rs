@@ -180,9 +180,14 @@ impl AppState {
         let profile_id = load_or_create_profile_id(&data_dir);
         let tier = db.get_or_create_profile(&profile_id).unwrap_or(Tier::Free);
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
+        // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
+        // sidecar は alice-llm-server binary の別途 install を必要とする
+        // (release.yml は bundle 済だが local `cargo run` では欠落) →
+        // 初回起動 UX が壊れる Embedded は alice-llm を rlib 直リンクなので
+        // binary 追加なしで動く GGUF DL は既存 downloader flow で自動化済
         let backend_kind = BackendKind::from_db_str(
             &db.get_backend_kind(&profile_id)
-                .unwrap_or_else(|_| "Sidecar".to_string()),
+                .unwrap_or_else(|_| "Embedded".to_string()),
         );
         let execution_mode = ExecutionMode::from_db_str(
             &db.get_execution_mode(&profile_id)

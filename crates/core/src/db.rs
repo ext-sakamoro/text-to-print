@@ -107,9 +107,17 @@ impl Database {
             .execute("ALTER TABLE generations ADD COLUMN manifest_json TEXT", []);
         // Stage 3-C.6: `backend_kind` persists the user's inference backend
         // choice (Sidecar HTTP vs Embedded in-process) across app restarts
-        // Default `Sidecar` matches pre-3-C.6 behaviour.
+        //
+        // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
+        // sidecar は alice-llm-server binary の別途 install を必要とし、
+        // 初回起動で spawn 失敗 UX が壊れていた Embedded は alice-llm を
+        // rlib 直リンクなので binary 追加なしで動く (詳細は
+        // crates/app/src/state.rs 該当箇所コメント)
+        //
+        // 注意: 既存 install (backend_kind = 'Sidecar' persist 済) には
+        // 影響なし ALTER TABLE ADD COLUMN の DEFAULT は新規行のみ適用
         let _ = self.conn.execute(
-            "ALTER TABLE profiles ADD COLUMN backend_kind TEXT NOT NULL DEFAULT 'Sidecar'",
+            "ALTER TABLE profiles ADD COLUMN backend_kind TEXT NOT NULL DEFAULT 'Embedded'",
             [],
         );
         // Stage 3-C.12: `execution_mode` persists whether the Embedded
