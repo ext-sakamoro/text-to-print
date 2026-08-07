@@ -9,10 +9,24 @@ pub struct SdfViewer {
     pub has_sdf: bool,
     pub pending_wgsl: Option<String>,
     pub camera: alice_view::app::Camera3D,
+    /// この LOL source で parse を既に試行したか (成功でも失敗でも true)
+    /// UI が毎 frame set_lol を呼ぶため、失敗時に log spam を防ぐ
+    /// 新しい LOL source が来たら reset される (set_lol 内で管理)
+    last_attempted_lol: Option<String>,
 }
 
 impl SdfViewer {
     pub fn set_lol(&mut self, lol_source: &str) {
+        // 同 LOL source を毎 frame 再試行しない (parse 失敗時 30-60 FPS で
+        // log spam していた事案対策) 新規 LOL が来たら再試行
+        if self
+            .last_attempted_lol
+            .as_deref()
+            .is_some_and(|prev| prev == lol_source)
+        {
+            return;
+        }
+        self.last_attempted_lol = Some(lol_source.to_string());
         match text_to_print_core::pipeline::lol_to_wgsl(lol_source) {
             Ok(wgsl) => {
                 self.pending_wgsl = Some(wgsl);
@@ -20,7 +34,10 @@ impl SdfViewer {
                 tracing::info!("WGSL shader generated for SDF preview");
             }
             Err(e) => {
-                tracing::warn!("Failed to generate WGSL: {e}");
+                tracing::warn!(
+                    "Failed to generate WGSL: {e} (LOL: {})",
+                    lol_source.chars().take(80).collect::<String>()
+                );
                 self.has_sdf = false;
             }
         }
@@ -29,9 +46,7 @@ impl SdfViewer {
 
 pub fn show(ui: &mut Ui, state: &AppState, viewer: &mut SdfViewer) {
     // 生成完了時に WGSL を生成
-    if let GenerationStatus::Done { lol_source, .. } = &state.generation_status
-        && !viewer.has_sdf
-    {
+    if let GenerationStatus::Done { lol_source, .. } = &state.generation_status {
         viewer.set_lol(lol_source);
     }
 
