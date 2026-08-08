@@ -227,7 +227,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
                     "頂点数: {} / 三角形数: {}",
                     stats.vertex_count, stats.triangle_count
                 ));
-                ui.label(format!("保存先: {}", stats.path));
+                ui.label(format!("保存先: {}", anonymize_home(&stats.path)));
 
                 if let Some(overhang) = &stats.overhang_summary {
                     ui.label(format!(
@@ -367,12 +367,56 @@ fn show_sidecar_status(ui: &mut Ui, state: &AppState) {
     }
 }
 
+/// Replace the user's `$HOME` prefix in a file path with `~` so the UI
+/// doesn't leak their username in "保存先" / preview labels When `$HOME`
+/// isn't set or doesn't match, returns the input unchanged
+fn anonymize_home(path: &str) -> String {
+    if let Some(home) = std::env::var_os("HOME").and_then(|h| h.into_string().ok())
+        && let Some(rest) = path.strip_prefix(&home)
+    {
+        return format!("~{rest}");
+    }
+    path.to_string()
+}
+
 fn show_phase_progress(ui: &mut Ui, progress: &PhaseProgress) {
     let total = GenerationPhase::ALL.len();
     let done = progress.completed.len();
+    let elapsed = progress.elapsed();
+    let in_flight = progress.current.is_some();
+
+    // Fake sub-progress during the in-flight phase so the bar visibly moves
+    // instead of sitting at 0% for the entire LLM inference (~100-500 sec
+    // on iGPU) The blend is 90% of the current phase share, capped just
+    // shy of the next phase boundary so completion snaps forward
     #[allow(clippy::cast_precision_loss)]
-    let ratio = done as f32 / total as f32;
+    let phase_share = 1.0 / total as f32;
+    #[allow(clippy::cast_precision_loss)]
+    let base_ratio = done as f32 / total as f32;
+    let ratio = if in_flight && let Some(elapsed) = elapsed {
+        // 120s = typical LLM phase on iGPU; asymptotes to 0.9 * phase_share
+        let phase_progress = (elapsed.as_secs_f32() / 120.0).min(0.9);
+        (base_ratio + phase_share * phase_progress).min(1.0)
+    } else {
+        base_ratio
+    };
     ui.add(egui::ProgressBar::new(ratio).show_percentage());
+
+    if in_flight && let Some(elapsed) = elapsed {
+        let sec = elapsed.as_secs();
+        let phase_label = progress.current.map(|p| p.label()).unwrap_or("");
+        ui.horizontal(|ui| {
+            ui.add(egui::Spinner::new());
+            ui.monospace(format!(
+                "{phase_label} 実行中... 経過 {:02}:{:02}",
+                sec / 60,
+                sec % 60,
+            ));
+        });
+        // Keep the timer ticking without user input
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(500));
+    }
 
     egui::Grid::new("phase_grid")
         .num_columns(3)
@@ -674,6 +718,122 @@ fn run_export(
     }
 }
 
+/// Skip the LLM entirely and drive the mesh pipeline directly from a
+/// hand-crafted LOL DSL string This is the fast path (~1 sec) used by
+/// template buttons in the prompt panel LLM phase is emitted as
+/// zero-duration so the UI phase grid still walks through all 5 stages
+fn start_generation_from_lol(state: &mut AppState, lol_source: String, template_name: &str) {
+    let gen_id = uuid::Uuid::now_v7().to_string();
+    let is_public = state.tier.limits().force_public;
+    let prompt_placeholder = format!("[template] {template_name}");
+
+    let _ = state.db.insert_generation(&GenerationRecord {
+        id: &gen_id,
+        profile_id: &state.profile_id,
+        prompt: &prompt_placeholder,
+        lol_source: Some(&lol_source),
+        sdf_data: None,
+        quality: "preview",
+        status: "pending",
+        is_public,
+        manifest_json: None,
+    });
+    let _ = state
+        .db
+        .increment_daily_usage(&state.profile_id, &state.today());
+
+    state.generation_status = GenerationStatus::Generating;
+    state.phase_progress.reset();
+    state.phase_progress.generation_start = Some(Instant::now());
+
+    let tx = state.result_tx.clone();
+    let id = gen_id;
+    let output_dir = state.data_dir.join("exports");
+    let can_download = state.tier.limits().can_download;
+    let lol_clone = lol_source.clone();
+
+    state.runtime.spawn(async move {
+        // LLM phase = instant so the phase grid still ticks through in the
+        // same order as a real generation (Llm → Parse → Mesh → Safety →
+        // Export) template mesh is entirely local so no network / model
+        // load is involved
+        let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Llm));
+        let _ = tx.send(GenerationMessage::PhaseDone(
+            GenerationPhase::Llm,
+            Duration::ZERO,
+        ));
+        let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Parse));
+        let _ = tx.send(GenerationMessage::PhaseDone(
+            GenerationPhase::Parse,
+            Duration::ZERO,
+        ));
+
+        let mut pipeline_error: Option<String> = None;
+        let mesh_stats = if can_download {
+            let _ = std::fs::create_dir_all(&output_dir);
+            let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Mesh));
+            let mesh_start = Instant::now();
+            let stats_result = pipeline::export_mesh(
+                &lol_clone,
+                &output_dir,
+                ExportFormat::ThreeMf,
+                Quality::Preview,
+            );
+            let _ = tx.send(GenerationMessage::PhaseDone(
+                GenerationPhase::Mesh,
+                mesh_start.elapsed(),
+            ));
+
+            let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Safety));
+            let _ = tx.send(GenerationMessage::PhaseDone(
+                GenerationPhase::Safety,
+                Duration::ZERO,
+            ));
+
+            let _ = tx.send(GenerationMessage::PhaseStart(GenerationPhase::Export));
+            let out = match stats_result {
+                Ok(stats) => Some(stats),
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        lol_preview = %lol_clone.chars().take(120).collect::<String>(),
+                        "template mesh export failed"
+                    );
+                    pipeline_error = Some(format!("テンプレート生成失敗: {e}"));
+                    None
+                }
+            };
+            let _ = tx.send(GenerationMessage::PhaseDone(
+                GenerationPhase::Export,
+                Duration::ZERO,
+            ));
+            out
+        } else {
+            for p in [
+                GenerationPhase::Mesh,
+                GenerationPhase::Safety,
+                GenerationPhase::Export,
+            ] {
+                let _ = tx.send(GenerationMessage::PhaseStart(p));
+                let _ = tx.send(GenerationMessage::PhaseDone(p, Duration::ZERO));
+            }
+            None
+        };
+
+        if let Some(err) = pipeline_error {
+            let _ = tx.send(GenerationMessage::Failure { id, error: err });
+        } else {
+            let _ = tx.send(GenerationMessage::Success {
+                id,
+                lol_source: lol_clone,
+                mesh_stats: mesh_stats.map(Box::new),
+                retry_count: 0,
+                share_dry_run: None,
+            });
+        }
+    });
+}
+
 fn start_generation(state: &mut AppState, _lang: Lang) {
     let gen_id = uuid::Uuid::now_v7().to_string();
     let prompt_text = state.prompt_input.trim().to_string();
@@ -696,6 +856,9 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
 
     state.generation_status = GenerationStatus::Generating;
     state.phase_progress.reset();
+    // Start the wall-clock timer so the UI can show progress during the
+    // LLM phase (which is 99% of total wall time on iGPU)
+    state.phase_progress.generation_start = Some(Instant::now());
 
     let config = state.llm_config.clone();
     // Stage 3-C.6: dispatch through the user-selected backend When the
@@ -983,94 +1146,75 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
     }
 }
 
-/// テンプレート prompt を prompt 入力欄に注入する UI section
+/// テンプレート = ALICE-Bamboo/models 実プリント合格 baseline
 ///
-/// 3 カテゴリ (実用品 / DIY / ゲーム・装飾) 各 4-5 template
-/// ボタンをクリックすると `state.prompt_input` に text を書き込む
-/// user は数値を修正して生成 生成中は disabled
+/// Phase T1.1 (2026-08-08) で ALICE-* 由来なしの自作 LOL DSL を全削除、
+/// `alice_lol::stdlib::pattern::registry::ALL` (canonical 13 pattern) のうち
+/// runtime_parser Phase 5.1 高階 primitive で表現可能な 9 items を採用
+///
+/// 全 template は `~/ALICE-Bamboo/models/` に対応する `bamboo_canonical` を持ち、
+/// `printability_score` (Bamboo simulation 実測) + `certified_by` (Both / UserFieldTest)
+/// で認証済 未対応 4 items (shelf_divider / wall_hook / gridfinity_bin / drawer_organizer)
+/// は ALICE-LOL runtime_parser に高階 primitive 追加後に取り込む
+///
+/// 詳細: [[project_text_to_print_templates_alice_source]]
+///
+/// タプル形式: (button label, LOL DSL string)
+const TEMPLATE_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
+    (
+        "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
+        &[
+            // shopping_cart_coin_100yen: Φ22.8 × 1.7mm、models/accessories/shopping-cart-coin
+            ("コイン (100円)", "shopping_cart_coin(22.8, 1.7)"),
+            // skadis_panel_300x300: 300×300×5mm + peg 穴 98 個、models/wall-organizer/skadis-300x300
+            ("SKADIS パネル 300×300", "skadis_panel(300, 5, 6)"),
+            // skadis_hook_s: S 字曲げ、models/wall-organizer/skadis-hook-s
+            ("SKADIS フック S", "skadis_hook_s()"),
+            // skadis_clip: 単 peg 細物ホルダー、models/wall-organizer/skadis-clip
+            ("SKADIS クリップ", "skadis_clip()"),
+            // skadis_elastic_cord: 伸縮バンド固定、models/wall-organizer/skadis-elastic-cord
+            ("SKADIS ゴムバンド", "skadis_elastic_cord()"),
+        ],
+    ),
+    (
+        "実績品 UserFieldTest 認証 (実荷重テスト合格、ALICE-Bamboo/models 由来)",
+        &[
+            // skadis_hook_j: J 字曲げ、models/wall-organizer/skadis-hook-j
+            ("SKADIS フック J", "skadis_hook_j()"),
+            // skadis_hook_l: 直角曲げ、models/wall-organizer/skadis-hook-l
+            ("SKADIS フック L", "skadis_hook_l()"),
+            // skadis_container: 2 peg gusset ribs 補強、models/wall-organizer/skadis-container
+            ("SKADIS コンテナ", "skadis_container()"),
+            // skadis_shelf: 2 peg rib 補強棚板、PETG 30lbs 実荷重合格、models/wall-organizer/skadis-shelf
+            ("SKADIS シェルフ", "skadis_shelf()"),
+        ],
+    ),
+];
+
+/// テンプレート = 直接 LOL DSL 生成 (LLM bypass、~1 秒)
+///
+/// 従来の Japanese prompt + LLM 経路 (2-8 min + 非決定) から刷新
+/// ボタンクリック → alice-bamboo pipeline に LOL を直接流し込み、mesh + 3MF
+/// を即座に生成 → viewer 表示 生成中は disabled
 fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
-    ui.collapsing("テンプレート (クリックで prompt に挿入)", |ui| {
-        ui.add_enabled_ui(!is_generating, |ui| {
-            const CATEGORIES: &[(&str, &[(&str, &str)])] = &[
-                (
-                    "実用品",
-                    &[
-                        ("ネジ M6", "M6 の六角ボルト、頭径 10mm、頭厚 4mm、ネジ部長さ 25mm、ネジ径 6mm"),
-                        (
-                            "L字フック",
-                            "L字型のフック、長辺 60mm、短辺 40mm、幅 15mm、厚さ 5mm、両端に直径 5mm のネジ穴",
-                        ),
-                        ("ワッシャー", "ワッシャー、外径 20mm、内径 8mm、厚さ 2mm"),
-                        (
-                            "L字ブラケット",
-                            "L字ブラケット、辺 50mm × 50mm、幅 30mm、厚さ 4mm、両辺に直径 5mm のネジ穴を 2 つずつ",
-                        ),
-                        (
-                            "スペーサー",
-                            "円柱型スペーサー、外径 12mm、内径 4mm、高さ 15mm",
-                        ),
-                    ],
-                ),
-                (
-                    "DIY / インテリア",
-                    &[
-                        (
-                            "壁掛けフック",
-                            "壁掛け用フック、ベース板 40mm × 60mm × 5mm、フック部分 30mm 突き出し、ネジ穴 2 個 (直径 5mm)",
-                        ),
-                        (
-                            "取っ手 (ノブ)",
-                            "ドロワーノブ、ヘッド直径 30mm、高さ 20mm、ネジ穴 M4 深さ 12mm",
-                        ),
-                        (
-                            "スマホスタンド",
-                            "スマホスタンド、幅 80mm、奥行 60mm、高さ 40mm、傾斜角 65 度、ケーブル穴 直径 10mm",
-                        ),
-                        (
-                            "コースター",
-                            "円形コースター、直径 90mm、厚さ 4mm、縁 2mm 立ち上がり",
-                        ),
-                        (
-                            "植木鉢",
-                            "円柱型植木鉢、外径 80mm、高さ 100mm、壁厚 3mm、底に排水穴 5mm × 4 個",
-                        ),
-                    ],
-                ),
-                (
-                    "ゲーム / 装飾",
-                    &[
-                        (
-                            "椅子",
-                            "シンプルな椅子、座面 40mm × 40mm × 4mm、脚 4 本 (角柱 4mm × 4mm × 40mm)、背もたれ 40mm × 45mm × 4mm",
-                        ),
-                        (
-                            "テーブル",
-                            "四角いテーブル、天板 80mm × 60mm × 5mm、脚 4 本 (角柱 5mm × 5mm × 30mm)",
-                        ),
-                        ("本棚", "本棚、幅 60mm、高さ 80mm、奥行 20mm、棚板 3 枚、板厚 3mm"),
-                        (
-                            "剣",
-                            "ファンタジー風の剣、刃長 100mm、刃幅 15mm、刃厚 3mm、鍔 30mm × 8mm、柄 40mm × 10mm",
-                        ),
-                        (
-                            "宝箱",
-                            "宝箱、本体 60mm × 40mm × 30mm、蓋 60mm × 40mm × 15mm (アーチ状)、金具 4 個",
-                        ),
-                    ],
-                ),
-            ];
-            for (cat_name, items) in CATEGORIES {
-                ui.label(egui::RichText::new(*cat_name).strong());
-                ui.horizontal_wrapped(|ui| {
-                    for (label, template) in *items {
-                        if ui.button(*label).clicked() {
-                            state.prompt_input = (*template).to_string();
-                            state.prompt_focused_once = false;
+    ui.collapsing(
+        "テンプレート (クリックで即生成、LLM 経由しない)",
+        |ui| {
+            ui.add_enabled_ui(!is_generating, |ui| {
+                for (cat_name, items) in TEMPLATE_CATEGORIES {
+                    ui.label(egui::RichText::new(*cat_name).strong());
+                    ui.horizontal_wrapped(|ui| {
+                        for (label, lol_dsl) in *items {
+                            if ui.button(*label).clicked() {
+                                state.prompt_input = format!("[template] {label}");
+                                state.prompt_focused_once = false;
+                                start_generation_from_lol(state, (*lol_dsl).to_string(), label);
+                            }
                         }
-                    }
-                });
-                ui.add_space(2.0);
-            }
-        });
-    });
+                    });
+                    ui.add_space(2.0);
+                }
+            });
+        },
+    );
 }

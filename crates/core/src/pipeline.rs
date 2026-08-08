@@ -131,9 +131,14 @@ impl Quality {
     }
 
     /// Marching-cubes resolution used by the `alice_bamboo` 3MF pipeline.
+    ///
+    /// Preview は Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs`
+    /// 全 13 pattern で `resolution: 96` 統一) と同じ 96 に揃え、大型 template
+    /// (SKADIS panel 300×300 等) の mesh gen 時間を短縮 (128³ = 2.1M → 96³ = 885K、
+    /// 2.4x sample 削減)
     pub fn mesh_resolution(self) -> usize {
         match self {
-            Self::Preview => 128,
+            Self::Preview => 96,
             Self::High => 192,
             Self::Ultra => 256,
         }
@@ -186,6 +191,21 @@ pub fn export_mesh(
     }
 }
 
+/// mesh 生成経路 (Dual Contouring vs Marching Cubes) を bbox 寸法から判定
+///
+/// 判定基準 (OR 論理):
+/// - `aspect_ratio (= max_dim / min_dim) > 5.0`: 板状 / 棒状 (peg 穴等の小 feature を保存)
+/// - `min_dim <= 5.0mm`: 薄物 (Hermite data で watertight 保証)
+///
+/// Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json`) の route 判定と一致
+/// SKADIS panel 300×300 (bbox 312×17×312) は aspect 18.4 → DC 経路に落ちる
+fn should_use_dual_contouring(dims: (f32, f32, f32)) -> bool {
+    let max_dim = dims.0.max(dims.1).max(dims.2);
+    let min_dim = dims.0.min(dims.1).min(dims.2);
+    let aspect_ratio = max_dim / min_dim.max(1e-3);
+    aspect_ratio > 5.0 || min_dim <= 5.0
+}
+
 /// LOL → 3MF via alice-bamboo, with safety + overhang analysis.
 ///
 /// Pipeline:
@@ -228,14 +248,28 @@ fn export_3mf_via_bamboo(
     let min_bounds = aabb.min - padding;
     let max_bounds = aabb.max + padding;
 
-    // Phase 5.4: 厚さ判定 → 薄物 (Y 範囲 < 5mm) は DC 経路、厚物は MC 経路 (Phase 3''.2 実測根拠)
-    let thickness_y = aabb.max.y - aabb.min.y;
-    let use_dc = thickness_y < 5.0;
+    // Phase 5.4 → 5.5 (2026-08-08): 経路判定を AABB Y 軸単独から aspect ratio ベースに拡張
+    // 「薄物 vs 厚物」は AABB Y だけでなく shape aspect ratio で決定 (SKADIS panel 300×300 は
+    // 本体 5mm + peg 補強で AABB Y=17mm、旧判定では MC 経路に落ちて Ø5mm peg 穴が解像度不足で
+    // 消失した事案) 詳細判定ロジック: `should_use_dual_contouring`
+    let dims = (
+        aabb.max.x - aabb.min.x,
+        aabb.max.y - aabb.min.y,
+        aabb.max.z - aabb.min.z,
+    );
+    let use_dc = should_use_dual_contouring(dims);
+    let (max_dim, min_dim) = (
+        dims.0.max(dims.1).max(dims.2),
+        dims.0.min(dims.1).min(dims.2),
+    );
     info!(
-        thickness_y = thickness_y,
+        thickness_y = dims.1,
+        max_dim = max_dim,
+        min_dim = min_dim,
+        aspect_ratio = max_dim / min_dim.max(1e-3),
         use_dc = use_dc,
         resolution = quality.mesh_resolution(),
-        "mesh route selected (< 5mm → DC、>= 5mm → MC)"
+        "mesh route selected (aspect_ratio > 5.0 OR min_dim <= 5.0 → DC)"
     );
 
     let mesh = if use_dc {
@@ -773,9 +807,45 @@ mod tests {
 
     #[test]
     fn test_quality_mesh_resolution() {
-        assert_eq!(Quality::Preview.mesh_resolution(), 128);
+        assert_eq!(Quality::Preview.mesh_resolution(), 96);
         assert_eq!(Quality::High.mesh_resolution(), 192);
         assert_eq!(Quality::Ultra.mesh_resolution(), 256);
+    }
+
+    #[test]
+    fn should_use_dc_for_flat_panel_shapes() {
+        // SKADIS panel 300×300: bbox 312×17×312、aspect 18.4 → DC (Bamboo canonical と一致)
+        assert!(should_use_dual_contouring((312.0, 17.0, 312.0)));
+        // 板状 (200×2×200): min_dim 2.0 <= 5.0 → DC
+        assert!(should_use_dual_contouring((200.0, 2.0, 200.0)));
+        // 棒状 (100×5×5): aspect 20.0 → DC
+        assert!(should_use_dual_contouring((100.0, 5.0, 5.0)));
+    }
+
+    #[test]
+    fn should_use_dc_for_thin_coins() {
+        // コイン Ø22.8 × 1.7mm: min_dim 1.7 <= 5.0 → DC
+        assert!(should_use_dual_contouring((22.8, 1.7, 22.8)));
+        // 極薄 (10×0.5×10): min_dim 0.5 → DC
+        assert!(should_use_dual_contouring((10.0, 0.5, 10.0)));
+    }
+
+    #[test]
+    fn should_use_mc_for_bulky_shapes() {
+        // 立方体 20×20×20: aspect 1.0、min_dim 20.0 → MC
+        assert!(!should_use_dual_contouring((20.0, 20.0, 20.0)));
+        // 直方体 30×20×15: aspect 2.0、min_dim 15.0 → MC
+        assert!(!should_use_dual_contouring((30.0, 20.0, 15.0)));
+        // 中型 (50×15×30): aspect 3.33、min_dim 15.0 → MC
+        assert!(!should_use_dual_contouring((50.0, 15.0, 30.0)));
+    }
+
+    #[test]
+    fn should_use_dc_at_boundary_min_dim_5mm() {
+        // min_dim ちょうど 5.0mm → DC (`<= 5.0`)
+        assert!(should_use_dual_contouring((100.0, 5.0, 100.0)));
+        // min_dim 5.1mm、aspect 100/5.1=19.6 → DC (aspect 経由)
+        assert!(should_use_dual_contouring((100.0, 5.1, 100.0)));
     }
 
     #[test]

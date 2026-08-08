@@ -259,6 +259,50 @@ P2-1〜P2-5 + P2-7 完了後:
 
 **受入基準**: 最初の Paid tier 課金成功 + Free tier LoRA flywheel 1 サイクル完走
 
+### P2-8: Template アーキテクチャ再設計 (LLM bypass + ALICE-Bamboo 直叩き)
+
+**背景**: 現状 templates は日本語 prompt を LLM に注入する scaffolding 実装 template click しても LLM 推論 (2-8 分 + retry) を毎回待たされ、非決定性 (temperature > 0) で毎回違う LOL が生成される 「template = 既知完成品」の user 期待とギャップあり ALICE-LOL / ALICE-Bamboo / ALICE-Print の proven pipeline を直叩きすべきなのに現状は LLM の下流ツール扱いになっている
+
+**正しい architecture** (2026-08-08 議論確定):
+- **templates** = LOL DSL library (LLM bypass、alice-bamboo pipeline 直叩き、~1 秒で mesh)
+- **自然言語 prompt** = 「novel な形状を text で探索」時のみ LLM 経路 (2-8 分、非決定性)
+- 両経路とも同じ alice-bamboo::lol_to_sdf → mesh → export_bambu_3mf に集約
+
+#### Phase T1 ✅ (2026-08-08 完了予定、この session): 静的 LOL テンプレート化 (D-1)
+
+- ✅ 現状 14 template (実用品 / DIY / ゲーム・装飾 の 3 カテゴリ) の Japanese prompt を実 LOL DSL に置換
+- ✅ template click → 直接 LOL 生成経路 (`alice_bamboo::lol_to_sdf` → mesh → 3MF) を通す (LLM 完全 bypass)
+- ✅ 生成時間 2-8 分 → ~1 秒に短縮、決定性 100%
+- ✅ 全 14 template で shape が意図通りに Bambu Studio 表示可能なことを目視確認
+
+**受入基準**: template click → 1 秒以内に mesh preview + 3MF file 生成、同じ template を N 回 click しても常に identical shape
+
+#### Phase T2 (次 session、~2h scope): Placeholder + slider UI (D-3)
+
+- [ ] LOL DSL に `{width}` `{height}` 等 named placeholder を許可 (`stdlib::format!` 相当の変数展開)
+- [ ] template metadata に param 定義 (name, min, max, default, unit)
+- [ ] template click 時に slider / number input を surface (例: 「コースター 直径 [90] mm、厚さ [4] mm」)
+- [ ] slider 変更で LOL bake → 即座に mesh preview 更新 (debounce ~100ms)
+
+**受入基準**: user が template 選択 + slider で寸法調整 → 実時間で preview 更新、3MF export で slider 値通りの mesh 出力
+
+#### Phase T3 (次 session、~1h scope): ALICE-Bamboo/examples の import
+
+- [ ] `~/ALICE-Bamboo/examples/skadis_sdf.rs` / `shopping_cart_coin.rs` / `wall-organizer` 系の hand-crafted LOL を text-to-print の template library に import
+- [ ] category を追加 (e.g., "SKADIS system", "実用品 (印刷実績あり)")
+- [ ] license note (originator: alice-bamboo/examples) を UI に添付
+
+**受入基準**: SKADIS panel / coin 等の proven LOL を text-to-print から 1 click で出力
+
+#### Phase T4 (次 session、~1h scope): History → template promote
+
+- [ ] History tab で過去生成 LOL を右クリック → 「マイテンプレートに追加」button
+- [ ] user 定義 template を db に永続 (profiles.custom_templates JSON column)
+- [ ] template category に「マイテンプレート」を追加、hardcoded 14 と並列表示
+- [ ] template 名編集 + 削除 UI
+
+**受入基準**: user 生成物 → template 化 → 別 session で再利用可能
+
 ### P2-7: datasets 拡大 + LOL primitive 網羅 audit script (別 session 実行想定)
 
 現状 523 sample を数千 sample に拡大 + LOL DSL 全 primitive カバレッジを systematic に verify
@@ -296,3 +340,4 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | **CI 修正** — 4 job 全 green 化:  `cargo audit` は `.cargo/audit.toml` per-entry rationale 付き ignore list + Cargo.lock update で 12 vuln 解消 / `fmt` 独立 job 廃止して `clippy-test-doc` に merge (workspace path deps 解決 fail 回避) / `ALICE_ECO_TOKEN` GitHub secret 登録 (private ALICE-Bamboo checkout 通過) / Phase S2 追加 code の rustfmt 自動整形 |
 | 2026-08-07 | **end-to-end pipeline 完走まで到達** — LLM system_prompt を Z-up 慣習 + wedge example に刷新、`fix_prompt::LolParseError` variant で parse retry loop 完成、`max_retries` 1→2、HTTP timeout 180→300s、export silent Err bug 修正 実測 `スマホスタンド…` prompt で Bambu Studio 対応 3MF 完走 test 228 pass |
 | 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別 session で mesh 経路に refactor 予定) |
+| 2026-08-08 | **P2-8 追加** — Template アーキテクチャ再設計 議論 (現状 Japanese prompt + LLM 経路の非決定性 / 遅さ / 失敗リスクの問題共有) LLM は「novel な形状の探索」だけに使い、templates は alice-bamboo pipeline 直叩き (~1 秒、決定性 100%) にすべきという設計判断確定 Phase T1 (LOL DSL 化、本 session) / T2 (placeholder + slider UI) / T3 (ALICE-Bamboo/examples import) / T4 (history → template promote) の 4 phase に分割 |

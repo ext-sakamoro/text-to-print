@@ -47,6 +47,14 @@ pub struct PhaseProgress {
     pub completed: Vec<(GenerationPhase, Duration)>,
     /// Retry count for the LLM phase (surfaced by Stage 8 backend when wired).
     pub retry_count: u32,
+    /// Wall-clock instant when the current generation started
+    ///
+    /// Populated by `prompt.rs` right before the LLM inference request is
+    /// dispatched, cleared on `reset()` The UI reads this to show a running
+    /// elapsed-time counter — otherwise the progress bar sits at 0% for the
+    /// entire LLM phase (which dominates the wall-clock time) and users
+    /// cannot tell whether the app is stuck or working
+    pub generation_start: Option<std::time::Instant>,
 }
 
 impl PhaseProgress {
@@ -54,6 +62,7 @@ impl PhaseProgress {
         self.current = None;
         self.completed.clear();
         self.retry_count = 0;
+        self.generation_start = None;
     }
 
     pub fn is_done(&self, phase: GenerationPhase) -> bool {
@@ -65,6 +74,12 @@ impl PhaseProgress {
             .iter()
             .find(|(p, _)| *p == phase)
             .map(|(_, d)| *d)
+    }
+
+    /// Elapsed time since `generation_start` was set — returns `None` when
+    /// no generation is currently in flight
+    pub fn elapsed(&self) -> Option<Duration> {
+        self.generation_start.map(|t| t.elapsed())
     }
 }
 
@@ -857,6 +872,7 @@ mod tests {
             current: Some(GenerationPhase::Llm),
             completed: vec![(GenerationPhase::Llm, Duration::from_millis(120))],
             retry_count: 0,
+            generation_start: None,
         };
         p.current = Some(GenerationPhase::Parse);
         assert!(p.is_done(GenerationPhase::Llm));
@@ -880,6 +896,7 @@ mod tests {
             current: Some(GenerationPhase::Export),
             completed,
             retry_count: 2,
+            generation_start: None,
         };
         for (phase, ms) in GenerationPhase::ALL.iter().zip(latencies) {
             assert!(p.is_done(*phase));
@@ -897,6 +914,7 @@ mod tests {
                 (GenerationPhase::Parse, Duration::from_millis(2)),
             ],
             retry_count: 3,
+            generation_start: None,
         };
         p.reset();
         assert!(p.current.is_none());
