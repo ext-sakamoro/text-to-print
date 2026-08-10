@@ -1157,7 +1157,7 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
 /// で認証済 未対応 4 items (shelf_divider / wall_hook / gridfinity_bin / drawer_organizer)
 /// は ALICE-LOL runtime_parser に高階 primitive 追加後に取り込む
 ///
-/// 詳細: [[project_text_to_print_templates_alice_source]]
+/// 詳細: memory `project_text_to_print_templates_alice_source.md` 参照
 ///
 /// タプル形式: (button label, LOL DSL string)
 const TEMPLATE_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
