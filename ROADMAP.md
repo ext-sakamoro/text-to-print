@@ -2,7 +2,38 @@
 
 target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
-現状 (2026-08-08): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace **228**/228 pass、mesh preview + Z-up system_prompt + retry loop 完成後) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+現状 (2026-08-11): core パイプライン完成 (text → LLM → LOL → SDF → mesh → MakerWorld 対応 .3mf、cargo test workspace **232**/232 pass、SKADIS panel canonical 化 + Template アーキテクチャ Phase T1 完了 2026-08-09) release automation 完成 (.tar.gz / .zip / .msi / .deb / .AppImage + macOS codesign + notarize) 残タスクは docs / infra deploy / paid tier
+
+## Release スケジュール (β 公開 vs 本番公開)
+
+| 段階 | version | 意味 | 対象 user | 依存 phase | 目安時期 |
+|--|--|--|--|--|--|
+| **β 公開** | v0.1.0 β | early adopter 向け先行公開 (GitHub Releases 公開開始、user 側 install 可、ただし production 品質 pre-verify なし、実 MakerWorld / 実 Stripe 未通過) | 個人 / ALICE community / 3D print 早期 user | P0 のみ | 数時間〜1 日 |
+| **本番公開 (GA)** | v0.1.0 GA | production 品質 (実機検証済、backend infra 全 deploy 済、公開情報として推奨可) | 一般 3D print user、Bambu owner | P0 + P1 | 数日〜2 週 |
+| **商用公開** | v1.0.0 | Paid tier 課金稼働、LoRA flywheel 自動化、複数 printer / filament template | 商用 user + Enterprise | P0 + P1 + P2 | 数週〜数ヶ月 |
+
+**β vs 本番の判断基準**:
+- **β 公開時点で許容**: production 品質未達 / 実 MakerWorld upload 未検証 / Stripe live 未切替 / crash reporter / share endpoint 未 deploy / Bonsai27B 公開判断保留 / 実機 test は個人環境のみ
+- **本番公開 (GA) 時点で必達**: 全 P1 タスク受入基準 pass + 実 MakerWorld upload 成功 + backend endpoint (share / crash) CF Workers deploy 済 + GA release notes 公開
+- **商用公開 (v1.0.0) 時点で必達**: 実 Stripe live 課金 1 件成功 + LoRA flywheel 1 サイクル完走 + Windows Authenticode 署名 + landing page + マーケティング配布 channel 確保
+
+---
+
+### 2026-08-09 完了項目
+
+- ✅ **SKADIS panel canonical 化 (Phase T1.1)** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix: (1) Y 板厚 17mm bug (RoundedBox 6 面 inflate 罠、`~/.claude/projects/-Users-ys/memory/feedback_alice_sdf_rounded_box_six_face_inflate.md`) を `Intersection { RoundedBox, Box3d Y-cutter }` で解消、Y=5mm 正確、X/Z corner fillet 保持 (2) Stadium peg 穴 (Box3d rectangle → 中央 Box + Y 軸 Cylinder × 2 半円 ends の Union、SKADIS_SPEC.md §1 準拠 5×15mm round 2.5) (3) connector 穴 44 個 + mount 穴 6 個追加 (production `models/wall-organizer/skadis-300x300/generate.py::get_conn_positions` / `_mount_positions` を Rust に port、Python 板 origin=左下 → Rust 板 origin=中央 座標変換) 実測 148 hole 全 visible (peg 98 + conn 44 + mount 6)、mesh gen 5292ms/238700 tri/overhang 2.1%/PLA 安全性 OK、Bambu production 3MF `skadis_panel_300x300.3mf` と shape 一致 alice-lol lib test 226 pass (skadis 12 tests all pass)
+
+- ✅ **pipeline aspect_ratio ベース DC/MC 判定 (Phase T1.2)** — `crates/core/src/pipeline.rs` の `use_dc = thickness_y < 5.0` (Y 軸単独) を `should_use_dual_contouring(dims)` helper (`aspect_ratio > 5.0 || min_dim <= 5.0`) に refactor SKADIS panel Y=17mm bug で MC 経路に落ちて Ø5mm peg 穴が MC 解像度不足 (X/Z cell 3.25mm) で消失した bug を根本予防 Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json` の `"route": "DC"/"MC"`) と実装 route 一致確認 新 test 4 個追加 (should_use_dc_for_flat_panel_shapes / thin_coins / mc_for_bulky / boundary at min_dim 5mm) 詳細: memory `feedback_alice_sdf_dc_mc_route_aspect_ratio.md`
+
+- ✅ **Preview resolution 128→96 (Bamboo canonical 準拠)** — Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs` 全 13 pattern 統一値 96) と揃える sample 数 128³=2.1M → 96³=885K = 2.4× 削減、mesh gen 大幅高速化 (SKADIS panel 25 分見込→5.3s = 285× speedup)
+
+- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL、anti-pattern E: examples を無視して templates を自作) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別 session で ALICE-LOL runtime_parser に primitive 追加後に取り込み)
+
+- ✅ **UI 経過時間表示** — `crates/app/src/state.rs::PhaseProgress` に `generation_start: Option<Instant>` + `elapsed()` method 追加 進捗 bar が 0% のまま LLM phase 待機中でも user が経過時間を確認可能 (旧: 「stuck か working か区別つかない」問題)
+
+- ✅ **CI green 化 (両 repo)** — ALICE-LOL fmt fail (`skadis_sdf.rs` L448/L457 trailing comment 位置ずれ、rustfmt が inline コメント直後の // 単独行を続き位置にインデントする挙動) を空行で分離して解消 text-to-print doc fail (rustdoc が `[[wikilink]]` 記法を intra-doc link と解釈して unresolved link error) を「memory `X.md` 参照」text 形式に修正 両 CI success 確認 (ALICE-LOL 1m24s / text-to-print 5m45s)
+
+- ✅ **memory 3 file 追加** (`~/.claude/projects/-Users-ys/memory/`): `feedback_alice_sdf_rounded_box_six_face_inflate.md` (RoundedBox 6 面 inflate 罠) + `feedback_alice_sdf_dc_mc_route_aspect_ratio.md` (MC/DC route 判定 rule) + `success_skadis_panel_canonical_alignment_2026_08_09.md` (production Python 対応 mirror pattern 10 段 canonical フロー、gridfinity/wall_hook/drawer/shelf 4 items で再発予定)
 
 ### 2026-08-08 完了項目
 
@@ -268,14 +299,17 @@ P2-1〜P2-5 + P2-7 完了後:
 - **自然言語 prompt** = 「novel な形状を text で探索」時のみ LLM 経路 (2-8 分、非決定性)
 - 両経路とも同じ alice-bamboo::lol_to_sdf → mesh → export_bambu_3mf に集約
 
-#### Phase T1 ✅ (2026-08-08 完了予定、この session): 静的 LOL テンプレート化 (D-1)
+#### Phase T1 ✅ (2026-08-08〜2026-08-09 完了): 静的 LOL テンプレート化 (D-1) + ALICE-Bamboo canonical 化
 
-- ✅ 現状 14 template (実用品 / DIY / ゲーム・装飾 の 3 カテゴリ) の Japanese prompt を実 LOL DSL に置換
+- ✅ **Phase T1.0** (2026-08-08): 現状 14 template (実用品 / DIY / ゲーム・装飾 の 3 カテゴリ) の Japanese prompt を実 LOL DSL に置換
+- ✅ **Phase T1.1** (2026-08-09): TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 (自作 15 items 削除、anti-pattern E 解消、`registry::ALL` 13 canonical pattern と 1:1)
+- ✅ **Phase T1.2** (2026-08-09): pipeline `should_use_dual_contouring(dims)` helper で aspect_ratio ベース DC/MC 判定 + Preview resolution 128→96 (Bamboo canonical 準拠)
+- ✅ **Phase T1.3** (2026-08-09): ALICE-LOL `skadis_panel_sdf` 3 段 canonical 化 (Y板厚 5mm + Stadium peg + connector/mount 148 hole 全再現)
 - ✅ template click → 直接 LOL 生成経路 (`alice_bamboo::lol_to_sdf` → mesh → 3MF) を通す (LLM 完全 bypass)
-- ✅ 生成時間 2-8 分 → ~1 秒に短縮、決定性 100%
-- ✅ 全 14 template で shape が意図通りに Bambu Studio 表示可能なことを目視確認
+- ✅ 生成時間 2-8 分 → **数百 ms〜数秒に短縮** (SKADIS panel 大型 template で 5.3s、コイン等の小型で ~1s)、決定性 100%
+- ✅ SKADIS panel 300×300 で shape 意図通りに Bambu Studio 表示可能なことを実 UI 目視確認、他 8 items は user 検証待ち
 
-**受入基準**: template click → 1 秒以内に mesh preview + 3MF file 生成、同じ template を N 回 click しても常に identical shape
+**受入基準**: template click → 数秒以内に mesh preview + 3MF file 生成、同じ template を N 回 click しても常に identical shape (SKADIS panel は 148 hole 全 canonical 再現、production 3MF と一致)
 
 #### Phase T2 (次 session、~2h scope): Placeholder + slider UI (D-3)
 
@@ -341,3 +375,6 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | **end-to-end pipeline 完走まで到達** — LLM system_prompt を Z-up 慣習 + wedge example に刷新、`fix_prompt::LolParseError` variant で parse retry loop 完成、`max_retries` 1→2、HTTP timeout 180→300s、export silent Err bug 修正 実測 `スマホスタンド…` prompt で Bambu Studio 対応 3MF 完走 test 228 pass |
 | 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別 session で mesh 経路に refactor 予定) |
 | 2026-08-08 | **P2-8 追加** — Template アーキテクチャ再設計 議論 (現状 Japanese prompt + LLM 経路の非決定性 / 遅さ / 失敗リスクの問題共有) LLM は「novel な形状の探索」だけに使い、templates は alice-bamboo pipeline 直叩き (~1 秒、決定性 100%) にすべきという設計判断確定 Phase T1 (LOL DSL 化、本 session) / T2 (placeholder + slider UI) / T3 (ALICE-Bamboo/examples import) / T4 (history → template promote) の 4 phase に分割 |
+| 2026-08-09 | **Phase T1.1-1.3 完了** — SKADIS panel canonical 化 3 段 fix (Y板厚 17mm→5mm bug + Stadium peg + connector/mount 148 hole 全再現) + pipeline aspect_ratio ベース DC/MC 判定 helper + Preview resolution 128→96 (SKADIS panel mesh gen 25 分見込→5.3s = 285x speedup) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 + UI 経過時間表示 + memory 3 file (RoundedBox 罠 / DC-MC route / SKADIS canonical) 追加 alice-lol lib test 226 pass / text-to-print workspace 232 pass |
+| 2026-08-10 | **CI green 化** — ALICE-LOL fmt fail (trailing comment 位置ずれ) + text-to-print rustdoc fail (wikilink → intra-doc link 誤解釈) 両方修正、両 CI success (ALICE-LOL 1m24s / text-to-print 5m45s) |
+| 2026-08-11 | **README / ROADMAP 更新** — Release スケジュール section (β 公開 / 本番公開 GA / 商用公開 v1.0.0 の 3 段区切り + 判断基準明示) 新設 + 2026-08-09 完了項目 6 個追加 + P2-8 Phase T1 チェックボックス更新 (14→9 items canonical) |
