@@ -99,6 +99,14 @@ pub struct CustomizerState {
     pub pen_cup: PenCupUiState,
     /// Phone stand customizer (§ 2.9)
     pub phone_stand: PhoneStandUiState,
+    /// Headphone holder customizer (§ 2.5、Phase B2)
+    pub headphone_holder: HeadphoneHolderUiState,
+    /// Under-desk clamp mount customizer (§ 2.4、Phase B2)
+    pub under_desk_mount: UnderDeskMountUiState,
+    /// Desk shelf customizer (§ 2.3、Phase B2)
+    pub desk_shelf: DeskShelfUiState,
+    /// Monitor riser customizer (§ 2.1、Phase B2、簡易版 単一プリント)
+    pub monitor_riser: MonitorRiserUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -284,6 +292,128 @@ impl PhoneStandUiState {
         format!(
             "phone_stand({}, {}, {})",
             self.slot_width, self.back_height, self.cable_hole_dia
+        )
+    }
+}
+
+/// ヘッドホンホルダー customizer UI state (`headphone_holder(arm_len, headband_w, mount_w)`)
+#[derive(Debug, Clone, Copy)]
+pub struct HeadphoneHolderUiState {
+    /// hook arm 長さ (mm、default 80、range 60-120)
+    pub arm_length: f32,
+    /// headband 幅 = arm width (mm、default 50、range 30-70)
+    pub headband_width: f32,
+    /// mount plate 幅 (mm、default 100、range 60-150)
+    pub mount_width: f32,
+}
+
+impl Default for HeadphoneHolderUiState {
+    fn default() -> Self {
+        Self {
+            arm_length: 80.0,
+            headband_width: 50.0,
+            mount_width: 100.0,
+        }
+    }
+}
+
+impl HeadphoneHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "headphone_holder({}, {}, {})",
+            self.arm_length, self.headband_width, self.mount_width
+        )
+    }
+}
+
+/// 机下 clamp mount customizer UI state (`under_desk_mount(desk_t, clamp_w, screw_dia)`)
+#[derive(Debug, Clone, Copy)]
+pub struct UnderDeskMountUiState {
+    /// desk thickness = clamp gap (mm、default 25、range 15-60)
+    pub desk_thickness: f32,
+    /// clamp jaw 幅 (mm、default 40、range 20-80)
+    pub clamp_width: f32,
+    /// screw hole 径 (mm、default 4 = M4、0 で穴なし = 両面テープ)
+    pub screw_hole_dia: f32,
+}
+
+impl Default for UnderDeskMountUiState {
+    fn default() -> Self {
+        Self {
+            desk_thickness: 25.0,
+            clamp_width: 40.0,
+            screw_hole_dia: 4.0,
+        }
+    }
+}
+
+impl UnderDeskMountUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "under_desk_mount({}, {}, {})",
+            self.desk_thickness, self.clamp_width, self.screw_hole_dia
+        )
+    }
+}
+
+/// 卓上シェルフ customizer UI state (`desk_shelf(shelf_w, shelf_d, leg_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct DeskShelfUiState {
+    /// shelf 幅 (mm、default 400、range 200-500)
+    pub shelf_width: f32,
+    /// shelf 奥行 (mm、default 200、range 150-300)
+    pub shelf_depth: f32,
+    /// leg 高さ (mm、default 100、range 60-150)
+    pub leg_height: f32,
+}
+
+impl Default for DeskShelfUiState {
+    fn default() -> Self {
+        Self {
+            shelf_width: 400.0,
+            shelf_depth: 200.0,
+            leg_height: 100.0,
+        }
+    }
+}
+
+impl DeskShelfUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "desk_shelf({}, {}, {})",
+            self.shelf_width, self.shelf_depth, self.leg_height
+        )
+    }
+}
+
+/// モニターライザー customizer UI state (`monitor_riser(width, depth, height)`)
+///
+/// 簡易版 = 単一プリント想定、UI slider max=280mm (Bambu H2D 315mm 内)
+#[derive(Debug, Clone, Copy)]
+pub struct MonitorRiserUiState {
+    /// 全幅 (mm、default 250、range 200-280)
+    pub width: f32,
+    /// 全奥行 (mm、default 180、range 150-240)
+    pub depth: f32,
+    /// 全高 (mm、default 90、range 60-120)
+    pub height: f32,
+}
+
+impl Default for MonitorRiserUiState {
+    fn default() -> Self {
+        Self {
+            width: 250.0,
+            depth: 180.0,
+            height: 90.0,
+        }
+    }
+}
+
+impl MonitorRiserUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "monitor_riser({}, {}, {})",
+            self.width, self.depth, self.height
         )
     }
 }
@@ -1009,8 +1139,9 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        BusinessCardUiState, CustomizerState, GenerationPhase, GridfinityUiState, PenCupUiState,
-        PhaseProgress, PhoneStandUiState, StickyNoteUiState, default_sidecar_port,
+        BusinessCardUiState, CustomizerState, DeskShelfUiState, GenerationPhase, GridfinityUiState,
+        HeadphoneHolderUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
+        PhoneStandUiState, StickyNoteUiState, UnderDeskMountUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -1255,11 +1386,64 @@ mod tests {
     #[test]
     fn customizer_state_default_includes_all_5_archetypes() {
         let c = CustomizerState::default();
-        // 5 archetype default 全部 set されている
+        // 5 archetype (旧、PART 1 + PART 2 前半) default 全部 set されている
         assert_eq!(c.gridfinity.to_lol(), "gridfinity_bin(2, 2, 6)");
         assert_eq!(c.sticky_note.to_lol(), "sticky_note_holder(76, 76, 30)");
         assert_eq!(c.business_card.to_lol(), "business_card_holder(91, 55, 22)");
         assert_eq!(c.pen_cup.to_lol(), "pen_cup(75, 100)");
         assert_eq!(c.phone_stand.to_lol(), "phone_stand(14, 100, 18)");
+    }
+
+    // ── Phase B2: PART 2 残 4 archetype UI state tests ──
+
+    #[test]
+    fn headphone_holder_default_is_wall_mount() {
+        let h = HeadphoneHolderUiState::default();
+        assert!((h.arm_length - 80.0).abs() < 1e-6);
+        assert!((h.headband_width - 50.0).abs() < 1e-6);
+        assert!((h.mount_width - 100.0).abs() < 1e-6);
+        assert_eq!(h.to_lol(), "headphone_holder(80, 50, 100)");
+    }
+
+    #[test]
+    fn under_desk_mount_default_is_standard_desk() {
+        let m = UnderDeskMountUiState::default();
+        assert!((m.desk_thickness - 25.0).abs() < 1e-6);
+        assert!((m.clamp_width - 40.0).abs() < 1e-6);
+        assert!((m.screw_hole_dia - 4.0).abs() < 1e-6);
+        assert_eq!(m.to_lol(), "under_desk_mount(25, 40, 4)");
+    }
+
+    #[test]
+    fn desk_shelf_default_is_desktop_400x200() {
+        let s = DeskShelfUiState::default();
+        assert!((s.shelf_width - 400.0).abs() < 1e-6);
+        assert!((s.shelf_depth - 200.0).abs() < 1e-6);
+        assert!((s.leg_height - 100.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "desk_shelf(400, 200, 100)");
+    }
+
+    #[test]
+    fn monitor_riser_default_is_compact_desk() {
+        let r = MonitorRiserUiState::default();
+        assert!((r.width - 250.0).abs() < 1e-6);
+        assert!((r.depth - 180.0).abs() < 1e-6);
+        assert!((r.height - 90.0).abs() < 1e-6);
+        assert_eq!(r.to_lol(), "monitor_riser(250, 180, 90)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_9_archetypes() {
+        let c = CustomizerState::default();
+        // Phase B2 追加後は 9 archetype 全部 (PART 1 + PART 2 全部)
+        assert_eq!(c.gridfinity.to_lol(), "gridfinity_bin(2, 2, 6)");
+        assert_eq!(c.sticky_note.to_lol(), "sticky_note_holder(76, 76, 30)");
+        assert_eq!(c.business_card.to_lol(), "business_card_holder(91, 55, 22)");
+        assert_eq!(c.pen_cup.to_lol(), "pen_cup(75, 100)");
+        assert_eq!(c.phone_stand.to_lol(), "phone_stand(14, 100, 18)");
+        assert_eq!(c.headphone_holder.to_lol(), "headphone_holder(80, 50, 100)");
+        assert_eq!(c.under_desk_mount.to_lol(), "under_desk_mount(25, 40, 4)");
+        assert_eq!(c.desk_shelf.to_lol(), "desk_shelf(400, 200, 100)");
+        assert_eq!(c.monitor_riser.to_lol(), "monitor_riser(250, 180, 90)");
     }
 }

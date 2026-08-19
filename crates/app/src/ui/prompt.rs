@@ -1229,9 +1229,9 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応: Gridfinity bin + organizer-gridfinity-desk PART 2 の 4 archetype
-/// (sticky_note_holder / business_card_holder / pen_cup / phone_stand)
-/// 追加 archetype は同 collapsing 内に別 section で並べる
+/// 現行対応 9 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
+///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1246,6 +1246,14 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_pen_cup_customizer(ui, state);
                 ui.separator();
                 show_phone_stand_customizer(ui, state);
+                ui.separator();
+                show_headphone_holder_customizer(ui, state);
+                ui.separator();
+                show_under_desk_mount_customizer(ui, state);
+                ui.separator();
+                show_desk_shelf_customizer(ui, state);
+                ui.separator();
+                show_monitor_riser_customizer(ui, state);
             });
         },
     );
@@ -1464,6 +1472,149 @@ fn show_phone_stand_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input = format!("[customizer] {label}");
         state.prompt_focused_once = false;
         start_generation_from_lol(state, ps_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ヘッドホンホルダー customizer (`arm_length × headband_width × mount_width`)
+///
+/// wall_hook variant で headband 対応、M4 mount 穴付き
+fn show_headphone_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🎧 ヘッドホンホルダー (wall-mount + hook)").strong());
+
+    let h = &mut state.customizer_state.headphone_holder;
+    ui.horizontal(|ui| {
+        ui.label("arm 長 (mm):");
+        ui.add(egui::Slider::new(&mut h.arm_length, 60.0..=120.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("headband 幅 (mm):");
+        ui.add(egui::Slider::new(&mut h.headband_width, 30.0..=70.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("mount 幅 (mm):");
+        ui.add(egui::Slider::new(&mut h.mount_width, 60.0..=150.0).step_by(1.0));
+    });
+
+    let h_copy = *h;
+    let label = format!(
+        "ヘッドホンホルダー arm{}mm×hb{}mm×mount{}mm",
+        h_copy.arm_length, h_copy.headband_width, h_copy.mount_width
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, h_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 机下 clamp mount customizer (`desk_thickness × clamp_width × screw_dia`)
+///
+/// C 字 clamp、screw=0 で穴なし (両面テープ想定)
+fn show_under_desk_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔧 机下 clamp mount (C 字クランプ + 締付ネジ)").strong());
+
+    let m = &mut state.customizer_state.under_desk_mount;
+    ui.horizontal(|ui| {
+        ui.label("desk 厚 (mm):");
+        ui.add(egui::Slider::new(&mut m.desk_thickness, 15.0..=60.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("clamp 幅 (mm):");
+        ui.add(egui::Slider::new(&mut m.clamp_width, 20.0..=80.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("screw 径 (mm):");
+        ui.add(egui::Slider::new(&mut m.screw_hole_dia, 0.0..=8.0).step_by(0.5));
+    });
+
+    let m_copy = *m;
+    let screw_note = if m_copy.screw_hole_dia > 0.0 {
+        format!("M{:.0}", m_copy.screw_hole_dia)
+    } else {
+        "両面テープ".to_string()
+    };
+    let label = format!(
+        "机下 mount desk{}mm × clamp{}mm ({screw_note})",
+        m_copy.desk_thickness, m_copy.clamp_width
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, m_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 卓上シェルフ customizer (`shelf_width × shelf_depth × leg_height`)
+///
+/// 平板 + 左右 2 脚 shelf_divider 簡易版 (hex cutout なし)
+fn show_desk_shelf_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🗄 卓上シェルフ (平板 + 左右 2 脚)").strong());
+
+    let s = &mut state.customizer_state.desk_shelf;
+    ui.horizontal(|ui| {
+        ui.label("shelf 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.shelf_width, 200.0..=500.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("shelf 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut s.shelf_depth, 150.0..=300.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("leg 高 (mm):");
+        ui.add(egui::Slider::new(&mut s.leg_height, 60.0..=150.0).step_by(5.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "シェルフ {}×{}mm × 脚{}mm",
+        s_copy.shelf_width, s_copy.shelf_depth, s_copy.leg_height
+    );
+    ui.label("注: 幅 315mm 超えは Bambu H2D 単一プリント不可 (要分割)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// モニターライザー customizer (`width × depth × height`)
+///
+/// 簡易版 = 単一プリント想定、Ø40mm cable hole 付き
+fn show_monitor_riser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🖥 モニターライザー (プラットフォーム + 2 脚 + cable)").strong());
+
+    let r = &mut state.customizer_state.monitor_riser;
+    ui.horizontal(|ui| {
+        ui.label("幅 (mm):");
+        ui.add(egui::Slider::new(&mut r.width, 200.0..=280.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("奥行 (mm):");
+        ui.add(egui::Slider::new(&mut r.depth, 150.0..=240.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("高さ (mm):");
+        ui.add(egui::Slider::new(&mut r.height, 60.0..=120.0).step_by(5.0));
+    });
+
+    let r_copy = *r;
+    let label = format!(
+        "モニターライザー {}×{}×{}mm",
+        r_copy.width, r_copy.depth, r_copy.height
+    );
+    ui.label("cable 穴 Ø40mm 標準装備、単一プリント想定 (280mm 以下)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, r_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);
