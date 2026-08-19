@@ -449,9 +449,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 9 archetype 一覧 (2026-08-19 時点)
+## 既存 12 archetype 一覧 (2026-08-19 時点)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md`)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md`)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -465,6 +465,9 @@ or all-field 明示 (advanced field も全部書く)
 | 7 | `under_desk_mount(desk_thickness, clamp_width, screw_dia)` | 3 | 25/40/4mm | § 2.4 |
 | 8 | `desk_shelf(shelf_width, shelf_depth, leg_height)` | 3 | 400×200×100mm | § 2.3 |
 | 9 | `monitor_riser(width, depth, height)` | 3 | 250×180×90mm | § 2.1 (簡易版) |
+| 10 | `coaster(diameter, thickness)` | 2 | Ø95×5mm (round) | household § 7 |
+| 11 | `tissue_box_cover(internal_l, internal_w, internal_h)` | 3 | 231×116×53mm (US rect) | household § 1 |
+| 12 | `storage_box(internal_l, internal_w, internal_h)` | 3 | 150×100×60mm (medium、基本形 lid なし) | household § 3 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -484,7 +487,7 @@ or all-field 明示 (advanced field も全部書く)
 
 **ALICE-Bamboo/docs/patterns/** 他 doc に基づく候補:
 
-- **household.md** (438 行): ティッシュケース / コースター / 収納 BOX / 各種フック → `tissue_box_cover` / `coaster` / `storage_box`
+- ~~household.md~~ ✅ 3 archetype 完了 (Sprint 4、coaster / tissue_box_cover / storage_box) 残 = lid + hinge (Print-in-Place / filament pin / living hinge) は future sprint
 - **hobby-diy.md** (315 行): ケーブル管理 / LED チャネル / ギア / ボードゲームインサート → `cable_organizer` / `led_channel` / `gear`
 - **tools.md** (424 行): レンチ / ソケット / ヘックスビット / バイス / バッテリー → `wrench_holder` / `socket_rail` / `hex_bit_holder`
 - **electronics-enclosure.md** (411 行): RPi / ESP32 / 18650 / 充電ドック / IP 防水 → `raspberry_pi_case` / `esp32_enclosure` / `18650_holder`
