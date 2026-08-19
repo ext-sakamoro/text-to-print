@@ -54,40 +54,47 @@ jobs:
         with:
           path: text-to-print
 
-      # Public ALICE ecosystem repos
+      # Public ALICE ecosystem repos (5) — canonical org は ext-sakamoro
+      # 旧 Project-ALICE/* 参照は 404 (repo 存在せず、ci.yml と同 2026-08-06 修正)
       - name: Checkout ALICE-SDF
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-SDF
+          repository: ext-sakamoro/ALICE-SDF
           path: ALICE-SDF
       - name: Checkout ALICE-LOL
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-LOL
+          repository: ext-sakamoro/ALICE-LOL
           path: ALICE-LOL
       - name: Checkout ALICE-View
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-View
+          repository: ext-sakamoro/ALICE-View
           path: ALICE-View
       - name: Checkout ALICE-LLM
         uses: actions/checkout@v4
         with:
-          repository: Project-ALICE/ALICE-LLM
+          repository: ext-sakamoro/ALICE-LLM
           path: ALICE-LLM
+      - name: Checkout ALICE-Physics
+        uses: actions/checkout@v4
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
 
-      # Private ALICE ecosystem repos (require ALICE_ECO_TOKEN secret)
+      # Private ALICE ecosystem repos (2) — require ALICE_ECO_TOKEN secret
+      # ALICE-Bamboo は alice-print を path dep で参照するので両方 checkout 必須
       - name: Checkout ALICE-Bamboo (private)
         uses: actions/checkout@v4
         with:
           repository: ext-sakamoro/ALICE-Bamboo
           path: ALICE-Bamboo
           token: ${{ secrets.ALICE_ECO_TOKEN }}
-      - name: Checkout ALICE-Physics (private)
+      - name: Checkout ALICE-Print (private)
         uses: actions/checkout@v4
         with:
-          repository: ext-sakamoro/ALICE-Physics
-          path: ALICE-Physics
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
           token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - name: Install Rust toolchain
