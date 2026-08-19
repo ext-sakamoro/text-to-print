@@ -1229,7 +1229,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応: Gridfinity bin (organizer-gridfinity-desk PART 1)
+/// 現行対応: Gridfinity bin + organizer-gridfinity-desk PART 2 の 4 archetype
+/// (sticky_note_holder / business_card_holder / pen_cup / phone_stand)
 /// 追加 archetype は同 collapsing 内に別 section で並べる
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
@@ -1237,15 +1238,24 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
         |ui| {
             ui.add_enabled_ui(!is_generating, |ui| {
                 show_gridfinity_customizer(ui, state);
+                ui.separator();
+                show_sticky_note_customizer(ui, state);
+                ui.separator();
+                show_business_card_customizer(ui, state);
+                ui.separator();
+                show_pen_cup_customizer(ui, state);
+                ui.separator();
+                show_phone_stand_customizer(ui, state);
             });
         },
     );
 }
 
-/// Gridfinity bin customizer (basic 3 param: units_x, units_y, height_u)
+/// Gridfinity bin customizer (basic 3 param + advanced 5 param collapsible)
 ///
 /// 42mm grid × 7mm height unit で任意サイズを生成
 /// 例: 2×2 × 6U = 84×84×46mm (最典型 default)
+/// 詳細設定で dividers (内部仕切り) + 壁厚 + 底厚 も指定可
 fn show_gridfinity_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label(egui::RichText::new("📦 Gridfinity bin (42mm grid × 7mm 高さ)").strong());
 
@@ -1263,6 +1273,29 @@ fn show_gridfinity_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add(egui::Slider::new(&mut g.height_u, 2..=10).text("(2U=18mm ~ 10U=74mm)"));
     });
 
+    // Advanced (dividers + wall/floor thickness) は default で閉じている
+    ui.collapsing("詳細設定 (dividers + 壁厚)", |ui| {
+        ui.checkbox(&mut g.use_dividers, "内部仕切り (dividers) を有効化");
+        ui.add_enabled_ui(g.use_dividers, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Dividers X:");
+                ui.add(egui::Slider::new(&mut g.dividers_x, 2..=6).text("(cells)"));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Dividers Y:");
+                ui.add(egui::Slider::new(&mut g.dividers_y, 2..=6).text("(cells)"));
+            });
+        });
+        ui.horizontal(|ui| {
+            ui.label("壁厚 (mm):");
+            ui.add(egui::Slider::new(&mut g.wall_thickness, 0.8..=3.0).step_by(0.1));
+        });
+        ui.horizontal(|ui| {
+            ui.label("底厚 (mm):");
+            ui.add(egui::Slider::new(&mut g.floor_thickness, 1.0..=4.0).step_by(0.1));
+        });
+    });
+
     #[allow(clippy::cast_precision_loss)]
     let ext_x_mm = g.units_x as f32 * 42.0;
     #[allow(clippy::cast_precision_loss)]
@@ -1274,14 +1307,163 @@ fn show_gridfinity_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     ));
 
     let g_copy = *g;
-    let label = format!(
-        "Gridfinity {}×{} × {}U",
-        g_copy.units_x, g_copy.units_y, g_copy.height_u
-    );
+    let label = if g_copy.use_dividers {
+        format!(
+            "Gridfinity {}×{} × {}U ({}×{} dividers)",
+            g_copy.units_x, g_copy.units_y, g_copy.height_u, g_copy.dividers_x, g_copy.dividers_y
+        )
+    } else {
+        format!(
+            "Gridfinity {}×{} × {}U",
+            g_copy.units_x, g_copy.units_y, g_copy.height_u
+        )
+    };
     if ui.button(format!("作成: {label}")).clicked() {
         state.prompt_input = format!("[customizer] {label}");
         state.prompt_focused_once = false;
         start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 付箋ホルダー customizer (`pad_w × pad_d × height`)
+///
+/// Post-it 3×3 inch = 76×76mm、大型 3×5 inch = 76×127mm 等
+fn show_sticky_note_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🗒 付箋ホルダー (Post-it 3×3 / 3×5 inch 対応)").strong());
+
+    let s = &mut state.customizer_state.sticky_note;
+    ui.horizontal(|ui| {
+        ui.label("pad 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.pad_width, 50.0..=150.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("pad 深さ (mm):");
+        ui.add(egui::Slider::new(&mut s.pad_depth, 50.0..=150.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("高さ (mm):");
+        ui.add(egui::Slider::new(&mut s.height, 15.0..=60.0).step_by(1.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "付箋ホルダー {}×{}×{}mm",
+        s_copy.pad_width, s_copy.pad_depth, s_copy.height
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 名刺ホルダー customizer (`card_w × card_h × slot_thickness`)
+///
+/// JP meishi 91×55 / US 89×51 / EU 85.6×54、収納枚数 = slot_thickness / 0.5mm 目安
+fn show_business_card_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💳 名刺ホルダー (JP 91×55 / US 89×51 / EU 85.6×54)").strong());
+
+    let b = &mut state.customizer_state.business_card;
+    ui.horizontal(|ui| {
+        ui.label("card 幅 (mm):");
+        ui.add(egui::Slider::new(&mut b.card_width, 80.0..=100.0).step_by(0.1));
+    });
+    ui.horizontal(|ui| {
+        ui.label("card 高さ (mm):");
+        ui.add(egui::Slider::new(&mut b.card_height, 45.0..=65.0).step_by(0.1));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 厚 (mm):");
+        ui.add(egui::Slider::new(&mut b.slot_thickness, 10.0..=40.0).step_by(1.0));
+    });
+
+    // 収納枚数目安 (card 1 枚 ~0.5mm、20% margin)
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let capacity = (b.slot_thickness / 0.5 * 0.8) as u32;
+    ui.label(format!("収納枚数目安: 約 {capacity} 枚"));
+
+    let b_copy = *b;
+    let label = format!(
+        "名刺ホルダー {}×{}mm ({}枚)",
+        b_copy.card_width, b_copy.card_height, capacity
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, b_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ペン立て customizer (`inner_dia × height`)
+///
+/// standard 70-85mm 内径 × 90-120mm 高、pen 12mm / pencil 8mm / marker 16mm / highlighter 24mm 想定
+fn show_pen_cup_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("✏ ペン立て (single-compartment 円筒)").strong());
+
+    let p = &mut state.customizer_state.pen_cup;
+    ui.horizontal(|ui| {
+        ui.label("内径 (mm):");
+        ui.add(egui::Slider::new(&mut p.inner_diameter, 40.0..=120.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("高さ (mm):");
+        ui.add(egui::Slider::new(&mut p.height, 50.0..=150.0).step_by(1.0));
+    });
+
+    let p_copy = *p;
+    let outer_dia = p_copy.inner_diameter + 4.0;
+    let label = format!("ペン立て Ø{}×{}mm", p_copy.inner_diameter, p_copy.height);
+    ui.label(format!("外形 Ø{outer_dia:.1}mm (壁厚 2mm)"));
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, p_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// スマホ / タブレット スタンド customizer (`slot_w × back_h × cable_dia`)
+///
+/// phone: slot 10-15mm / back 80-120mm、tablet: slot 12-18mm / back 150-190mm
+/// cable_dia = 0 で cable 穴なし
+fn show_phone_stand_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📱 スマホ / タブレット スタンド (L 字 + 上部 slot)").strong());
+
+    let ps = &mut state.customizer_state.phone_stand;
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut ps.slot_width, 8.0..=20.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("back 高さ (mm):");
+        ui.add(egui::Slider::new(&mut ps.back_height, 60.0..=200.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cable 穴径 (mm):");
+        ui.add(egui::Slider::new(&mut ps.cable_hole_dia, 0.0..=30.0).step_by(1.0));
+    });
+
+    let ps_copy = *ps;
+    let hole_note = if ps_copy.cable_hole_dia > 0.0 {
+        format!("cable Ø{}mm", ps_copy.cable_hole_dia)
+    } else {
+        "穴なし".to_string()
+    };
+    let label = format!(
+        "スタンド slot {}mm × back {}mm ({hole_note})",
+        ps_copy.slot_width, ps_copy.back_height
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, ps_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

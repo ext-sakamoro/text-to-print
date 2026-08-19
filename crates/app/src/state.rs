@@ -91,9 +91,20 @@ impl PhaseProgress {
 pub struct CustomizerState {
     /// Gridfinity bin customizer (organizer-gridfinity-desk PART 1)
     pub gridfinity: GridfinityUiState,
+    /// Sticky note holder customizer (organizer-gridfinity-desk § 2.7)
+    pub sticky_note: StickyNoteUiState,
+    /// Business card holder customizer (§ 2.6)
+    pub business_card: BusinessCardUiState,
+    /// Pen cup customizer (§ 2.2)
+    pub pen_cup: PenCupUiState,
+    /// Phone stand customizer (§ 2.9)
+    pub phone_stand: PhoneStandUiState,
 }
 
-/// Gridfinity bin customizer UI state (units_x × units_y × height_u basic 3 param)
+/// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
+///
+/// Basic: units_x, units_y, height_u = `gridfinity_bin(ux, uy, hu)`
+/// Advanced: 上記 + dividers (use/x/y) + wall/floor thickness = `gridfinity_bin_ex(...)`
 #[derive(Debug, Clone, Copy)]
 pub struct GridfinityUiState {
     /// units X 方向 (1 unit = 42mm、range 1-6)
@@ -102,6 +113,16 @@ pub struct GridfinityUiState {
     pub units_y: u32,
     /// 高さ U 数 (1U = 7mm、range 2-10)
     pub height_u: u32,
+    /// advanced: dividers 有効化 (true → 内部仕切りあり)
+    pub use_dividers: bool,
+    /// advanced: X 方向 dividers (2-6、use_dividers=true 時のみ有効)
+    pub dividers_x: u32,
+    /// advanced: Y 方向 dividers (2-6、use_dividers=true 時のみ有効)
+    pub dividers_y: u32,
+    /// advanced: 壁厚 (mm、range 0.8-3.0、default 1.2)
+    pub wall_thickness: f32,
+    /// advanced: 底厚 (mm、range 1.0-4.0、default 1.5)
+    pub floor_thickness: f32,
 }
 
 impl Default for GridfinityUiState {
@@ -111,16 +132,158 @@ impl Default for GridfinityUiState {
             units_x: 2,
             units_y: 2,
             height_u: 6,
+            use_dividers: false,
+            dividers_x: 2,
+            dividers_y: 2,
+            wall_thickness: 1.2,
+            floor_thickness: 1.5,
         }
     }
 }
 
 impl GridfinityUiState {
-    /// LOL DSL string 組立 (`gridfinity_bin(ux, uy, hu)`)
+    /// LOL DSL string 組立
+    ///
+    /// use_dividers=true or wall/floor が default 以外なら `gridfinity_bin_ex`、
+    /// それ以外は basic `gridfinity_bin` を使う
+    pub fn to_lol(self) -> String {
+        let default_wall = (self.wall_thickness - 1.2).abs() < 0.01;
+        let default_floor = (self.floor_thickness - 1.5).abs() < 0.01;
+        if self.use_dividers || !default_wall || !default_floor {
+            let (dx, dy) = if self.use_dividers {
+                (self.dividers_x, self.dividers_y)
+            } else {
+                (0, 0)
+            };
+            format!(
+                "gridfinity_bin_ex({}, {}, {}, {}, {}, {}, {})",
+                self.units_x,
+                self.units_y,
+                self.height_u,
+                dx,
+                dy,
+                self.wall_thickness,
+                self.floor_thickness
+            )
+        } else {
+            format!(
+                "gridfinity_bin({}, {}, {})",
+                self.units_x, self.units_y, self.height_u
+            )
+        }
+    }
+}
+
+/// 付箋ホルダー customizer UI state (`sticky_note_holder(pad_w, pad_d, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct StickyNoteUiState {
+    /// pad 幅 (mm、default 76 = Post-it 3 inch)
+    pub pad_width: f32,
+    /// pad 深さ (mm、default 76 or 127)
+    pub pad_depth: f32,
+    /// 全高 (mm、default 30 = 3-8 枚分)
+    pub height: f32,
+}
+
+impl Default for StickyNoteUiState {
+    fn default() -> Self {
+        Self {
+            pad_width: 76.0,
+            pad_depth: 76.0,
+            height: 30.0,
+        }
+    }
+}
+
+impl StickyNoteUiState {
     pub fn to_lol(self) -> String {
         format!(
-            "gridfinity_bin({}, {}, {})",
-            self.units_x, self.units_y, self.height_u
+            "sticky_note_holder({}, {}, {})",
+            self.pad_width, self.pad_depth, self.height
+        )
+    }
+}
+
+/// 名刺ホルダー customizer UI state (`business_card_holder(card_w, card_h, slot_thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct BusinessCardUiState {
+    /// card 幅 (mm、default 91 = JP meishi)
+    pub card_width: f32,
+    /// card 高さ (mm、default 55 = JP meishi)
+    pub card_height: f32,
+    /// slot 厚 (mm、default 22 = 30-50 枚分)
+    pub slot_thickness: f32,
+}
+
+impl Default for BusinessCardUiState {
+    fn default() -> Self {
+        Self {
+            card_width: 91.0,
+            card_height: 55.0,
+            slot_thickness: 22.0,
+        }
+    }
+}
+
+impl BusinessCardUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "business_card_holder({}, {}, {})",
+            self.card_width, self.card_height, self.slot_thickness
+        )
+    }
+}
+
+/// ペン立て customizer UI state (`pen_cup(inner_dia, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PenCupUiState {
+    /// cup 内径 (mm、default 75)
+    pub inner_diameter: f32,
+    /// cup 全高 (mm、default 100)
+    pub height: f32,
+}
+
+impl Default for PenCupUiState {
+    fn default() -> Self {
+        Self {
+            inner_diameter: 75.0,
+            height: 100.0,
+        }
+    }
+}
+
+impl PenCupUiState {
+    pub fn to_lol(self) -> String {
+        format!("pen_cup({}, {})", self.inner_diameter, self.height)
+    }
+}
+
+/// スマホスタンド customizer UI state (`phone_stand(slot_w, back_h, cable_dia)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PhoneStandUiState {
+    /// slot 幅 (mm、default 14 = phone、ケース対応時 +2-3)
+    pub slot_width: f32,
+    /// back plate 高さ (mm、default 100 phone / 150-190 tablet)
+    pub back_height: f32,
+    /// cable 通し穴径 (mm、default 18、0 で穴なし)
+    pub cable_hole_dia: f32,
+}
+
+impl Default for PhoneStandUiState {
+    fn default() -> Self {
+        Self {
+            slot_width: 14.0,
+            back_height: 100.0,
+            cable_hole_dia: 18.0,
+        }
+    }
+}
+
+impl PhoneStandUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "phone_stand({}, {}, {})",
+            self.slot_width, self.back_height, self.cable_hole_dia
         )
     }
 }
@@ -846,7 +1009,8 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        CustomizerState, GenerationPhase, GridfinityUiState, PhaseProgress, default_sidecar_port,
+        BusinessCardUiState, CustomizerState, GenerationPhase, GridfinityUiState, PenCupUiState,
+        PhaseProgress, PhoneStandUiState, StickyNoteUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -998,6 +1162,7 @@ mod tests {
             units_x: 3,
             units_y: 4,
             height_u: 6,
+            ..Default::default()
         };
         assert_eq!(g.to_lol(), "gridfinity_bin(3, 4, 6)");
     }
@@ -1014,5 +1179,87 @@ mod tests {
         assert_eq!(c.gridfinity.units_x, 2);
         assert_eq!(c.gridfinity.units_y, 2);
         assert_eq!(c.gridfinity.height_u, 6);
+    }
+
+    // ── Phase C: gridfinity_bin_ex advanced UI state tests ──
+
+    #[test]
+    fn gridfinity_advanced_default_is_basic_lol() {
+        let g = GridfinityUiState::default();
+        assert!(!g.use_dividers);
+        assert_eq!(g.dividers_x, 2);
+        assert_eq!(g.dividers_y, 2);
+        assert!((g.wall_thickness - 1.2).abs() < 1e-6);
+        assert!((g.floor_thickness - 1.5).abs() < 1e-6);
+        // default state (no advanced use) → basic gridfinity_bin
+        assert_eq!(g.to_lol(), "gridfinity_bin(2, 2, 6)");
+    }
+
+    #[test]
+    fn gridfinity_with_dividers_switches_to_ex() {
+        let g = GridfinityUiState {
+            use_dividers: true,
+            dividers_x: 3,
+            dividers_y: 2,
+            ..Default::default()
+        };
+        assert_eq!(g.to_lol(), "gridfinity_bin_ex(2, 2, 6, 3, 2, 1.2, 1.5)");
+    }
+
+    #[test]
+    fn gridfinity_with_custom_wall_switches_to_ex() {
+        let g = GridfinityUiState {
+            wall_thickness: 1.8,
+            ..Default::default()
+        };
+        assert_eq!(g.to_lol(), "gridfinity_bin_ex(2, 2, 6, 0, 0, 1.8, 1.5)");
+    }
+
+    // ── Phase B: PART 2 archetype UI state tests ──
+
+    #[test]
+    fn sticky_note_default_is_small_square() {
+        let s = StickyNoteUiState::default();
+        assert!((s.pad_width - 76.0).abs() < 1e-6);
+        assert!((s.pad_depth - 76.0).abs() < 1e-6);
+        assert!((s.height - 30.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "sticky_note_holder(76, 76, 30)");
+    }
+
+    #[test]
+    fn business_card_default_is_jp_meishi() {
+        let b = BusinessCardUiState::default();
+        assert!((b.card_width - 91.0).abs() < 1e-6);
+        assert!((b.card_height - 55.0).abs() < 1e-6);
+        assert!((b.slot_thickness - 22.0).abs() < 1e-6);
+        assert_eq!(b.to_lol(), "business_card_holder(91, 55, 22)");
+    }
+
+    #[test]
+    fn pen_cup_default_is_standard_75x100() {
+        let p = PenCupUiState::default();
+        assert!((p.inner_diameter - 75.0).abs() < 1e-6);
+        assert!((p.height - 100.0).abs() < 1e-6);
+        assert_eq!(p.to_lol(), "pen_cup(75, 100)");
+    }
+
+    #[test]
+    fn phone_stand_default_is_phone_with_cable_hole() {
+        let ps = PhoneStandUiState::default();
+        assert!((ps.slot_width - 14.0).abs() < 1e-6);
+        assert!((ps.back_height - 100.0).abs() < 1e-6);
+        assert!((ps.cable_hole_dia - 18.0).abs() < 1e-6);
+        assert_eq!(ps.to_lol(), "phone_stand(14, 100, 18)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_5_archetypes() {
+        let c = CustomizerState::default();
+        // 5 archetype default 全部 set されている
+        assert_eq!(c.gridfinity.to_lol(), "gridfinity_bin(2, 2, 6)");
+        assert_eq!(c.sticky_note.to_lol(), "sticky_note_holder(76, 76, 30)");
+        assert_eq!(c.business_card.to_lol(), "business_card_holder(91, 55, 22)");
+        assert_eq!(c.pen_cup.to_lol(), "pen_cup(75, 100)");
+        assert_eq!(c.phone_stand.to_lol(), "phone_stand(14, 100, 18)");
     }
 }
