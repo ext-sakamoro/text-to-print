@@ -189,6 +189,9 @@ pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lan
     ui.add_space(4.0);
     show_prompt_templates(ui, state, is_generating);
 
+    ui.add_space(4.0);
+    show_prompt_customizer(ui, state, is_generating);
+
     ui.add_space(8.0);
 
     if ui
@@ -1187,6 +1190,9 @@ const TEMPLATE_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
             ("SKADIS コンテナ", "skadis_container()"),
             // skadis_shelf: 2 peg rib 補強棚板、PETG 30lbs 実荷重合格、models/wall-organizer/skadis-shelf
             ("SKADIS シェルフ", "skadis_shelf()"),
+            // shelf_divider: 560×250×120mm U 字仕切り、hex cutout 底板 + 2 側板
+            // models/shelf/divider-560x250x120 実プリント合格 spec
+            ("棚仕切り 560×250×120", "shelf_divider()"),
         ],
     ),
 ];
@@ -1217,4 +1223,66 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
             });
         },
     );
+}
+
+/// カスタマイザー = パラメータ入力可能な template (LLM bypass、~1 秒)
+///
+/// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
+/// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
+/// 現行対応: Gridfinity bin (organizer-gridfinity-desk PART 1)
+/// 追加 archetype は同 collapsing 内に別 section で並べる
+fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
+    ui.collapsing(
+        "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
+        |ui| {
+            ui.add_enabled_ui(!is_generating, |ui| {
+                show_gridfinity_customizer(ui, state);
+            });
+        },
+    );
+}
+
+/// Gridfinity bin customizer (basic 3 param: units_x, units_y, height_u)
+///
+/// 42mm grid × 7mm height unit で任意サイズを生成
+/// 例: 2×2 × 6U = 84×84×46mm (最典型 default)
+fn show_gridfinity_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📦 Gridfinity bin (42mm grid × 7mm 高さ)").strong());
+
+    let g = &mut state.customizer_state.gridfinity;
+    ui.horizontal(|ui| {
+        ui.label("Units X:");
+        ui.add(egui::Slider::new(&mut g.units_x, 1..=6).text("(1-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("Units Y:");
+        ui.add(egui::Slider::new(&mut g.units_y, 1..=6).text("(1-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("Height U:");
+        ui.add(egui::Slider::new(&mut g.height_u, 2..=10).text("(2U=18mm ~ 10U=74mm)"));
+    });
+
+    #[allow(clippy::cast_precision_loss)]
+    let ext_x_mm = g.units_x as f32 * 42.0;
+    #[allow(clippy::cast_precision_loss)]
+    let ext_y_mm = g.units_y as f32 * 42.0;
+    #[allow(clippy::cast_precision_loss)]
+    let ext_h_mm = g.height_u as f32 * 7.0 + 4.75;
+    ui.label(format!(
+        "外形寸法: {ext_x_mm:.1} × {ext_y_mm:.1} × {ext_h_mm:.1}mm"
+    ));
+
+    let g_copy = *g;
+    let label = format!(
+        "Gridfinity {}×{} × {}U",
+        g_copy.units_x, g_copy.units_y, g_copy.height_u
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
 }

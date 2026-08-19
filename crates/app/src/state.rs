@@ -83,6 +83,48 @@ impl PhaseProgress {
     }
 }
 
+/// パラメータ入力可能な template の UI 状態 (in-memory only、DB 永続化なし)
+///
+/// 経路 A (固定 preset button) と経路 B (自然言語 LLM) の中間に位置する
+/// **customizer 経路**を提供する archetype 毎に UI state を保持する
+#[derive(Debug, Clone, Default)]
+pub struct CustomizerState {
+    /// Gridfinity bin customizer (organizer-gridfinity-desk PART 1)
+    pub gridfinity: GridfinityUiState,
+}
+
+/// Gridfinity bin customizer UI state (units_x × units_y × height_u basic 3 param)
+#[derive(Debug, Clone, Copy)]
+pub struct GridfinityUiState {
+    /// units X 方向 (1 unit = 42mm、range 1-6)
+    pub units_x: u32,
+    /// units Y 方向 (range 1-6)
+    pub units_y: u32,
+    /// 高さ U 数 (1U = 7mm、range 2-10)
+    pub height_u: u32,
+}
+
+impl Default for GridfinityUiState {
+    fn default() -> Self {
+        // Gridfinity 2×2 × 6U (~84×84×46mm) = 最典型 default
+        Self {
+            units_x: 2,
+            units_y: 2,
+            height_u: 6,
+        }
+    }
+}
+
+impl GridfinityUiState {
+    /// LOL DSL string 組立 (`gridfinity_bin(ux, uy, hu)`)
+    pub fn to_lol(self) -> String {
+        format!(
+            "gridfinity_bin({}, {}, {})",
+            self.units_x, self.units_y, self.height_u
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -160,6 +202,8 @@ pub struct AppState {
     /// upload (Epic-Infra #35) will consume the same payload; the dry-run
     /// path keeps the opt-in gate honest even when the backend is offline
     pub pending_share_dry_run: Option<std::path::PathBuf>,
+    /// Template customizer UI state (Gridfinity bin 等の param 入力保持)
+    pub customizer_state: CustomizerState,
 }
 
 pub enum GenerationStatus {
@@ -437,6 +481,7 @@ impl AppState {
             share_lol_dsl,
             enforce_lol_grammar,
             pending_share_dry_run: None,
+            customizer_state: CustomizerState::default(),
         }
     }
 
@@ -800,7 +845,9 @@ fn spawn_embedded_load(
 
 #[cfg(test)]
 mod tests {
-    use super::{GenerationPhase, PhaseProgress, default_sidecar_port};
+    use super::{
+        CustomizerState, GenerationPhase, GridfinityUiState, PhaseProgress, default_sidecar_port,
+    };
     use std::time::Duration;
 
     #[test]
@@ -933,5 +980,39 @@ mod tests {
         assert!(p.current.is_none());
         assert!(p.completed.is_empty());
         assert_eq!(p.retry_count, 0);
+    }
+
+    // ── customizer_state tests ──
+
+    #[test]
+    fn gridfinity_default_is_2x2_6u() {
+        let g = GridfinityUiState::default();
+        assert_eq!(g.units_x, 2);
+        assert_eq!(g.units_y, 2);
+        assert_eq!(g.height_u, 6);
+    }
+
+    #[test]
+    fn gridfinity_to_lol_matches_dsl_syntax() {
+        let g = GridfinityUiState {
+            units_x: 3,
+            units_y: 4,
+            height_u: 6,
+        };
+        assert_eq!(g.to_lol(), "gridfinity_bin(3, 4, 6)");
+    }
+
+    #[test]
+    fn gridfinity_to_lol_default_matches_2x2_6u() {
+        let g = GridfinityUiState::default();
+        assert_eq!(g.to_lol(), "gridfinity_bin(2, 2, 6)");
+    }
+
+    #[test]
+    fn customizer_state_default_is_gridfinity_default() {
+        let c = CustomizerState::default();
+        assert_eq!(c.gridfinity.units_x, 2);
+        assert_eq!(c.gridfinity.units_y, 2);
+        assert_eq!(c.gridfinity.height_u, 6);
     }
 }
