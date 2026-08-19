@@ -34,6 +34,7 @@ ignore = [
     "RUSTSEC-2026-0099",  # rustls-webpki v0.101 ← libp2p-tls 0.5 ← libp2p 0.54
     "RUSTSEC-2026-0104",  # rustls-webpki v0.101 ← libp2p-tls 0.5 ← libp2p 0.54
     "RUSTSEC-2026-0002",  # lru v0.12            ← libp2p-identify / libp2p-swarm
+    "RUSTSEC-2026-0258",  # h2 v0.3.27           ← hyper 0.14 ← igd-next 0.14 ← libp2p-upnp ← libp2p 0.54 (h2 v0.4.16 は upgrade 済、v0.3 line に patched 版なし)
 
     # ── upstream ALICE-* / wgpu / egui font stack ───────────────────
     #
