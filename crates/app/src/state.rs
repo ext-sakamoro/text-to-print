@@ -107,6 +107,12 @@ pub struct CustomizerState {
     pub desk_shelf: DeskShelfUiState,
     /// Monitor riser customizer (§ 2.1、Phase B2、簡易版 単一プリント)
     pub monitor_riser: MonitorRiserUiState,
+    /// Coaster customizer (household § 7、Sprint 4)
+    pub coaster: CoasterUiState,
+    /// Tissue box cover customizer (household § 1、Sprint 4)
+    pub tissue_box_cover: TissueBoxCoverUiState,
+    /// Storage box customizer (household § 3、Sprint 4、基本形 lid なし)
+    pub storage_box: StorageBoxUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -414,6 +420,91 @@ impl MonitorRiserUiState {
         format!(
             "monitor_riser({}, {}, {})",
             self.width, self.depth, self.height
+        )
+    }
+}
+
+/// コースター customizer UI state (`coaster(diameter, thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CoasterUiState {
+    /// 直径 (mm、default 95、range 80-110)
+    pub diameter: f32,
+    /// 全厚 (mm、default 5、range 4-8)
+    pub thickness: f32,
+}
+
+impl Default for CoasterUiState {
+    fn default() -> Self {
+        Self {
+            diameter: 95.0,
+            thickness: 5.0,
+        }
+    }
+}
+
+impl CoasterUiState {
+    pub fn to_lol(self) -> String {
+        format!("coaster({}, {})", self.diameter, self.thickness)
+    }
+}
+
+/// ティッシュボックスカバー customizer UI state
+/// (`tissue_box_cover(internal_l, internal_w, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct TissueBoxCoverUiState {
+    /// 内部 長さ (mm、default 231 = US rectangular)
+    pub internal_length: f32,
+    /// 内部 幅 (mm、default 116)
+    pub internal_width: f32,
+    /// 内部 高さ (mm、default 53)
+    pub internal_height: f32,
+}
+
+impl Default for TissueBoxCoverUiState {
+    fn default() -> Self {
+        Self {
+            internal_length: 231.0,
+            internal_width: 116.0,
+            internal_height: 53.0,
+        }
+    }
+}
+
+impl TissueBoxCoverUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "tissue_box_cover({}, {}, {})",
+            self.internal_length, self.internal_width, self.internal_height
+        )
+    }
+}
+
+/// 収納 BOX customizer UI state (`storage_box(internal_l, internal_w, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct StorageBoxUiState {
+    /// 内部 長さ (mm、default 150 = medium)
+    pub internal_length: f32,
+    /// 内部 幅 (mm、default 100)
+    pub internal_width: f32,
+    /// 内部 高さ (mm、default 60)
+    pub internal_height: f32,
+}
+
+impl Default for StorageBoxUiState {
+    fn default() -> Self {
+        Self {
+            internal_length: 150.0,
+            internal_width: 100.0,
+            internal_height: 60.0,
+        }
+    }
+}
+
+impl StorageBoxUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "storage_box({}, {}, {})",
+            self.internal_length, self.internal_width, self.internal_height
         )
     }
 }
@@ -1139,9 +1230,10 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        BusinessCardUiState, CustomizerState, DeskShelfUiState, GenerationPhase, GridfinityUiState,
-        HeadphoneHolderUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
-        PhoneStandUiState, StickyNoteUiState, UnderDeskMountUiState, default_sidecar_port,
+        BusinessCardUiState, CoasterUiState, CustomizerState, DeskShelfUiState, GenerationPhase,
+        GridfinityUiState, HeadphoneHolderUiState, MonitorRiserUiState, PenCupUiState,
+        PhaseProgress, PhoneStandUiState, StickyNoteUiState, StorageBoxUiState,
+        TissueBoxCoverUiState, UnderDeskMountUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -1445,5 +1537,45 @@ mod tests {
         assert_eq!(c.under_desk_mount.to_lol(), "under_desk_mount(25, 40, 4)");
         assert_eq!(c.desk_shelf.to_lol(), "desk_shelf(400, 200, 100)");
         assert_eq!(c.monitor_riser.to_lol(), "monitor_riser(250, 180, 90)");
+    }
+
+    // ── Sprint 4: household.md 3 archetype UI state tests ──
+
+    #[test]
+    fn coaster_default_is_round_95x5() {
+        let c = CoasterUiState::default();
+        assert!((c.diameter - 95.0).abs() < 1e-6);
+        assert!((c.thickness - 5.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "coaster(95, 5)");
+    }
+
+    #[test]
+    fn tissue_box_cover_default_is_rectangular_us() {
+        let t = TissueBoxCoverUiState::default();
+        assert!((t.internal_length - 231.0).abs() < 1e-6);
+        assert!((t.internal_width - 116.0).abs() < 1e-6);
+        assert!((t.internal_height - 53.0).abs() < 1e-6);
+        assert_eq!(t.to_lol(), "tissue_box_cover(231, 116, 53)");
+    }
+
+    #[test]
+    fn storage_box_default_is_medium() {
+        let s = StorageBoxUiState::default();
+        assert!((s.internal_length - 150.0).abs() < 1e-6);
+        assert!((s.internal_width - 100.0).abs() < 1e-6);
+        assert!((s.internal_height - 60.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "storage_box(150, 100, 60)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_12_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 4 追加後は 12 archetype (organizer PART 1+2 完全 + household 3)
+        assert_eq!(c.coaster.to_lol(), "coaster(95, 5)");
+        assert_eq!(
+            c.tissue_box_cover.to_lol(),
+            "tissue_box_cover(231, 116, 53)"
+        );
+        assert_eq!(c.storage_box.to_lol(), "storage_box(150, 100, 60)");
     }
 }

@@ -1254,6 +1254,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_desk_shelf_customizer(ui, state);
                 ui.separator();
                 show_monitor_riser_customizer(ui, state);
+                ui.separator();
+                show_coaster_customizer(ui, state);
+                ui.separator();
+                show_tissue_box_cover_customizer(ui, state);
+                ui.separator();
+                show_storage_box_customizer(ui, state);
             });
         },
     );
@@ -1615,6 +1621,105 @@ fn show_monitor_riser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input = format!("[customizer] {label}");
         state.prompt_focused_once = false;
         start_generation_from_lol(state, r_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// コースター customizer (`diameter × thickness`)
+///
+/// round bowl 状、rim 2.5mm 幅 × 1.5mm 高 で液滴 catch (household § 7)
+fn show_coaster_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥤 コースター (round + rim)").strong());
+
+    let c = &mut state.customizer_state.coaster;
+    ui.horizontal(|ui| {
+        ui.label("直径 (mm):");
+        ui.add(egui::Slider::new(&mut c.diameter, 80.0..=110.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全厚 (mm):");
+        ui.add(egui::Slider::new(&mut c.thickness, 4.0..=8.0).step_by(0.5));
+    });
+
+    let c_copy = *c;
+    let label = format!("コースター Ø{}×{}mm", c_copy.diameter, c_copy.thickness);
+    ui.label("rim 2.5mm 幅 × 1.5mm 高 (液滴 catch)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ティッシュボックスカバー customizer (`internal_l × internal_w × internal_h`)
+///
+/// bottom open + top pull slot (80×30mm 標準)、内部寸法指定 (household § 1)
+fn show_tissue_box_cover_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧻 ティッシュボックスカバー (bottom open + top slot)").strong());
+
+    let t = &mut state.customizer_state.tissue_box_cover;
+    ui.horizontal(|ui| {
+        ui.label("内部 長 (mm):");
+        ui.add(egui::Slider::new(&mut t.internal_length, 100.0..=280.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 幅 (mm):");
+        ui.add(egui::Slider::new(&mut t.internal_width, 100.0..=200.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 高 (mm):");
+        ui.add(egui::Slider::new(&mut t.internal_height, 40.0..=140.0).step_by(1.0));
+    });
+
+    let t_copy = *t;
+    let label = format!(
+        "ティッシュカバー 内 {}×{}×{}mm",
+        t_copy.internal_length, t_copy.internal_width, t_copy.internal_height
+    );
+    ui.label("プリセット目安: US rect (231×116×53) / Cube (114×114×127) / Square (114×114×100)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, t_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 収納 BOX customizer (`internal_l × internal_w × internal_h`)
+///
+/// top open 基本形、lid + hinge は future sprint (household § 3)
+fn show_storage_box_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📦 収納 BOX (top open、基本形)").strong());
+
+    let s = &mut state.customizer_state.storage_box;
+    ui.horizontal(|ui| {
+        ui.label("内部 長 (mm):");
+        ui.add(egui::Slider::new(&mut s.internal_length, 60.0..=250.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.internal_width, 60.0..=200.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 高 (mm):");
+        ui.add(egui::Slider::new(&mut s.internal_height, 30.0..=120.0).step_by(5.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "収納 BOX 内 {}×{}×{}mm",
+        s_copy.internal_length, s_copy.internal_width, s_copy.internal_height
+    );
+    ui.label("プリセット目安: Small (80×60×40) / Medium (150×100×60) / Large (200×150×80)");
+    ui.label("注: lid + hinge は future sprint、現状は top open 基本形");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);
