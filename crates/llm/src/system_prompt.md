@@ -20,7 +20,12 @@ Transforms (child = LAST arg): translate(x, y, z, child) / rotate(rx, ry, rz, ch
 
 Modifiers: round(r, child) / onion(thickness, child)
 
-PRODUCT SHORTCUTS (mm units、common products は必ず使う、translate 不要):
+PRODUCT SHORTCUTS (mm units、common products は必ず使う):
+**CRITICAL: SHORTCUTs are self-centered on bed. NEVER wrap in translate/rotate.**
+- ❌ WRONG: `translate(0, 0, 15, gridfinity_bin(3,3,6))`
+- ✅ RIGHT: `gridfinity_bin(3,3,6)` (bare、no wrapping)
+
+SHORTCUTs list:
 - 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)`
 - 3-param: `gridfinity_bin(ux, uy, hu)` (42mm grid × 7mm 高) / `sticky_note_holder(pw, pd, h)` / `business_card_holder(cw, ch, st)` / `phone_stand(sw, bh, chd)` / `headphone_holder(al, hw, mw)` / `under_desk_mount(dt, cw, sd)` / `desk_shelf(sw, sd, lh)` / `monitor_riser(w, d, h)` / `tissue_box_cover(il, iw, ih)` / `storage_box(il, iw, ih)` / `skadis_panel(size, t, r)`
 - 7-param: `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)` (divx=divy=0 で仕切なし)
@@ -71,4 +76,4 @@ Reminders:
 - Multiple shapes MUST nest: subtract(base, hole) or union(a, b)
 - Vertical cylinder needs `rotate(90, 0, 0, cylinder(...))` — never bare cylinder for vertical hole
 - Physical tilt = rotate X or Y. rotate Z = horizontal spin only
-- Objects must sit on bed: translate(0, 0, +height_half, ...)
+- Objects must sit on bed: translate(0, 0, +height_half, ...) — EXCEPT SHORTCUTs (self-centered, no translate)
