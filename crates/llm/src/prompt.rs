@@ -35,6 +35,27 @@ mod tests {
         assert!(SYSTEM_PROMPT.contains("315"));
     }
 
+    /// 2026-08-20 追加: system_prompt が iGPU prefill 実用限界を超えないか監視
+    ///
+    /// iGPU (Apple M3 + Qwen 3.5-4B) の prefill 時間は prompt 長 O(n²) スケーリング
+    /// 実測: ~2500 chars で 180s、6081 chars で 300s+ timeout (v0.1.0-beta.1 実測)
+    /// 4500 chars 以下なら 3-min timeout に収まる安全域
+    ///
+    /// Sprint C (2026-08-19) で SHORTCUT section 追加時に 6081 chars まで膨張
+    /// させて LLM 経路 B を timeout で機能停止させた事故を再発防止
+    #[test]
+    fn system_prompt_size_within_igpu_prefill_budget() {
+        const MAX_CHARS: usize = 4500;
+        assert!(
+            SYSTEM_PROMPT.len() <= MAX_CHARS,
+            "system_prompt.md is {} chars, exceeds iGPU prefill budget {} chars \
+             (>~5000 causes 300s HTTP timeout on iGPU + 3B model, see \
+             feedback_text_to_print_system_prompt_size_guard.md)",
+            SYSTEM_PROMPT.len(),
+            MAX_CHARS
+        );
+    }
+
     #[test]
     fn system_prompt_teaches_high_level_shortcuts() {
         // 2026-08-20 追加: SHORTCUT section で 12 archetype + preset 系を LLM に
