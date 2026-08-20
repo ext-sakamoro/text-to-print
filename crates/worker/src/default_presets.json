@@ -1,0 +1,25 @@
+{
+  "version": "2026-08-20T00:00:00Z",
+  "categories": [
+    {
+      "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
+      "presets": [
+        { "id": "coin_100yen", "label": "コイン (100円)", "lol_dsl": "shopping_cart_coin(22.8, 1.7)" },
+        { "id": "skadis_panel_300", "label": "SKADIS パネル 300×300", "lol_dsl": "skadis_panel(300, 5, 6)" },
+        { "id": "skadis_hook_s", "label": "SKADIS フック S", "lol_dsl": "skadis_hook_s()" },
+        { "id": "skadis_clip", "label": "SKADIS クリップ", "lol_dsl": "skadis_clip()" },
+        { "id": "skadis_elastic_cord", "label": "SKADIS ゴムバンド", "lol_dsl": "skadis_elastic_cord()" }
+      ]
+    },
+    {
+      "name": "実績品 UserFieldTest 認証 (実荷重テスト合格、ALICE-Bamboo/models 由来)",
+      "presets": [
+        { "id": "skadis_hook_j", "label": "SKADIS フック J", "lol_dsl": "skadis_hook_j()" },
+        { "id": "skadis_hook_l", "label": "SKADIS フック L", "lol_dsl": "skadis_hook_l()" },
+        { "id": "skadis_container", "label": "SKADIS コンテナ", "lol_dsl": "skadis_container()" },
+        { "id": "skadis_shelf", "label": "SKADIS シェルフ", "lol_dsl": "skadis_shelf()" },
+        { "id": "shelf_divider_560", "label": "棚仕切り 560×250×120", "lol_dsl": "shelf_divider()" }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 //! text-to-print LoRA share upload backend (Cloudflare Workers, Rust wasm32)
 //!
 //! Endpoints:
-//! - `POST /api/share`  — accept a [`SharePayload`] matching v1 alice_manifest schema
-//! - `GET  /health`     — liveness probe
+//! - `POST /api/share`   — accept a [`SharePayload`] matching v1 alice_manifest schema
+//! - `GET  /api/presets` — archetype preset library (Sprint X.1、Layer 1 sync)
+//! - `GET  /health`      — liveness probe
 //!
 //! Wired to D1 (SQLite serverless) via the `SHARES_DB` binding. See
 //! `wrangler.toml` and `migrations/0001_init.sql`.
@@ -28,6 +29,7 @@ use worker::{
 mod checkout;
 mod email;
 mod license_issue;
+mod presets_handler;
 mod rate_limit;
 mod share_handler;
 mod stripe_webhook;
@@ -99,6 +101,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> WorkerResult<Respons
     router
         .get("/health", |_, _| Response::ok("ok"))
         .post_async("/api/share", handle_share)
+        .get_async("/api/presets", handle_presets)
         .post_async("/stripe/webhook", handle_stripe_webhook)
         .post_async("/stripe/checkout-session", handle_checkout_session)
         .run(req, env)
@@ -107,6 +110,10 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> WorkerResult<Respons
 
 async fn handle_share(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
     share_handler::handle(&mut req, &ctx).await
+}
+
+async fn handle_presets(req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
+    presets_handler::handle(&req, &ctx).await
 }
 
 async fn handle_stripe_webhook(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
