@@ -121,6 +121,16 @@ fn projection_label(p: alice_bamboo::color4::ProjectionAxis) -> &'static str {
 pub fn show(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lang: Lang) {
     poll_results(ui, state);
 
+    // 12 archetype customizer 展開時に画面外に溢れるため縦 scroll でラップ
+    // (2026-08-20 追加、user 実機 report で発覚した scroll bar 不能 bug 修正)
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            show_inner(ui, state, ui_state, lang);
+        });
+}
+
+fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, lang: Lang) {
     ui.heading("Text to 3D");
     ui.separator();
 
