@@ -20,16 +20,19 @@ text-to-print には **3 経路** の生成 flow があり、customizer 経路 (
 | **C** | customizer slider | param 手動指定 → LOL 動的組立 → 1 秒生成 | `show_prompt_customizer()` (prompt.rs) + `CustomizerState` (state.rs) |
 | **B** | LLM 自然言語 | 自由入力 → GBNF constrained LLM → 2-8 分生成、非決定 | 既存 prompt 欄 + `start_generation()` |
 
-**新 archetype 追加 = 4 layer** の実装:
+**新 archetype 追加 = 4 layer + 2 optional** の実装:
 
 ```
-[Layer 3] text-to-print prompt.rs      ← show_xxx_customizer() 関数 + dispatch
+[Layer 3] text-to-print prompt.rs      ← show_xxx_customizer() 関数 + dispatch (経路 C)
               ↓
 [Layer 2] text-to-print state.rs       ← XxxUiState struct + to_lol()
               ↓
 [Layer 1] ALICE-LOL runtime_parser.rs  ← "xxx" => { ... } dispatch
               ↓
 [Layer 0] ALICE-LOL pattern_sdf.rs     ← XxxSpec struct + xxx(&spec) -> SdfNode fn
+
+[Layer L] text-to-print lol.gbnf       ← name_Nf に "xxx" 追加 (経路 B、LLM 自然言語)
+[Layer L] text-to-print system_prompt.md ← PRODUCT SHORTCUTS section に用途例
 ```
 
 **判断軸**: 「LOL DSL primitive として `xxx(...)` を書けば mesh が出る」→ Layer 0-1 実装
@@ -383,6 +386,44 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
 
 ---
 
+### Step 5 (optional): GBNF grammar 追加 (Layer L、LLM 経路 B 対応)
+
+`~/text-to-print/crates/llm/src/lol.gbnf` の適切な category に primitive 名を追加:
+
+```gbnf
+# param 数に応じて追加先が変わる
+name_1f ::= ... | "xxx"    # 1 param
+name_2f ::= ... | "xxx"    # 2 param
+name_3f ::= ... | "xxx"    # 3 param
+name_7f ::= ... | "xxx"    # 7 param (gridfinity_bin_ex 等)
+name_no_arg ::= ... | "xxx"  # 0 param (preset shortcut)
+```
+
+**test 追加** (`~/text-to-print/crates/llm/src/grammar_lol.rs`):
+```rust
+// lol_gbnf_includes_high_level_primitives の must_have に "xxx" 追加
+```
+
+### Step 6 (optional): system_prompt.md に SHORTCUT 例追加 (LLM 用途学習)
+
+`~/text-to-print/crates/llm/src/system_prompt.md` の PRODUCT SHORTCUTS section table に 1 行追加:
+```
+| user says | LOL DSL | 説明 |
+|--|--|--|
+| ○○ / xxx | `xxx(p1, p2, p3)` | (default 値の説明) |
+```
+
+**test 追加** (`~/text-to-print/crates/llm/src/prompt.rs`):
+```rust
+// system_prompt_teaches_high_level_shortcuts の array に "xxx" 追加
+```
+
+**Step 5-6 の効果**: user が「○○ 作って」と自然言語 (経路 B) 入力時に LLM が `xxx(...)` を出せるようになる
+
+**Step 5-6 skip した場合**: 経路 A/C (preset/customizer) のみ有効、LLM 経路では基礎 primitive で組み立てる (LLM が新 archetype を知らない)
+
+---
+
 ## 追加チェックリスト (新 archetype 実装前に self-check)
 
 - [ ] 座標系 (Y-up? Z-up?) を決めた既存 codebase は Y-up (cylinder native) 混在許容
@@ -403,6 +444,8 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
 - [ ] `cargo fmt --check` clean
 - [ ] ALICE-LOL 側は `cargo test --lib` + `cargo clippy --lib --tests`
 - [ ] Bambu H2D 単一プリント想定なら UI slider max ≤ 280mm (bed 315mm 内)
+- [ ] **LLM 経路 B にも対応させたい場合**: `lol.gbnf` + `system_prompt.md` 更新 (Step 5-6)
+- [ ] GBNF 変更後: `cargo test --package text-to-print-llm grammar_lol` で GBNF syntax pass 確認
 
 ---
 
