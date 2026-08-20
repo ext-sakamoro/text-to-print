@@ -20,37 +20,13 @@ Transforms (child = LAST arg): translate(x, y, z, child) / rotate(rx, ry, rz, ch
 
 Modifiers: round(r, child) / onion(thickness, child)
 
-PRODUCT SHORTCUTS (prefer these over hand-building from primitives when user asks for a common product):
+PRODUCT SHORTCUTS (mm units、common products は必ず使う、translate 不要):
+- 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)`
+- 3-param: `gridfinity_bin(ux, uy, hu)` (42mm grid × 7mm 高) / `sticky_note_holder(pw, pd, h)` / `business_card_holder(cw, ch, st)` / `phone_stand(sw, bh, chd)` / `headphone_holder(al, hw, mw)` / `under_desk_mount(dt, cw, sd)` / `desk_shelf(sw, sd, lh)` / `monitor_riser(w, d, h)` / `tissue_box_cover(il, iw, ih)` / `storage_box(il, iw, ih)` / `skadis_panel(size, t, r)`
+- 7-param: `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)` (divx=divy=0 で仕切なし)
+- preset (no arg): `wall_hook()` `drawer_organizer()` `shelf_divider()` `skadis_hook_l()` `skadis_hook_j()` `skadis_hook_s()` `skadis_container()` `skadis_clip()` `skadis_shelf()` `skadis_elastic_cord()`
 
-| user says | LOL DSL | 説明 |
-|--|--|--|
-| ペン立て / pen cup / pencil holder | `pen_cup(inner_dia, height)` | 円筒 cup (default `pen_cup(75, 100)`) |
-| コースター / coaster | `coaster(diameter, thickness)` | 円形 disc + rim (default `coaster(95, 5)`) |
-| 100 円コイン / shopping cart coin | `shopping_cart_coin(dia, thickness)` | 円形 token (default `shopping_cart_coin(22.8, 1.7)`) |
-| Gridfinity / bin / 収納 grid | `gridfinity_bin(units_x, units_y, height_u)` | 42mm grid × 7mm 高さ (`gridfinity_bin(2, 2, 6)`=84×84×46mm) |
-| Gridfinity + 内部仕切り + 壁厚指定 | `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)` | divx=divy=0 で仕切りなし、wall=floor=0 で default |
-| 付箋ホルダー / sticky note holder / Post-it | `sticky_note_holder(pad_w, pad_d, height)` | (default `sticky_note_holder(76, 76, 30)`) |
-| 名刺ホルダー / business card holder | `business_card_holder(card_w, card_h, slot_thickness)` | JP=91×55 / US=89×51 (default `business_card_holder(91, 55, 22)`) |
-| スマホ / タブレット スタンド | `phone_stand(slot_w, back_h, cable_dia)` | (default `phone_stand(14, 100, 18)`、cable_dia=0 で穴なし) |
-| ヘッドホンホルダー / headphone holder | `headphone_holder(arm_length, headband_width, mount_width)` | wall-mount (default `headphone_holder(80, 50, 100)`) |
-| 机下 clamp / under desk mount | `under_desk_mount(desk_thickness, clamp_width, screw_dia)` | (default `under_desk_mount(25, 40, 4)`、screw=0 で両面テープ) |
-| 卓上シェルフ / desk shelf | `desk_shelf(shelf_w, shelf_d, leg_h)` | (default `desk_shelf(400, 200, 100)`) |
-| モニターライザー / monitor riser | `monitor_riser(width, depth, height)` | (default `monitor_riser(250, 180, 90)`、cable Ø40mm 標準装備) |
-| ティッシュボックスカバー / tissue box cover | `tissue_box_cover(internal_l, internal_w, internal_h)` | US=231×116×53 (default) |
-| 収納 BOX / storage box | `storage_box(internal_l, internal_w, internal_h)` | medium=150×100×60 (default、lid なし) |
-| SKADIS パネル | `skadis_panel(size, thickness, corner_r)` | (default `skadis_panel(300, 5, 6)`) |
-| SKADIS フック S/J/L | `skadis_hook_s()` / `skadis_hook_j()` / `skadis_hook_l()` | preset (no arg) |
-| SKADIS コンテナ / クリップ / シェルフ / ゴムバンド | `skadis_container()` / `skadis_clip()` / `skadis_shelf()` / `skadis_elastic_cord()` | preset |
-| 壁掛けフック / wall hook | `wall_hook()` | preset (PLA 1kgf、M4 mount 穴付き) |
-| 引き出し仕切り / drawer organizer | `drawer_organizer()` | preset (chopsticks 3 slot、250×200×40mm) |
-| 棚仕切り / shelf divider | `shelf_divider()` | preset (560×250×120mm、field-tested) |
-
-SHORTCUT 使用時は translate 不要 (product 自体が座標系持つ) 例:
-- "Gridfinity 3×3 6U" → `gridfinity_bin(3, 3, 6)` (translate 不要)
-- "コースター 直径 100mm 厚 5mm" → `coaster(100, 5)`
-- "ペン立て 内径 60mm 高さ 90mm" → `pen_cup(60, 90)`
-
-user が既存 product の変種を求めたら SHORTCUT を preferred、custom shape はいつも通り基礎 primitive で組み立て
+Ex: "Gridfinity 3x3 6U"→`gridfinity_bin(3,3,6)`, "ペン立て 60mm 高100"→`pen_cup(60,100)`, "コースター 100mm 5mm厚"→`coaster(100,5)`
 
 Examples:
 
