@@ -34,4 +34,28 @@ mod tests {
         assert!(SYSTEM_PROMPT.contains("0.8mm"));
         assert!(SYSTEM_PROMPT.contains("315"));
     }
+
+    #[test]
+    fn system_prompt_teaches_high_level_shortcuts() {
+        // 2026-08-20 追加: SHORTCUT section で 12 archetype + preset 系を LLM に
+        // 教えているか確認 (「ペン立て」→ `pen_cup(...)` を思いつく前提)
+        assert!(SYSTEM_PROMPT.contains("SHORTCUT"));
+        for name in [
+            "gridfinity_bin",
+            "sticky_note_holder",
+            "business_card_holder",
+            "pen_cup",
+            "phone_stand",
+            "coaster",
+            "tissue_box_cover",
+            "storage_box",
+            "wall_hook",
+            "skadis_panel",
+        ] {
+            assert!(
+                SYSTEM_PROMPT.contains(name),
+                "system_prompt.md must teach LLM about '{name}' SHORTCUT"
+            );
+        }
+    }
 }

@@ -62,4 +62,48 @@ mod tests {
         // should accept its opening char
         assert!(fsm.accepts('s') || fsm.accepts(' ') || fsm.accepts('\n'));
     }
+
+    #[test]
+    fn lol_gbnf_includes_high_level_primitives() {
+        // 2026-08-20 追加: 12 archetype 全部 + wall_hook / drawer / shelf_divider /
+        // SKADIS preset 系が GBNF に登録されているか (retention gate、future
+        // refactor で誤って削除するのを防ぐ)
+        let must_have = [
+            // 2f primitives
+            "shopping_cart_coin",
+            "pen_cup",
+            "coaster",
+            // 3f primitives
+            "gridfinity_bin",
+            "sticky_note_holder",
+            "business_card_holder",
+            "phone_stand",
+            "headphone_holder",
+            "under_desk_mount",
+            "desk_shelf",
+            "monitor_riser",
+            "tissue_box_cover",
+            "storage_box",
+            "skadis_panel",
+            // 7f primitives
+            "gridfinity_bin_ex",
+            // no-arg primitives
+            "wall_hook",
+            "drawer_organizer",
+            "shelf_divider",
+            "skadis_hook_l",
+            "skadis_hook_j",
+            "skadis_hook_s",
+            "skadis_container",
+            "skadis_clip",
+            "skadis_shelf",
+            "skadis_elastic_cord",
+        ];
+        for name in must_have {
+            assert!(
+                LOL_GBNF.contains(&format!("\"{name}\"")),
+                "LOL_GBNF must include high-level primitive: {name}"
+            );
+        }
+    }
 }

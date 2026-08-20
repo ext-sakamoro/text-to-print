@@ -57,8 +57,10 @@ expr ::= prim_1f
        | prim_4f
        | prim_5f
        | prim_6f
+       | prim_7f
        | prim_9f
        | prim_10f
+       | prim_no_arg
        | op_variadic
        | op_k_children
        | op_2k_children
@@ -79,8 +81,13 @@ prim_3f ::= name_3f ws "(" ws number ws "," ws number ws "," ws number ws ")"
 prim_4f ::= name_4f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
 prim_5f ::= name_5f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
 prim_6f ::= name_6f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+prim_7f ::= name_7f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
 prim_9f ::= name_9f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
 prim_10f ::= name_10f ws "(" ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws "," ws number ws ")"
+
+# prim_no_arg: 引数なし preset primitive (2026-08-20 追加、Phase 5.1 + Phase B/B2 高階 primitive)
+# runtime_parser の spec::default_xxx() を呼び出す preset shortcut group
+prim_no_arg ::= name_no_arg ws "(" ws ")"
 
 name_1f ::= "sphere"
           | "octahedron"
@@ -117,6 +124,10 @@ name_2f ::= "cylinder"
           | "circle_2d"
           | "blobby_cross"
           | "terrain"
+          # Phase 5.1 + household 高階 primitive (2026-08-20 追加)
+          | "shopping_cart_coin"
+          | "pen_cup"
+          | "coaster"
 
 name_3f ::= "box3d"
           | "ellipsoid"
@@ -136,6 +147,18 @@ name_3f ::= "box3d"
           | "tunnel"
           | "rounded_x"
           | "pie"
+          # Phase 5.1 + Phase B + Phase B2 + household 高階 primitive (2026-08-20 追加)
+          | "skadis_panel"
+          | "gridfinity_bin"
+          | "sticky_note_holder"
+          | "business_card_holder"
+          | "phone_stand"
+          | "headphone_holder"
+          | "under_desk_mount"
+          | "desk_shelf"
+          | "monitor_riser"
+          | "tissue_box_cover"
+          | "storage_box"
 
 name_4f ::= "rounded_box"
           | "plane"
@@ -157,9 +180,25 @@ name_5f ::= "horseshoe" | "superellipsoid"
 
 name_6f ::= "segment_2d"
 
+# Phase C 高階 primitive (7 param advanced spec、2026-08-20 追加)
+name_7f ::= "gridfinity_bin_ex"
+
 name_9f ::= "triangle"
 
 name_10f ::= "bezier"
+
+# 引数なし preset primitive (2026-08-20 追加)
+# Bamboo canonical + PART 1/2 で spec::default_xxx() を呼び出す preset shortcut
+name_no_arg ::= "wall_hook"
+              | "drawer_organizer"
+              | "shelf_divider"
+              | "skadis_hook_l"
+              | "skadis_hook_j"
+              | "skadis_hook_s"
+              | "skadis_container"
+              | "skadis_clip"
+              | "skadis_shelf"
+              | "skadis_elastic_cord"
 
 # ─── Operations (Boolean / combining constructs) ──────────────────────
 #
