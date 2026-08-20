@@ -1222,7 +1222,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
                     ui.horizontal_wrapped(|ui| {
                         for (label, lol_dsl) in *items {
                             if ui.button(*label).clicked() {
-                                state.prompt_input = format!("[template] {label}");
+                                state.prompt_input.clear();
                                 state.prompt_focused_once = false;
                                 start_generation_from_lol(state, (*lol_dsl).to_string(), label);
                             }
@@ -1343,7 +1343,7 @@ fn show_gridfinity_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         )
     };
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, g_copy.to_lol(), &label);
     }
@@ -1377,7 +1377,7 @@ fn show_sticky_note_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         s_copy.pad_width, s_copy.pad_depth, s_copy.height
     );
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, s_copy.to_lol(), &label);
     }
@@ -1416,7 +1416,7 @@ fn show_business_card_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         b_copy.card_width, b_copy.card_height, capacity
     );
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, b_copy.to_lol(), &label);
     }
@@ -1445,7 +1445,7 @@ fn show_pen_cup_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     let label = format!("ペン立て Ø{}×{}mm", p_copy.inner_diameter, p_copy.height);
     ui.label(format!("外形 Ø{outer_dia:.1}mm (壁厚 2mm)"));
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, p_copy.to_lol(), &label);
     }
@@ -1485,7 +1485,7 @@ fn show_phone_stand_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         ps_copy.slot_width, ps_copy.back_height
     );
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, ps_copy.to_lol(), &label);
     }
@@ -1519,7 +1519,7 @@ fn show_headphone_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         h_copy.arm_length, h_copy.headband_width, h_copy.mount_width
     );
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, h_copy.to_lol(), &label);
     }
@@ -1558,7 +1558,7 @@ fn show_under_desk_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         m_copy.desk_thickness, m_copy.clamp_width
     );
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, m_copy.to_lol(), &label);
     }
@@ -1593,7 +1593,7 @@ fn show_desk_shelf_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     );
     ui.label("注: 幅 315mm 超えは Bambu H2D 単一プリント不可 (要分割)");
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, s_copy.to_lol(), &label);
     }
@@ -1628,7 +1628,7 @@ fn show_monitor_riser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     );
     ui.label("cable 穴 Ø40mm 標準装備、単一プリント想定 (280mm 以下)");
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, r_copy.to_lol(), &label);
     }
@@ -1656,7 +1656,7 @@ fn show_coaster_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     let label = format!("コースター Ø{}×{}mm", c_copy.diameter, c_copy.thickness);
     ui.label("rim 2.5mm 幅 × 1.5mm 高 (液滴 catch)");
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, c_copy.to_lol(), &label);
     }
@@ -1691,7 +1691,7 @@ fn show_tissue_box_cover_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     );
     ui.label("プリセット目安: US rect (231×116×53) / Cube (114×114×127) / Square (114×114×100)");
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, t_copy.to_lol(), &label);
     }
@@ -1727,7 +1727,7 @@ fn show_storage_box_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     ui.label("プリセット目安: Small (80×60×40) / Medium (150×100×60) / Large (200×150×80)");
     ui.label("注: lid + hinge は future sprint、現状は top open 基本形");
     if ui.button(format!("作成: {label}")).clicked() {
-        state.prompt_input = format!("[customizer] {label}");
+        state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, s_copy.to_lol(), &label);
     }
