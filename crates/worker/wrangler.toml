@@ -1,34 +1,35 @@
 name = "text-to-print"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-01-01"
-account_id = ""  # fill in via wrangler login before deploy
+account_id = "c2396e55b348a84b4d84096790d23b28"  # Sakamoro@extoria.co.jp's Account
 
 [build]
-command = "cargo install --version 0.2.6 --locked worker-build 2>/dev/null; worker-build --release"
+# worker-build version は worker crate version と一致 (2026-08-21 実測):
+# worker 0.8 (Cargo.toml) には worker-build 0.8 が必要 (共通 workers-rs 0.8 リリース)
+# worker-build 0.8 が bundle する wasm-bindgen 0.2.126 と project 側 wasm-bindgen 一致
+command = "cargo install --locked worker-build@^0.8 2>/dev/null; worker-build --release"
 
 # Custom domain wiring is done via Cloudflare dashboard once the Worker is
 # deployed. Suggested route (owner must map after first deploy):
 #   text-to-print.alicelaw.net/api/* -> text-to-print worker
 # alicelaw.net is already Cloudflare-managed so the subdomain add is trivial.
 
-# D1 binding — create with `wrangler d1 create text-to-print-shares` and paste
-# the returned `database_id` here, then UN-COMMENT this whole [[d1_databases]] block.
-# 空文字列 id は wrangler config validation で reject されるので、
-# database_id が確定するまで block ごとコメントアウトする方式に統一。
-# [[d1_databases]]
-# binding = "SHARES_DB"
-# database_name = "text-to-print-shares"
-# database_id = "PASTE_DATABASE_ID_HERE"
+# D1 binding for SharePayload upload endpoint (POST /api/share)
+# Created 2026-08-21 via `wrangler d1 create text-to-print-shares` (APAC region)
+[[d1_databases]]
+binding = "SHARES_DB"
+database_name = "text-to-print-shares"
+database_id = "06b65563-a027-47a8-bdf9-4f4556206b11"
 
 # KV binding for archetype preset library (Sprint X.1、Layer 1 sync)
-# Create with `wrangler kv:namespace create PRESETS_KV` and paste `id` here.
-# Seed initial data:
-#   wrangler kv:key put --binding=PRESETS_KV PRESETS_V1 --path src/default_presets.json
+# Created 2026-08-21 via `wrangler kv namespace create PRESETS_KV`.
+# Seed / update:
+#   wrangler kv key put --binding=PRESETS_KV PRESETS_V1 --path src/default_presets.json
 # `GET /api/presets` reads from this KV; falls back to bundled `default_presets.json`
 # when KV empty or unset (β 初期でも app が動く保険)
-# [[kv_namespaces]]
-# binding = "PRESETS_KV"
-# id = "PASTE_NAMESPACE_ID_HERE"
+[[kv_namespaces]]
+binding = "PRESETS_KV"
+id = "7ea49e07f6204a0d84739d2bf35db3a7"
 
 [vars]
 # Salt for hashing client IP so raw IPs never touch storage (privacy).

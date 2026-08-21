@@ -14,7 +14,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # `d1` feature 必須 (worker 0.5 以降 D1Database / Env::d1 は feature gate)
-worker = { version = "0.5", features = ["d1"] }
+# 2026-08-21 v0.5 → v0.8 upgrade: worker-build 0.2+ (新 wasm-bindgen 0.2.126 対応)
+# を使うため必須、v0.5 のままだと wasm-bindgen schema mismatch で deploy fail
+worker = { version = "0.8", features = ["d1"] }
 # Direct versions rather than `.workspace = true` because this crate is
 # excluded from the workspace (see root Cargo.toml comment) Keep in loose
 # sync with workspace versions when they move
