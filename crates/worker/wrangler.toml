@@ -12,11 +12,13 @@ command = "cargo install --version 0.2.6 --locked worker-build 2>/dev/null; work
 # alicelaw.net is already Cloudflare-managed so the subdomain add is trivial.
 
 # D1 binding — create with `wrangler d1 create text-to-print-shares` and paste
-# the returned `database_id` here before first deploy.
-[[d1_databases]]
-binding = "SHARES_DB"
-database_name = "text-to-print-shares"
-database_id = ""  # fill after `wrangler d1 create`
+# the returned `database_id` here, then UN-COMMENT this whole [[d1_databases]] block.
+# 空文字列 id は wrangler config validation で reject されるので、
+# database_id が確定するまで block ごとコメントアウトする方式に統一。
+# [[d1_databases]]
+# binding = "SHARES_DB"
+# database_name = "text-to-print-shares"
+# database_id = "PASTE_DATABASE_ID_HERE"
 
 # KV binding for archetype preset library (Sprint X.1、Layer 1 sync)
 # Create with `wrangler kv:namespace create PRESETS_KV` and paste `id` here.
@@ -24,9 +26,9 @@ database_id = ""  # fill after `wrangler d1 create`
 #   wrangler kv:key put --binding=PRESETS_KV PRESETS_V1 --path src/default_presets.json
 # `GET /api/presets` reads from this KV; falls back to bundled `default_presets.json`
 # when KV empty or unset (β 初期でも app が動く保険)
-[[kv_namespaces]]
-binding = "PRESETS_KV"
-id = ""  # fill after `wrangler kv:namespace create PRESETS_KV`
+# [[kv_namespaces]]
+# binding = "PRESETS_KV"
+# id = "PASTE_NAMESPACE_ID_HERE"
 
 [vars]
 # Salt for hashing client IP so raw IPs never touch storage (privacy).
