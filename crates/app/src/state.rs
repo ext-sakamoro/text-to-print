@@ -9,6 +9,12 @@ use text_to_print_llm::backend::LlmConfig;
 use text_to_print_llm::backend_kind::{BackendKind, EmbeddedStatus, ExecutionMode};
 use text_to_print_llm::embedded_backend::EmbeddedBackend;
 use text_to_print_llm::sidecar::SidecarStatus;
+use text_to_print_network::presets_client::{PresetCategory, PresetsResponse, parse_presets_json};
+
+/// Bundled default presets JSON — 起動時 Cloudflare / cache いずれも空なら
+/// 本 blob を parse して初期 preset とする (β 初期でも offline でも app が動く)
+/// worker crate 側の同名 file と手動 sync (schema 一致)
+pub const BUNDLED_DEFAULT_PRESETS_JSON: &str = include_str!("default_presets.json");
 
 /// Ordered pipeline phases surfaced to the UI progress indicator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -588,6 +594,61 @@ pub struct AppState {
     pub pending_share_dry_run: Option<std::path::PathBuf>,
     /// Template customizer UI state (Gridfinity bin 等の param 入力保持)
     pub customizer_state: CustomizerState,
+    /// Sprint X.1: archetype preset library snapshot (Layer 1 sync)
+    ///
+    /// 起動時に (1) local cache → (2) bundled default の順で初期化、その後
+    /// background で Cloudflare Worker `GET /api/presets` を fetch し
+    /// 成功時に上書き `prompt.rs::show_prompt_templates` は本 field を
+    /// dynamic に読み出して TEMPLATE_CATEGORIES const の代替とする
+    /// 詳細: memory/project_text_to_print_archetype_library_architecture.md
+    pub presets: PresetsSnapshot,
+}
+
+/// Preset library の in-memory snapshot、by-startup / by-cloud-sync で更新
+#[derive(Debug, Clone)]
+pub struct PresetsSnapshot {
+    pub source: PresetsSource,
+    pub version: String,
+    pub categories: Vec<PresetCategory>,
+}
+
+/// Snapshot がどこから来たか (debug + UI status 表示用)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetsSource {
+    /// Compile-time bundled JSON (`BUNDLED_DEFAULT_PRESETS_JSON`)、初回起動 or offline
+    Bundled,
+    /// Local SQLite `presets_cache` (前回起動時に sync 済み)
+    Cache,
+    /// 起動直後の background sync で Cloudflare から fresh 取得
+    Cloud,
+}
+
+impl PresetsSnapshot {
+    /// 起動時初期化: cache → bundled の順に fallback
+    ///
+    /// 常に成功 (bundled 必ず parse 通る前提、`BUNDLED_DEFAULT_PRESETS_JSON` は
+    /// compile-time embed + 単体 test で parse 保証済み)
+    #[must_use]
+    pub fn load_initial(db: &Database) -> Self {
+        // 1. local cache 試行
+        if let Ok(Some((json, _etag))) = db.get_presets_cache()
+            && let Ok(parsed) = parse_presets_json(&json)
+        {
+            return Self::from_response(parsed, PresetsSource::Cache);
+        }
+        // 2. bundled fallback (parse 失敗は panic、bundled は compile-time verified)
+        let parsed = parse_presets_json(BUNDLED_DEFAULT_PRESETS_JSON)
+            .expect("bundled default presets must be valid JSON");
+        Self::from_response(parsed, PresetsSource::Bundled)
+    }
+
+    fn from_response(resp: PresetsResponse, source: PresetsSource) -> Self {
+        Self {
+            source,
+            version: resp.version,
+            categories: resp.categories,
+        }
+    }
 }
 
 pub enum GenerationStatus {
@@ -624,6 +685,12 @@ pub enum GenerationMessage {
         id: String,
         error: String,
     },
+    /// Sprint X.1: background preset sync 完了通知
+    ///
+    /// Cloudflare Worker `GET /api/presets` fetch 成功時に emit、UI 側は
+    /// `poll_results` で受け取って `AppState::presets` を上書き 304 (未変更) or
+    /// error は特に message emit しない (silent、次回 startup で cache 経由復元)
+    PresetsUpdated(Box<PresetsSnapshot>),
 }
 
 impl AppState {
@@ -837,6 +904,19 @@ impl AppState {
             );
         }
 
+        // Sprint X.1: preset library の初期化 (cache → bundled fallback)
+        // `db` を struct 化する前に load、以降 background で Cloudflare fetch
+        let presets = PresetsSnapshot::load_initial(&db);
+
+        // Startup background preset sync (Cloudflare Worker から latest fetch)
+        // 失敗しても initial cache/bundled で動く、fetch 成功時に UI 更新
+        spawn_presets_sync(
+            &runtime,
+            db_path.clone(),
+            text_to_print_network::presets_client::PresetsClient::default_endpoint(),
+            result_tx.clone(),
+        );
+
         Self {
             data_dir,
             tier,
@@ -866,6 +946,7 @@ impl AppState {
             enforce_lol_grammar,
             pending_share_dry_run: None,
             customizer_state: CustomizerState::default(),
+            presets,
         }
     }
 
@@ -1112,6 +1193,63 @@ fn load_or_create_profile_id(data_dir: &std::path::Path) -> String {
 /// `backend_kind` is Embedded) and the runtime switch paths
 /// (`switch_backend_kind` / `on_model_choice_changed`) share the same
 /// wait-for-DL-then-load flow
+/// Sprint X.1: startup 時に Cloudflare Worker から preset を background fetch
+///
+/// 動作:
+/// 1. `db.get_presets_cache()` から前回の etag を取り出す
+/// 2. `PresetsClient::fetch(etag)` を呼び、200 なら DB cache 更新 + UI に PresetsUpdated 通知
+/// 3. 304 なら silent no-op (cache 継続)
+/// 4. network / server error なら silent no-op (bundled or cache で app は動く)
+///
+/// UI thread は blocking 一切なし、fetch 失敗しても launch 遅延 0
+fn spawn_presets_sync(
+    runtime: &tokio::runtime::Runtime,
+    db_path: PathBuf,
+    endpoint: String,
+    tx: mpsc::Sender<GenerationMessage>,
+) {
+    runtime.spawn(async move {
+        // fetch 前に current etag を DB から読む (別 thread から DB access するため再 open)
+        let current_etag: Option<String> = match Database::open(&db_path) {
+            Ok(db) => db
+                .get_presets_cache()
+                .ok()
+                .flatten()
+                .and_then(|(_json, etag)| etag),
+            Err(_) => None,
+        };
+
+        let client =
+            text_to_print_network::presets_client::PresetsClient::new(endpoint.clone());
+        match client.fetch(current_etag.as_deref()).await {
+            Ok(text_to_print_network::presets_client::FetchResult::Updated { body, etag }) => {
+                // Serialize body back to JSON for DB storage (canonical round-trip)
+                if let Ok(json) = serde_json::to_string(&body)
+                    && let Ok(db) = Database::open(&db_path)
+                {
+                    let _ = db.set_presets_cache(&body.version, etag.as_deref(), &json);
+                }
+                let snapshot = PresetsSnapshot {
+                    source: PresetsSource::Cloud,
+                    version: body.version.clone(),
+                    categories: body.categories,
+                };
+                let _ = tx.send(GenerationMessage::PresetsUpdated(Box::new(snapshot)));
+                tracing::info!(
+                    version = %body.version,
+                    "presets sync completed"
+                );
+            }
+            Ok(text_to_print_network::presets_client::FetchResult::NotModified) => {
+                tracing::debug!("presets sync: 304 not modified (cache current)");
+            }
+            Err(e) => {
+                tracing::info!(error = %e, endpoint, "presets sync failed (silent fallback to cache/bundled)");
+            }
+        }
+    });
+}
+
 fn spawn_embedded_load(
     runtime: &tokio::runtime::Runtime,
     models_dir: PathBuf,

@@ -1155,76 +1155,61 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 state.refresh_history();
                 ui.ctx().request_repaint();
             }
+            GenerationMessage::PresetsUpdated(new_snapshot) => {
+                // Sprint X.1: background fetch 完了、UI 反映
+                tracing::info!(
+                    version = %new_snapshot.version,
+                    category_count = new_snapshot.categories.len(),
+                    "presets snapshot updated from cloud"
+                );
+                state.presets = *new_snapshot;
+                ui.ctx().request_repaint();
+            }
         }
     }
 }
 
-/// テンプレート = ALICE-Bamboo/models 実プリント合格 baseline
-///
-/// Phase T1.1 (2026-08-08) で ALICE-* 由来なしの自作 LOL DSL を全削除、
-/// `alice_lol::stdlib::pattern::registry::ALL` (canonical 13 pattern) のうち
-/// runtime_parser Phase 5.1 高階 primitive で表現可能な 9 items を採用
-///
-/// 全 template は `~/ALICE-Bamboo/models/` に対応する `bamboo_canonical` を持ち、
-/// `printability_score` (Bamboo simulation 実測) + `certified_by` (Both / UserFieldTest)
-/// で認証済 未対応 4 items (shelf_divider / wall_hook / gridfinity_bin / drawer_organizer)
-/// は ALICE-LOL runtime_parser に高階 primitive 追加後に取り込む
-///
-/// 詳細: memory `project_text_to_print_templates_alice_source.md` 参照
-///
-/// タプル形式: (button label, LOL DSL string)
-const TEMPLATE_CATEGORIES: &[(&str, &[(&str, &str)])] = &[
-    (
-        "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
-        &[
-            // shopping_cart_coin_100yen: Φ22.8 × 1.7mm、models/accessories/shopping-cart-coin
-            ("コイン (100円)", "shopping_cart_coin(22.8, 1.7)"),
-            // skadis_panel_300x300: 300×300×5mm + peg 穴 98 個、models/wall-organizer/skadis-300x300
-            ("SKADIS パネル 300×300", "skadis_panel(300, 5, 6)"),
-            // skadis_hook_s: S 字曲げ、models/wall-organizer/skadis-hook-s
-            ("SKADIS フック S", "skadis_hook_s()"),
-            // skadis_clip: 単 peg 細物ホルダー、models/wall-organizer/skadis-clip
-            ("SKADIS クリップ", "skadis_clip()"),
-            // skadis_elastic_cord: 伸縮バンド固定、models/wall-organizer/skadis-elastic-cord
-            ("SKADIS ゴムバンド", "skadis_elastic_cord()"),
-        ],
-    ),
-    (
-        "実績品 UserFieldTest 認証 (実荷重テスト合格、ALICE-Bamboo/models 由来)",
-        &[
-            // skadis_hook_j: J 字曲げ、models/wall-organizer/skadis-hook-j
-            ("SKADIS フック J", "skadis_hook_j()"),
-            // skadis_hook_l: 直角曲げ、models/wall-organizer/skadis-hook-l
-            ("SKADIS フック L", "skadis_hook_l()"),
-            // skadis_container: 2 peg gusset ribs 補強、models/wall-organizer/skadis-container
-            ("SKADIS コンテナ", "skadis_container()"),
-            // skadis_shelf: 2 peg rib 補強棚板、PETG 30lbs 実荷重合格、models/wall-organizer/skadis-shelf
-            ("SKADIS シェルフ", "skadis_shelf()"),
-            // shelf_divider: 560×250×120mm U 字仕切り、hex cutout 底板 + 2 側板
-            // models/shelf/divider-560x250x120 実プリント合格 spec
-            ("棚仕切り 560×250×120", "shelf_divider()"),
-        ],
-    ),
-];
-
 /// テンプレート = 直接 LOL DSL 生成 (LLM bypass、~1 秒)
 ///
-/// 従来の Japanese prompt + LLM 経路 (2-8 min + 非決定) から刷新
-/// ボタンクリック → alice-bamboo pipeline に LOL を直接流し込み、mesh + 3MF
-/// を即座に生成 → viewer 表示 生成中は disabled
+/// Sprint X.1 (2026-08-21) で TEMPLATE_CATEGORIES const を廃止、
+/// `state.presets: PresetsSnapshot` (Cloudflare Worker 経由の Layer 1 sync) を
+/// 直接読む dynamic 実装に refactor 起動時は bundled default (or local cache)、
+/// background で Cloudflare fetch 完了時に UI 自動更新
+///
+/// 詳細: memory `project_text_to_print_archetype_library_architecture.md`
 fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "テンプレート (クリックで即生成、LLM 経由しない)",
         |ui| {
             ui.add_enabled_ui(!is_generating, |ui| {
-                for (cat_name, items) in TEMPLATE_CATEGORIES {
-                    ui.label(egui::RichText::new(*cat_name).strong());
+                // Snapshot を clone して borrow 期間を短縮 (start_generation_from_lol が
+                // state を mutable borrow するため、iterator 中の借用と衝突しないよう分離)
+                let snapshot = state.presets.clone();
+
+                // preset source label (bundled / cache / cloud) を version と共に
+                // 小さく表示、user が「今どの source を見ているか」認識できる
+                let source_label = match snapshot.source {
+                    crate::state::PresetsSource::Bundled => "内蔵",
+                    crate::state::PresetsSource::Cache => "cache",
+                    crate::state::PresetsSource::Cloud => "☁ Cloud",
+                };
+                ui.small(format!(
+                    "presets: {source_label} / version {}",
+                    snapshot.version
+                ));
+
+                for category in &snapshot.categories {
+                    ui.label(egui::RichText::new(&category.name).strong());
                     ui.horizontal_wrapped(|ui| {
-                        for (label, lol_dsl) in *items {
-                            if ui.button(*label).clicked() {
+                        for preset in &category.presets {
+                            if ui.button(&preset.label).clicked() {
                                 state.prompt_input.clear();
                                 state.prompt_focused_once = false;
-                                start_generation_from_lol(state, (*lol_dsl).to_string(), label);
+                                start_generation_from_lol(
+                                    state,
+                                    preset.lol_dsl.clone(),
+                                    &preset.label,
+                                );
                             }
                         }
                     });

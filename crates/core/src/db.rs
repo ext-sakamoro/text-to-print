@@ -141,6 +141,21 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN enforce_lol_grammar INTEGER NOT NULL DEFAULT 0",
             [],
         );
+        // Sprint X.1 (2026-08-21): archetype preset library sync cache
+        // Cloudflare Worker `GET /api/presets` の response を local に持つ、
+        // offline / 起動時 network 未接続でも last-known preset で app が動く
+        // `id = 1` 縛りで single-row 運用 (KV 全体を JSON blob として保存)
+        // 詳細: memory/project_text_to_print_archetype_library_architecture.md
+        let _ = self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS presets_cache (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version TEXT NOT NULL,
+                etag TEXT,
+                json_content TEXT NOT NULL,
+                fetched_at TEXT NOT NULL
+            )",
+            [],
+        );
         Ok(())
     }
 
@@ -345,6 +360,53 @@ impl Database {
         Ok(())
     }
 
+    /// Sprint X.1: preset cache から (json_content, etag) 読み出し
+    ///
+    /// 未 cache の場合 (未 sync or DB fresh) は `Ok(None)`、以降 caller で
+    /// bundled default にフォールバック
+    ///
+    /// # Errors
+    ///
+    /// SQLite query error 以外は None 扱い (No rows は正常)
+    pub fn get_presets_cache(&self) -> Result<Option<(String, Option<String>)>> {
+        let row: Option<(String, Option<String>)> = self
+            .conn
+            .query_row(
+                "SELECT json_content, etag FROM presets_cache WHERE id = 1",
+                [],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+            )
+            .ok();
+        Ok(row)
+    }
+
+    /// Sprint X.1: preset cache 更新 (upsert `id = 1`)
+    ///
+    /// Cloudflare Worker から fetch 成功時に呼出、次回 startup 時に local から
+    /// last-known preset を復元して offline でも動作 (bundled default より優先)
+    ///
+    /// # Errors
+    ///
+    /// SQLite upsert error (permission / disk full 等)
+    pub fn set_presets_cache(
+        &self,
+        version: &str,
+        etag: Option<&str>,
+        json_content: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO presets_cache (id, version, etag, json_content, fetched_at)
+             VALUES (1, ?1, ?2, ?3, datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET
+                 version = excluded.version,
+                 etag = excluded.etag,
+                 json_content = excluded.json_content,
+                 fetched_at = excluded.fetched_at",
+            rusqlite::params![version, etag, json_content],
+        )?;
+        Ok(())
+    }
+
     pub fn update_profile_tier(&self, id: &str, tier: &str, license_key: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE profiles SET tier = ?2, license_key = ?3, updated_at = datetime('now') WHERE id = ?1",
@@ -514,6 +576,52 @@ mod tests {
         // v0.1.0-beta.1: default 変更に追随
         let db = test_db();
         assert!(!db.get_enforce_lol_grammar("nonexistent").unwrap());
+    }
+
+    // ── Sprint X.1: presets_cache tests ──
+
+    #[test]
+    fn presets_cache_returns_none_when_empty() {
+        let db = test_db();
+        assert!(db.get_presets_cache().unwrap().is_none());
+    }
+
+    #[test]
+    fn presets_cache_roundtrip() {
+        let db = test_db();
+        db.set_presets_cache("v1", Some("etag123"), "{\"version\":\"v1\"}")
+            .unwrap();
+        let (json, etag) = db.get_presets_cache().unwrap().unwrap();
+        assert_eq!(json, "{\"version\":\"v1\"}");
+        assert_eq!(etag.as_deref(), Some("etag123"));
+    }
+
+    #[test]
+    fn presets_cache_upsert_single_row() {
+        // id = 1 縛りで single-row 運用、2 回 set しても row は 1 つ、最新 value を保持
+        let db = test_db();
+        db.set_presets_cache("v1", Some("etag1"), "{\"v\":1}")
+            .unwrap();
+        db.set_presets_cache("v2", Some("etag2"), "{\"v\":2}")
+            .unwrap();
+        let (json, etag) = db.get_presets_cache().unwrap().unwrap();
+        assert_eq!(json, "{\"v\":2}");
+        assert_eq!(etag.as_deref(), Some("etag2"));
+
+        // Verify only 1 row exists (single-row invariant)
+        let count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM presets_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn presets_cache_etag_can_be_null() {
+        let db = test_db();
+        db.set_presets_cache("v1", None, "{}").unwrap();
+        let (_json, etag) = db.get_presets_cache().unwrap().unwrap();
+        assert!(etag.is_none());
     }
 
     #[test]
