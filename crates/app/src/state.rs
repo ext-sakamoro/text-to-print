@@ -1219,8 +1219,14 @@ fn spawn_presets_sync(
             Err(_) => None,
         };
 
-        let client =
-            text_to_print_network::presets_client::PresetsClient::new(endpoint.clone());
+        tracing::info!(
+            endpoint = %endpoint,
+            etag = ?current_etag,
+            "presets sync starting"
+        );
+
+        let start = std::time::Instant::now();
+        let client = text_to_print_network::presets_client::PresetsClient::new(endpoint.clone());
         match client.fetch(current_etag.as_deref()).await {
             Ok(text_to_print_network::presets_client::FetchResult::Updated { body, etag }) => {
                 // Serialize body back to JSON for DB storage (canonical round-trip)
@@ -1237,14 +1243,23 @@ fn spawn_presets_sync(
                 let _ = tx.send(GenerationMessage::PresetsUpdated(Box::new(snapshot)));
                 tracing::info!(
                     version = %body.version,
+                    elapsed_ms = %start.elapsed().as_millis(),
                     "presets sync completed"
                 );
             }
             Ok(text_to_print_network::presets_client::FetchResult::NotModified) => {
-                tracing::debug!("presets sync: 304 not modified (cache current)");
+                tracing::info!(
+                    elapsed_ms = %start.elapsed().as_millis(),
+                    "presets sync: not modified (304, cache current)"
+                );
             }
             Err(e) => {
-                tracing::info!(error = %e, endpoint, "presets sync failed (silent fallback to cache/bundled)");
+                tracing::warn!(
+                    error = ?e,
+                    endpoint,
+                    elapsed_ms = %start.elapsed().as_millis(),
+                    "presets sync failed (silent fallback to cache/bundled)"
+                );
             }
         }
     });
