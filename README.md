@@ -111,7 +111,7 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 | Optional P2P share | libp2p (mdns / gossipsub / kad) for free-tier upload to ALICE-LOL |
 | Local DB | rusqlite (project history / license state / tier / model choice) |
 | Payment | Stripe subscription (Test mode scaffold complete、Phase S3 で Live 切替) |
-| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license issuance) |
+| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license issuance + preset library `/api/presets` KV-backed) |
 | License | Ed25519 (`ed25519-dalek`、`text_to_print_core::license` client-side offline verify) |
 | Email | Resend API (license delivery、backend 未設定時は log-only fallback) |
 | Auto-update | GitHub Releases + `self-update` (crates/app/src/updater.rs) |
@@ -140,7 +140,8 @@ text-to-print/
 │   │                Bonsai27B) + LOL_GBNF grammar constrained decoding
 │   ├── network/   - libp2p P2P share (free-tier upload の client 側)
 │   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint +
-│                    Stripe webhook + license issuance + Resend email、
+│                    Stripe webhook + license issuance + Resend email +
+│                    preset library `/api/presets` (KV-backed、Sprint X.1)、
 │                    workspace 除外、`wrangler deploy` で運用)
 ├── datasets/      - LoRA training data (523+ samples, growing)
 ├── scripts/       - LoRA training / dataset generation
@@ -166,6 +167,7 @@ Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-08-22: **Sprint X.1 Cloudflare preset library 完了** — worker `/api/presets` KV-backed preset library deploy 完了 (Custom Domain `text-to-print.alicelaw.net`)、app 起動時に background で fetch → ETag/304 cache 経路で 10 preset 同期、UI に "presets: Bundled / Cache / Cloud" 3 tier ラベル表示、DB `presets_cache` (SQLite single row) + `PresetsSnapshot` + `spawn_presets_sync` mpsc → UI 反映 β user が新 preset 追加を起動時に auto propagate 受信可能に 副次で worker crate 0.5→0.8 upgrade (wasm-bindgen schema mismatch fix)、log 増強 (begin/304 info/error Debug/elapsed_ms、silent failure 診断不能事案の反省) 副次実測 β verify で macOS + Tailscale MagicDNS が Cloudflare Custom Domain の A record を silent drop する経路罠を発見、Tailscale 撤去で恒久解決
 - 2026-08-09: **SKADIS panel canonical 化 + Template アーキテクチャ Phase T1** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix (Y板厚 17mm → 5mm、Stadium peg 穴 5×15、connector 穴 44 + mount 穴 6、合計 148 hole 全再現、Bambu production 3MF `~/ALICE-Bamboo/models/wall-organizer/skadis-300x300/skadis_panel_300x300.3mf` と shape 一致) + text-to-print pipeline `should_use_dual_contouring(dims)` helper で `aspect_ratio > 5.0 || min_dim <= 5.0` ベースの DC/MC route 判定 (旧 `thickness_y < 5.0` の Y 軸単独判定で SKADIS panel が MC 経路に落ちて peg 穴消失した bug の根本予防) + Preview resolution 128→96 (Bamboo canonical 準拠、sample 数 2.1M→885K = 2.4x 削減、SKADIS panel 実測 25 分見込 → 5.3s に短縮、285x 高速化) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 (自作 15 items 削除、anti-pattern E 解消、`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1) + UI 経過時間表示 (state.rs `elapsed()` method) 追加
 - 2026-08-08: **3D preview を mesh renderer に置換** (WGSL raymarching 廃止) 生成 pipeline が MC/DC で作った同一 `Mesh` を wgpu vertex/index buffer に upload して Phong lit で描画 viewer と Bambu Studio が同じ形状を表示するため生成結果の確認が信頼できるようになった (旧 raymarching だと Y-up world / camera artifact で違って見える混乱があった) `crates/app/src/sdf/` は名前は残るが中身は mesh pipeline
 - 2026-08-07: **end-to-end 完走まで到達** — LLM system_prompt を Z-up 慣習 + 適切な `rotate(90, 0, 0, cylinder(...))` を教える wedge example に刷新、`fix_prompt::LolParseError` variant + directive で parse 失敗時の retry loop を接続 (以前は空 suffix で silent break)、`max_retries` 1→2 + HTTP timeout 180→300s + export `.ok()` silent 破棄 bug 修正 現行 Qwen 3B (grammar OFF) で「スマホスタンド、幅80mm…」prompt から Bambu Studio 表示可能な wedge shape の 3MF が確実に出るところまで動作確認
