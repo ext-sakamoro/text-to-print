@@ -45,6 +45,12 @@ jobs:
             bin_name: text-to-print.exe
             sidecar_bin: alice-llm-server.exe
     runs-on: ${{ matrix.os }}
+    # macOS 署名 (Developer ID Application) と notarize は secret 設定済み時のみ実行
+    # β 期間中は無署名 tar.gz を許容 (user は「右クリック → 開く」で warning bypass 可)
+    # Apple Developer Program 加入 + secret 登録後は自動で signed build に切替
+    env:
+      HAS_MACOS_SIGNING: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_B64 != '' && secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD != '' }}
+      HAS_MACOS_NOTARIZE: ${{ secrets.APPLE_P8_B64 != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' }}
     defaults:
       run:
         working-directory: text-to-print
@@ -153,7 +159,7 @@ jobs:
       # descriptive error This is the intentional signal that the workflow
       # needs one-time DevOps setup (see `docs/RELEASE.md`)
       - name: Import Developer ID Application certificate (macOS)
-        if: startsWith(matrix.os, 'macos')
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_SIGNING == 'true'
         env:
           CERT_B64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_B64 }}
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
@@ -186,7 +192,7 @@ jobs:
           rm -f /tmp/developer-id.p12
 
       - name: codesign binary (macOS)
-        if: startsWith(matrix.os, 'macos')
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_SIGNING == 'true'
         shell: bash
         run: |
           IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain-db" \
@@ -294,7 +300,7 @@ jobs:
 
       # === macOS notarize archive + staple binary (T10.3) ===
       - name: notarize archive (macOS)
-        if: startsWith(matrix.os, 'macos')
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_NOTARIZE == 'true' && env.HAS_MACOS_SIGNING == 'true'
         env:
           APPLE_P8_B64: ${{ secrets.APPLE_P8_B64 }}
           APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}

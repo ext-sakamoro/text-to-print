@@ -187,6 +187,17 @@ Recent changes:
 - 2026-04-22: LoRA training pipeline (Paperspace A6000/A100) + 523 sample set
 - 2026-04-18: Rust desktop app Phase 1-2 (egui + wgpu + libp2p)
 
+## Install (β 期間、無署名)
+
+v0.1.0 β 期間中、macOS 版 (`.tar.gz`) と Windows 版 (`.msi` / `.zip`) は
+**無署名** で配布されている OS がインストール時に警告を出す場合の回避手順:
+
+- **macOS**: Finder で `.tar.gz` を展開 → 出た `text-to-print` を右クリック → **開く** → 「開発元を確認できません」ダイアログの 「開く」 ボタン (初回のみ、以降は通常起動)
+- **Windows**: SmartScreen が「認識されないアプリ」warning を出したら「詳細情報」→「実行」 (`.msi` 直接 install も可、Authenticode 未署名警告あり)
+- **Linux**: `.deb` (Debian/Ubuntu) or `.AppImage` (portable、`chmod +x` してから実行)
+
+Apple Developer Program 加入 + Windows Authenticode cert 導入は Phase S3 (Live 課金化) 以降に実施予定 β 期間は「install できる」を優先、警告 UX は割り切り
+
 ## Build
 
 ```bash
