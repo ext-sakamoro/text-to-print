@@ -259,7 +259,10 @@ jobs:
           # `<crates/app>/wix/License.rtf` に正しく解決される
           Push-Location crates/app
           try {
-            cargo wix --nocapture --no-build --install-version $version
+            # -p text-to-print 必須 (workspace root Cargo.toml が検出されるため
+            # package 指定なしだと "Workspace detected. Please pass a package name."
+            # で cargo wix が fail する)
+            cargo wix -p text-to-print --nocapture --no-build --install-version $version
           } finally {
             Pop-Location
           }
