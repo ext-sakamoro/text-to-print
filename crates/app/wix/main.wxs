@@ -95,17 +95,10 @@
                       2. Comment out or remove the `ComponentRef` tag with the "License" Id
                          attribute value further down in this file.
                     -->
-                    <!--
-                      cargo-wix 0.3+ の default base directory は
-                      `<package-root>/wix/` そのため Source は wxs 自身と同
-                      directory の License.rtf を直接指す (旧 `wix\License.rtf`
-                      は `<package-root>/wix/wix/License.rtf` の二重解決で
-                      LGHT0103 fail 2026-08-22 修正)
-                    -->
                     <Component Id='License' Guid='*'>
                         <File Id='LicenseFile'
                             DiskId='1'
-                            Source='License.rtf'
+                            Source='wix\License.rtf'
                             KeyPath='yes'/>
                     </Component>
                     
