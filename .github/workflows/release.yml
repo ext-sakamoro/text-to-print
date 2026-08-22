@@ -114,6 +114,15 @@ jobs:
       # it next to the desktop binary Bundled layout lets sidecar.rs resolve
       # the binary via `resolve_bin_path` -> exe-neighbor lookup without any
       # user-side install (`crates/llm/src/sidecar.rs`)
+      #
+      # ALICE-LLM/rust-toolchain.toml で 1.92.0 pin されているため、外側の
+      # dtolnay/rust-toolchain@stable で入れた target は stable 側にしか反映
+      # されない pinned 1.92.0 側にも明示追加 (cross-compile x86_64-apple-darwin)
+      # 既 install 済み target なら rustup は no-op なので全 4 job で idempotent
+      - name: Ensure ALICE-LLM toolchain has target
+        shell: bash
+        working-directory: ALICE-LLM
+        run: rustup target add ${{ matrix.target }}
       - name: Build alice-llm-server sidecar
         shell: bash
         working-directory: ALICE-LLM
@@ -228,8 +237,21 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         shell: pwsh
         run: |
-          cargo wix -p text-to-print --nocapture --no-build --install-version ${{ github.ref_name == '' && '0.0.0' || github.ref_name }}
-          Get-ChildItem -Path target/wix -Filter "*.msi" | ForEach-Object { Copy-Item $_.FullName -Destination "text-to-print-${{ matrix.target }}.msi" }
+          # github.ref_name は tag ref (例 "v0.1.0")、cargo-wix は SemVer `0.1.0`
+          # (v prefix 無し) を期待 v 付きで渡すと `unexpected character 'v'` で
+          # parse fail し target/wix 未生成 → 後段の Get-ChildItem が例外化
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          if ([string]::IsNullOrEmpty($version) -or -not ($version -match '^\d+\.\d+\.\d+')) {
+            $version = "0.0.0"
+          }
+          Write-Host "Using MSI version: $version (from ref_name: ${{ github.ref_name }})"
+          cargo wix -p text-to-print --nocapture --no-build --install-version $version
+          if (Test-Path target/wix) {
+            Get-ChildItem -Path target/wix -Filter "*.msi" | ForEach-Object { Copy-Item $_.FullName -Destination "text-to-print-${{ matrix.target }}.msi" }
+          } else {
+            Write-Host "ERROR: target/wix directory not created (cargo wix likely failed above)"
+            exit 1
+          }
 
       # === Linux .deb (#34 T10.5) via cargo-deb ===
       # `[package.metadata.deb]` in crates/app/Cargo.toml drives .deb
