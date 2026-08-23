@@ -116,6 +116,9 @@ mod tests {
             "razor_holder",
             "chopstick_holder",
             "swatch_holder",
+            "tp_holder",
+            "sd_card_holder",
+            "driver_rack",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

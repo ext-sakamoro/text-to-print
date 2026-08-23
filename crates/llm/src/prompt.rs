@@ -103,6 +103,9 @@ mod tests {
             "razor_holder",
             "chopstick_holder",
             "swatch_holder",
+            "tp_holder",
+            "sd_card_holder",
+            "driver_rack",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

@@ -143,6 +143,17 @@
         { "id": "swatch_standard_32", "label": "スウォッチ standard card 8×4 (W32×H70)", "lol_dsl": "swatch_holder(8, 4, 32)" },
         { "id": "swatch_mini_24", "label": "スウォッチ small square 8×5 (W24×H24)", "lol_dsl": "swatch_holder(8, 5, 24)" }
       ]
+    },
+    {
+      "name": "ミックス 4 (Sprint 15、bathroom + printer + garage 各 1)",
+      "presets": [
+        { "id": "tp_standard", "label": "TP ホルダー standard (Ø40×W110×板5mm)", "lol_dsl": "tp_holder(40, 110, 5)" },
+        { "id": "tp_thick", "label": "TP ホルダー thick backplate (Ø40×W110×板8mm)", "lol_dsl": "tp_holder(40, 110, 8)" },
+        { "id": "sd_full_4x4", "label": "SD カード full 4×4 (W24×H32)", "lol_dsl": "sd_card_holder(4, 4, 24)" },
+        { "id": "sd_micro_5x5", "label": "SD カード microSD 5×5 (W15×H11)", "lol_dsl": "sd_card_holder(5, 5, 15)" },
+        { "id": "driver_standard_8", "label": "ドライバーラック standard 8 slot (Ø25×H100)", "lol_dsl": "driver_rack(8, 25, 100)" },
+        { "id": "driver_precision_12", "label": "ドライバーラック precision 12 slot (Ø15×H80)", "lol_dsl": "driver_rack(12, 15, 80)" }
+      ]
     }
   ]
 }

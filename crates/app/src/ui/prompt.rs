@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 43 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 46 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1260,7 +1260,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11) +
 /// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12) +
 /// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13) +
-/// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14)
+/// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14) +
+/// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1351,6 +1352,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_chopstick_holder_customizer(ui, state);
                 ui.separator();
                 show_swatch_holder_customizer(ui, state);
+                ui.separator();
+                show_tp_holder_customizer(ui, state);
+                ui.separator();
+                show_sd_card_holder_customizer(ui, state);
+                ui.separator();
+                show_driver_rack_customizer(ui, state);
             });
         },
     );
@@ -2939,6 +2946,119 @@ fn show_swatch_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// トイレットペーパーホルダー customizer
+/// (`inner_diameter × roll_width × wall_thickness`、bathroom § 7.6)
+///
+/// Wall-mount backplate + Z-axis axle + M4 mount holes
+fn show_tp_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("🧻 トイレットペーパーホルダー (wall-mount backplate + axle)").strong(),
+    );
+
+    let t = &mut state.customizer_state.tp_holder;
+    ui.horizontal(|ui| {
+        ui.label("ロール内径 (mm):");
+        ui.add(egui::Slider::new(&mut t.inner_diameter, 35.0..=50.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ロール幅 = 軸長 (mm):");
+        ui.add(egui::Slider::new(&mut t.roll_width, 90.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("backplate 厚 (mm):");
+        ui.add(egui::Slider::new(&mut t.wall_thickness, 3.0..=10.0).step_by(0.5));
+    });
+
+    let t_copy = *t;
+    let label = format!(
+        "TP ホルダー 内径Ø{} × W{}mm × 板{}mm",
+        t_copy.inner_diameter, t_copy.roll_width, t_copy.wall_thickness
+    );
+    ui.label("プリセット目安: standard (Ø40×W110×5) / thick backplate (Ø40×W110×8)");
+    ui.label("固定: backplate 80×80mm、M4 mount hole 2 個 (上部左右)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, t_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// SD カードホルダー customizer
+/// (`rows × cols × card_width`、printer § 9.4)
+///
+/// 2D grid narrow rect slots for SD/microSD cards
+fn show_sd_card_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💾 SD カードホルダー (2D grid narrow slots)").strong());
+
+    let s = &mut state.customizer_state.sd_card_holder;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut s.rows, 2..=8).text("(2-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut s.cols, 2..=8).text("(2-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("カード幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.card_width, 12.0..=30.0).step_by(1.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "SD カードホルダー {}×{} × W{}mm",
+        s_copy.rows, s_copy.cols, s_copy.card_width
+    );
+    ui.label("プリセット目安: SD full (24×32mm) / microSD (15×11mm)");
+    ui.label("固定: カード高 32mm、厚 2.5mm、wall 1.5mm、floor 2mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ドライバーラック customizer
+/// (`slot_count × slot_diameter × height`、garage § 8.5)
+///
+/// Row 状 large cyl hole for screwdriver handles
+fn show_driver_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔧 ドライバーラック (row 状 large cyl hole)").strong());
+
+    let d = &mut state.customizer_state.driver_rack;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut d.slot_count, 4..=16).text("(4-16)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 直径 (mm):");
+        ui.add(egui::Slider::new(&mut d.slot_diameter, 15.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ラック高さ (mm):");
+        ui.add(egui::Slider::new(&mut d.height, 60.0..=150.0).step_by(5.0));
+    });
+
+    let d_copy = *d;
+    let label = format!(
+        "ドライバーラック {} slot × Ø{} × H{}mm",
+        d_copy.slot_count, d_copy.slot_diameter, d_copy.height
+    );
+    ui.label("プリセット目安: standard (8 × Ø25 × H100) / precision (12 × Ø15 × H80)");
+    ui.label("固定: wall 3mm、floor 5mm、床開口なし (handle 上向き挿入)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, d_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

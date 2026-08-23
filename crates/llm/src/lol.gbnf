@@ -201,6 +201,10 @@ name_3f ::= "box3d"
           | "razor_holder"
           | "chopstick_holder"
           | "swatch_holder"
+          # Sprint 15 ミックス 4 (bathroom + printer + garage 各 1、2026-08-23 追加)
+          | "tp_holder"
+          | "sd_card_holder"
+          | "driver_rack"
 
 name_4f ::= "rounded_box"
           | "plane"

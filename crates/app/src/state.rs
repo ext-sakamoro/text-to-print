@@ -188,6 +188,12 @@ pub struct CustomizerState {
     pub chopstick_holder: ChopstickHolderUiState,
     /// Filament swatch holder customizer (printer § 9.7、Sprint 14)
     pub swatch_holder: SwatchHolderUiState,
+    /// Toilet paper holder customizer (bathroom § 7.6、Sprint 15)
+    pub tp_holder: TpHolderUiState,
+    /// SD card holder customizer (printer § 9.4、Sprint 15)
+    pub sd_card_holder: SdCardHolderUiState,
+    /// Screwdriver rack customizer (garage § 8.5、Sprint 15)
+    pub driver_rack: DriverRackUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1517,6 +1523,101 @@ impl SwatchHolderUiState {
     }
 }
 
+// ── Sprint 15 ミックス 4 archetype UI state (tp / sd_card / driver) ──
+
+/// トイレットペーパーホルダー UI state (bathroom § 7.6、wall-mount backplate + Z-axis axle)
+/// (`tp_holder(inner_diameter, roll_width, wall_thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct TpHolderUiState {
+    /// ロール内径 (mm、standard=40、default 40、range 35-50)
+    pub inner_diameter: f32,
+    /// ロール幅 = 軸長 (mm、default 110、range 90-150)
+    pub roll_width: f32,
+    /// backplate 厚 (mm、default 5、range 3-10)
+    pub wall_thickness: f32,
+}
+
+impl Default for TpHolderUiState {
+    fn default() -> Self {
+        Self {
+            inner_diameter: 40.0,
+            roll_width: 110.0,
+            wall_thickness: 5.0,
+        }
+    }
+}
+
+impl TpHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "tp_holder({}, {}, {})",
+            self.inner_diameter, self.roll_width, self.wall_thickness
+        )
+    }
+}
+
+/// SD カードホルダー UI state (printer § 9.4、2D grid narrow rect slots for SD cards)
+/// (`sd_card_holder(rows, cols, card_width)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SdCardHolderUiState {
+    /// 行数 (default 4、range 2-8)
+    pub rows: u32,
+    /// 列数 (default 4、range 2-8)
+    pub cols: u32,
+    /// カード幅 (mm、SD full=24 / microSD=15、default 24、range 12-30)
+    pub card_width: f32,
+}
+
+impl Default for SdCardHolderUiState {
+    fn default() -> Self {
+        Self {
+            rows: 4,
+            cols: 4,
+            card_width: 24.0,
+        }
+    }
+}
+
+impl SdCardHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "sd_card_holder({}, {}, {})",
+            self.rows, self.cols, self.card_width
+        )
+    }
+}
+
+/// ドライバーラック UI state (garage § 8.5、row 状 large cyl hole for screwdriver handles)
+/// (`driver_rack(slot_count, slot_diameter, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct DriverRackUiState {
+    /// slot 個数 (default 8、range 4-16)
+    pub slot_count: u32,
+    /// slot 直径 (mm、handle 用、default 25、range 15-40)
+    pub slot_diameter: f32,
+    /// ラック高さ (mm、default 100、range 60-150)
+    pub height: f32,
+}
+
+impl Default for DriverRackUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 8,
+            slot_diameter: 25.0,
+            height: 100.0,
+        }
+    }
+}
+
+impl DriverRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "driver_rack({}, {}, {})",
+            self.slot_count, self.slot_diameter, self.height
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2520,16 +2621,17 @@ mod tests {
     use super::{
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
         CardTrayUiState, ChopstickHolderUiState, CoasterUiState, CustomizerState,
-        CutleryTrayUiState, DeskShelfUiState, DrillBitHolderUiState, EggTrayUiState,
-        Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
-        HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
-        KcupHolderUiState, LedChannelUiState, MagneticStripUiState, MonitorRiserUiState,
-        NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState,
-        PliersRackUiState, RaspiCaseUiState, RazorHolderUiState, SoapTrayUiState,
-        SockDividerUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
-        StorageBoxUiState, SwatchHolderUiState, TissueBoxCoverUiState, TokenWellUiState,
-        ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState,
-        WrenchHolderUiState, default_sidecar_port,
+        CutleryTrayUiState, DeskShelfUiState, DrillBitHolderUiState, DriverRackUiState,
+        EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase,
+        GridfinityUiState, HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState,
+        HexKeyHolderUiState, KcupHolderUiState, LedChannelUiState, MagneticStripUiState,
+        MonitorRiserUiState, NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
+        PillOrganizerUiState, PliersRackUiState, RaspiCaseUiState, RazorHolderUiState,
+        SdCardHolderUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState,
+        SpiceRackUiState, StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState,
+        TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState,
+        UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState,
+        default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -3270,5 +3372,43 @@ mod tests {
         assert_eq!(c.razor_holder.to_lol(), "razor_holder(12, 22, 4.5)");
         assert_eq!(c.chopstick_holder.to_lol(), "chopstick_holder(4, 13, 260)");
         assert_eq!(c.swatch_holder.to_lol(), "swatch_holder(8, 4, 32)");
+    }
+
+    // ── Sprint 15 ミックス 4 archetype UI state tests ──
+
+    #[test]
+    fn tp_holder_default_is_standard() {
+        let t = TpHolderUiState::default();
+        assert!((t.inner_diameter - 40.0).abs() < 1e-6);
+        assert!((t.roll_width - 110.0).abs() < 1e-6);
+        assert!((t.wall_thickness - 5.0).abs() < 1e-6);
+        assert_eq!(t.to_lol(), "tp_holder(40, 110, 5)");
+    }
+
+    #[test]
+    fn sd_card_holder_default_is_full_sd_4x4() {
+        let s = SdCardHolderUiState::default();
+        assert_eq!(s.rows, 4);
+        assert_eq!(s.cols, 4);
+        assert!((s.card_width - 24.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "sd_card_holder(4, 4, 24)");
+    }
+
+    #[test]
+    fn driver_rack_default_is_standard_8() {
+        let d = DriverRackUiState::default();
+        assert_eq!(d.slot_count, 8);
+        assert!((d.slot_diameter - 25.0).abs() < 1e-6);
+        assert!((d.height - 100.0).abs() < 1e-6);
+        assert_eq!(d.to_lol(), "driver_rack(8, 25, 100)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_46_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 15 追加後は 46 archetype (+3: tp_holder / sd_card_holder / driver_rack)
+        assert_eq!(c.tp_holder.to_lol(), "tp_holder(40, 110, 5)");
+        assert_eq!(c.sd_card_holder.to_lol(), "sd_card_holder(4, 4, 24)");
+        assert_eq!(c.driver_rack.to_lol(), "driver_rack(8, 25, 100)");
     }
 }
