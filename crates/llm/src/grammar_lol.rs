@@ -119,6 +119,9 @@ mod tests {
             "tp_holder",
             "sd_card_holder",
             "driver_rack",
+            "cotton_dispenser",
+            "sink_caddy",
+            "clamp_rack",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

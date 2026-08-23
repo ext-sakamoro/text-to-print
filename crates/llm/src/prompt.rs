@@ -106,6 +106,9 @@ mod tests {
             "tp_holder",
             "sd_card_holder",
             "driver_rack",
+            "cotton_dispenser",
+            "sink_caddy",
+            "clamp_rack",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

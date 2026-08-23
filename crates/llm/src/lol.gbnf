@@ -205,6 +205,10 @@ name_3f ::= "box3d"
           | "tp_holder"
           | "sd_card_holder"
           | "driver_rack"
+          # Sprint 16 ミックス 5 (bathroom + kitchen + garage 各 1、2026-08-23 追加)
+          | "cotton_dispenser"
+          | "sink_caddy"
+          | "clamp_rack"
 
 name_4f ::= "rounded_box"
           | "plane"

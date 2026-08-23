@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 46 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 49 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1261,7 +1261,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12) +
 /// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13) +
 /// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14) +
-/// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15)
+/// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15) +
+/// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1358,6 +1359,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_sd_card_holder_customizer(ui, state);
                 ui.separator();
                 show_driver_rack_customizer(ui, state);
+                ui.separator();
+                show_cotton_dispenser_customizer(ui, state);
+                ui.separator();
+                show_sink_caddy_customizer(ui, state);
+                ui.separator();
+                show_clamp_rack_customizer(ui, state);
             });
         },
     );
@@ -3059,6 +3066,120 @@ fn show_driver_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, d_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 綿棒/コットン ディスペンサー customizer
+/// (`count × inner_diameter × height`、bathroom § 7.4)
+///
+/// Open top cyl + inner cavity (pen_cup pattern の large version)
+fn show_cotton_dispenser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("🌸 綿棒/コットン ディスペンサー (open top cyl + inner cavity)")
+            .strong(),
+    );
+
+    let c = &mut state.customizer_state.cotton_dispenser;
+    ui.horizontal(|ui| {
+        ui.label("収容目安個数:");
+        ui.add(egui::Slider::new(&mut c.count, 20..=200).text("(20-200)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cavity 内径 (mm):");
+        ui.add(egui::Slider::new(&mut c.inner_diameter, 60.0..=120.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全高 (mm):");
+        ui.add(egui::Slider::new(&mut c.height, 60.0..=150.0).step_by(5.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "コットン ディスペンサー {} 個 × Ø{}mm × H{}mm",
+        c_copy.count, c_copy.inner_diameter, c_copy.height
+    );
+    ui.label("プリセット目安: standard (80 × Ø90 × H100) / large (150 × Ø110 × H130)");
+    ui.label("固定: wall 2.5mm、floor 2.5mm、count は informational (SDF に非反映)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// スポンジホルダー customizer
+/// (`tray_length × tray_width × drain_hole_count`、kitchen § 6.9)
+///
+/// Rect tray + Y-axis drain cyl holes (soap_tray pattern の kitchen scaled 版)
+fn show_sink_caddy_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧽 スポンジホルダー (drain hole 付き rect tray)").strong());
+
+    let s = &mut state.customizer_state.sink_caddy;
+    ui.horizontal(|ui| {
+        ui.label("tray 長 (mm):");
+        ui.add(egui::Slider::new(&mut s.tray_length, 150.0..=300.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("tray 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.tray_width, 80.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("drain hole 個数:");
+        ui.add(egui::Slider::new(&mut s.drain_hole_count, 4..=16).text("(4-16)"));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "スポンジホルダー L{} × W{}mm × {} drain",
+        s_copy.tray_length, s_copy.tray_width, s_copy.drain_hole_count
+    );
+    ui.label("プリセット目安: standard (L200×W100×8) / large sink (L280×W130×12)");
+    ui.label("固定: tray 深 30mm、drain Ø6mm、wall 2.5mm、floor 2.5mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// クランプ壁掛けラック customizer
+/// (`hook_count × hook_width × height`、garage § 8.8)
+///
+/// Row 状 hook + backplate + M4 mount holes (wall_hook の row 状拡張)
+fn show_clamp_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔨 クランプ壁掛けラック (row 状 hook + backplate)").strong());
+
+    let c = &mut state.customizer_state.clamp_rack;
+    ui.horizontal(|ui| {
+        ui.label("hook 個数:");
+        ui.add(egui::Slider::new(&mut c.hook_count, 2..=10).text("(2-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("各 hook 幅 (mm):");
+        ui.add(egui::Slider::new(&mut c.hook_width, 20.0..=60.0).step_by(2.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全高 (mm):");
+        ui.add(egui::Slider::new(&mut c.height, 100.0..=300.0).step_by(10.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "クランプラック {} hook × W{} × H{}mm",
+        c_copy.hook_count, c_copy.hook_width, c_copy.height
+    );
+    ui.label("プリセット目安: standard (5 × W30 × H150) / large workshop (8 × W50 × H250)");
+    ui.label("固定: hook 深 25mm、opening 15mm、backplate 厚 5mm、M4 mount hole 2 個");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

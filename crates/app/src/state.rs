@@ -194,6 +194,12 @@ pub struct CustomizerState {
     pub sd_card_holder: SdCardHolderUiState,
     /// Screwdriver rack customizer (garage § 8.5、Sprint 15)
     pub driver_rack: DriverRackUiState,
+    /// Cotton/swab dispenser customizer (bathroom § 7.4、Sprint 16)
+    pub cotton_dispenser: CottonDispenserUiState,
+    /// Sink sponge caddy customizer (kitchen § 6.9、Sprint 16)
+    pub sink_caddy: SinkCaddyUiState,
+    /// Clamp wall rack customizer (garage § 8.8、Sprint 16)
+    pub clamp_rack: ClampRackUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1618,6 +1624,101 @@ impl DriverRackUiState {
     }
 }
 
+// ── Sprint 16 ミックス 5 archetype UI state (cotton / sink / clamp) ──
+
+/// 綿棒/コットン ディスペンサー UI state (bathroom § 7.4、open top cyl + inner cavity)
+/// (`cotton_dispenser(count, inner_diameter, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CottonDispenserUiState {
+    /// 収容目安個数 (informational、SDF に非反映、default 80、range 20-200)
+    pub count: u32,
+    /// cavity 内径 (mm、default 90、range 60-120)
+    pub inner_diameter: f32,
+    /// 全高 (mm、default 100、range 60-150)
+    pub height: f32,
+}
+
+impl Default for CottonDispenserUiState {
+    fn default() -> Self {
+        Self {
+            count: 80,
+            inner_diameter: 90.0,
+            height: 100.0,
+        }
+    }
+}
+
+impl CottonDispenserUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "cotton_dispenser({}, {}, {})",
+            self.count, self.inner_diameter, self.height
+        )
+    }
+}
+
+/// スポンジホルダー UI state (kitchen § 6.9、drain hole 付き rect tray)
+/// (`sink_caddy(tray_length, tray_width, drain_hole_count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SinkCaddyUiState {
+    /// tray 内 長 (mm、default 200、range 150-300)
+    pub tray_length: f32,
+    /// tray 内 幅 (mm、default 100、range 80-150)
+    pub tray_width: f32,
+    /// drain hole 個数 (default 8、range 4-16)
+    pub drain_hole_count: u32,
+}
+
+impl Default for SinkCaddyUiState {
+    fn default() -> Self {
+        Self {
+            tray_length: 200.0,
+            tray_width: 100.0,
+            drain_hole_count: 8,
+        }
+    }
+}
+
+impl SinkCaddyUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "sink_caddy({}, {}, {})",
+            self.tray_length, self.tray_width, self.drain_hole_count
+        )
+    }
+}
+
+/// クランプ壁掛けラック UI state (garage § 8.8、row 状 hook + backplate)
+/// (`clamp_rack(hook_count, hook_width, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ClampRackUiState {
+    /// hook 個数 (default 5、range 2-10)
+    pub hook_count: u32,
+    /// 各 hook 幅 (mm、default 30、range 20-60)
+    pub hook_width: f32,
+    /// 全高 = backplate 高さ (mm、default 150、range 100-300)
+    pub height: f32,
+}
+
+impl Default for ClampRackUiState {
+    fn default() -> Self {
+        Self {
+            hook_count: 5,
+            hook_width: 30.0,
+            height: 150.0,
+        }
+    }
+}
+
+impl ClampRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "clamp_rack({}, {}, {})",
+            self.hook_count, self.hook_width, self.height
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2620,18 +2721,18 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
-        CardTrayUiState, ChopstickHolderUiState, CoasterUiState, CustomizerState,
-        CutleryTrayUiState, DeskShelfUiState, DrillBitHolderUiState, DriverRackUiState,
-        EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase,
-        GridfinityUiState, HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState,
-        HexKeyHolderUiState, KcupHolderUiState, LedChannelUiState, MagneticStripUiState,
-        MonitorRiserUiState, NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
-        PillOrganizerUiState, PliersRackUiState, RaspiCaseUiState, RazorHolderUiState,
-        SdCardHolderUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState,
-        SpiceRackUiState, StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState,
-        TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState,
-        UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState,
-        default_sidecar_port,
+        CardTrayUiState, ChopstickHolderUiState, ClampRackUiState, CoasterUiState,
+        CottonDispenserUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
+        DrillBitHolderUiState, DriverRackUiState, EggTrayUiState, Esp32EnclosureUiState,
+        FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState, HairdryerHolderUiState,
+        HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState, KcupHolderUiState,
+        LedChannelUiState, MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState,
+        PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
+        RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState, SinkCaddyUiState,
+        SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
+        StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TissueBoxCoverUiState,
+        TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState, UnderDeskMountUiState,
+        UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -3410,5 +3511,43 @@ mod tests {
         assert_eq!(c.tp_holder.to_lol(), "tp_holder(40, 110, 5)");
         assert_eq!(c.sd_card_holder.to_lol(), "sd_card_holder(4, 4, 24)");
         assert_eq!(c.driver_rack.to_lol(), "driver_rack(8, 25, 100)");
+    }
+
+    // ── Sprint 16 ミックス 5 archetype UI state tests ──
+
+    #[test]
+    fn cotton_dispenser_default_is_standard_80() {
+        let c = CottonDispenserUiState::default();
+        assert_eq!(c.count, 80);
+        assert!((c.inner_diameter - 90.0).abs() < 1e-6);
+        assert!((c.height - 100.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "cotton_dispenser(80, 90, 100)");
+    }
+
+    #[test]
+    fn sink_caddy_default_is_standard_l200() {
+        let s = SinkCaddyUiState::default();
+        assert!((s.tray_length - 200.0).abs() < 1e-6);
+        assert!((s.tray_width - 100.0).abs() < 1e-6);
+        assert_eq!(s.drain_hole_count, 8);
+        assert_eq!(s.to_lol(), "sink_caddy(200, 100, 8)");
+    }
+
+    #[test]
+    fn clamp_rack_default_is_standard_5() {
+        let c = ClampRackUiState::default();
+        assert_eq!(c.hook_count, 5);
+        assert!((c.hook_width - 30.0).abs() < 1e-6);
+        assert!((c.height - 150.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "clamp_rack(5, 30, 150)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_49_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 16 追加後は 49 archetype (+3: cotton_dispenser / sink_caddy / clamp_rack)
+        assert_eq!(c.cotton_dispenser.to_lol(), "cotton_dispenser(80, 90, 100)");
+        assert_eq!(c.sink_caddy.to_lol(), "sink_caddy(200, 100, 8)");
+        assert_eq!(c.clamp_rack.to_lol(), "clamp_rack(5, 30, 150)");
     }
 }

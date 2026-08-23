@@ -154,6 +154,17 @@
         { "id": "driver_standard_8", "label": "ドライバーラック standard 8 slot (Ø25×H100)", "lol_dsl": "driver_rack(8, 25, 100)" },
         { "id": "driver_precision_12", "label": "ドライバーラック precision 12 slot (Ø15×H80)", "lol_dsl": "driver_rack(12, 15, 80)" }
       ]
+    },
+    {
+      "name": "ミックス 5 (Sprint 16、bathroom + kitchen + garage 各 1)",
+      "presets": [
+        { "id": "cotton_standard", "label": "コットン ディスペンサー standard (80個 × Ø90 × H100)", "lol_dsl": "cotton_dispenser(80, 90, 100)" },
+        { "id": "cotton_large", "label": "コットン ディスペンサー large (150個 × Ø110 × H130)", "lol_dsl": "cotton_dispenser(150, 110, 130)" },
+        { "id": "sink_caddy_standard", "label": "スポンジホルダー standard (L200×W100×8 drain)", "lol_dsl": "sink_caddy(200, 100, 8)" },
+        { "id": "sink_caddy_large", "label": "スポンジホルダー large sink (L280×W130×12 drain)", "lol_dsl": "sink_caddy(280, 130, 12)" },
+        { "id": "clamp_standard_5", "label": "クランプラック standard (5 hook × W30 × H150)", "lol_dsl": "clamp_rack(5, 30, 150)" },
+        { "id": "clamp_workshop_8", "label": "クランプラック workshop (8 hook × W50 × H250)", "lol_dsl": "clamp_rack(8, 50, 250)" }
+      ]
     }
   ]
 }
