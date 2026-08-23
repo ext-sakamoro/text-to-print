@@ -107,6 +107,9 @@ mod tests {
             "cutlery_tray",
             "pill_organizer",
             "magnetic_strip",
+            "hairdryer_holder",
+            "kcup_holder",
+            "hex_key_holder",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

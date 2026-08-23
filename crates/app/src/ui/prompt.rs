@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 34 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 37 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1257,7 +1257,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8) +
 /// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9) +
 /// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10) +
-/// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11)
+/// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11) +
+/// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1330,6 +1331,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_pill_organizer_customizer(ui, state);
                 ui.separator();
                 show_magnetic_strip_customizer(ui, state);
+                ui.separator();
+                show_hairdryer_holder_customizer(ui, state);
+                ui.separator();
+                show_kcup_holder_customizer(ui, state);
+                ui.separator();
+                show_hex_key_holder_customizer(ui, state);
             });
         },
     );
@@ -2585,6 +2592,116 @@ fn show_magnetic_strip_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, m_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ヘアドライヤーホルダー customizer
+/// (`barrel_diameter × holster_depth × wall_thickness`、bathroom § 7.7)
+///
+/// 大径 cylindrical holster (Dyson Supersonic / 汎用ドライヤー対応)
+fn show_hairdryer_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💨 ヘアドライヤーホルダー (大径 holster)").strong());
+
+    let h = &mut state.customizer_state.hairdryer_holder;
+    ui.horizontal(|ui| {
+        ui.label("barrel 内径 (mm):");
+        ui.add(egui::Slider::new(&mut h.barrel_diameter, 40.0..=120.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("holster 深さ (mm):");
+        ui.add(egui::Slider::new(&mut h.holster_depth, 80.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("壁厚 (mm):");
+        ui.add(egui::Slider::new(&mut h.wall_thickness, 2.0..=6.0).step_by(0.5));
+    });
+
+    let h_copy = *h;
+    let label = format!(
+        "ドライヤーホルダー Ø{}×D{}mm",
+        h_copy.barrel_diameter, h_copy.holster_depth
+    );
+    ui.label("プリセット目安: Dyson Supersonic (Ø85) / 汎用 (Ø45-90) / 業務用 (Ø100+)");
+    ui.label("固定: 内 clearance 2mm、floor 5mm (荷重 400-700g 想定)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, h_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// K-Cup ホルダー customizer (`rows × cols × capsule_diameter`、kitchen § 6.7)
+///
+/// 2D grid K-Cup wells (K-Cup Ø53 / Nespresso Ø39 / Dolce Gusto Ø55 対応)
+fn show_kcup_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("☕ K-Cup ホルダー (2D grid capsule wells)").strong());
+
+    let k = &mut state.customizer_state.kcup_holder;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut k.rows, 1..=6).text("(1-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut k.cols, 1..=6).text("(1-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("capsule 直径 (mm):");
+        ui.add(egui::Slider::new(&mut k.capsule_diameter, 35.0..=60.0).step_by(1.0));
+    });
+
+    let k_copy = *k;
+    let label = format!(
+        "K-Cup ホルダー {}×{} × Ø{}mm",
+        k_copy.rows, k_copy.cols, k_copy.capsule_diameter
+    );
+    ui.label("プリセット目安: K-Cup (Ø53) / Nespresso Original (Ø39) / Dolce Gusto (Ø55)");
+    ui.label("固定: capsule 深 40mm、pitch = capsule + 3.5mm、floor 3mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, k_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ヘックスキーホルダー customizer
+/// (`count × min_key_mm × max_key_mm`、garage § 8.2)
+///
+/// row 状 hole linear interpolate (Metric 9-piece / SAE 12-piece、drill_bit pattern)
+fn show_hex_key_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔩 ヘックスキーホルダー (Allen key、block-style)").strong());
+
+    let h = &mut state.customizer_state.hex_key_holder;
+    ui.horizontal(|ui| {
+        ui.label("key 個数:");
+        ui.add(egui::Slider::new(&mut h.count, 5..=15).text("(5-15)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("最小 key 幅 (mm):");
+        ui.add(egui::Slider::new(&mut h.min_key_mm, 1.0..=4.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("最大 key 幅 (mm):");
+        ui.add(egui::Slider::new(&mut h.max_key_mm, 6.0..=15.0).step_by(0.5));
+    });
+
+    let h_copy = *h;
+    let label = format!(
+        "ヘックスキーホルダー {}-{}mm × {}",
+        h_copy.min_key_mm, h_copy.max_key_mm, h_copy.count
+    );
+    ui.label("プリセット目安: Metric 9-piece (1.5-10mm) / SAE 12-piece (0.05-3/8 inch)");
+    ui.label("固定: hole 深 18mm、clearance 0.3mm/side (key + 0.6mm total)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, h_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

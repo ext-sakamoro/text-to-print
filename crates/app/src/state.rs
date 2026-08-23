@@ -170,6 +170,12 @@ pub struct CustomizerState {
     pub pill_organizer: PillOrganizerUiState,
     /// Magnetic strip customizer (wall § 4.6、Sprint 11)
     pub magnetic_strip: MagneticStripUiState,
+    /// Hairdryer holder customizer (bathroom § 7.7、Sprint 12)
+    pub hairdryer_holder: HairdryerHolderUiState,
+    /// K-Cup holder customizer (kitchen § 6.7、Sprint 12)
+    pub kcup_holder: KcupHolderUiState,
+    /// Hex key holder customizer (garage § 8.2、Sprint 12)
+    pub hex_key_holder: HexKeyHolderUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1222,6 +1228,98 @@ impl MagneticStripUiState {
     }
 }
 
+/// ヘアドライヤーホルダー customizer UI state
+/// (`hairdryer_holder(barrel_diameter, holster_depth, wall_thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct HairdryerHolderUiState {
+    /// barrel 内径 (mm、Dyson=85 / 汎用=45-90、default 85、range 40-120)
+    pub barrel_diameter: f32,
+    /// holster 深さ (mm、default 110、range 80-150)
+    pub holster_depth: f32,
+    /// 壁厚 (mm、default 3.0、range 2-6)
+    pub wall_thickness: f32,
+}
+
+impl Default for HairdryerHolderUiState {
+    fn default() -> Self {
+        Self {
+            barrel_diameter: 85.0,
+            holster_depth: 110.0,
+            wall_thickness: 3.0,
+        }
+    }
+}
+
+impl HairdryerHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "hairdryer_holder({}, {}, {})",
+            self.barrel_diameter, self.holster_depth, self.wall_thickness
+        )
+    }
+}
+
+/// K-Cup ホルダー customizer UI state (`kcup_holder(rows, cols, capsule_diameter)`)
+#[derive(Debug, Clone, Copy)]
+pub struct KcupHolderUiState {
+    /// 行数 (default 3、range 1-6)
+    pub rows: u32,
+    /// 列数 (default 4、range 1-6)
+    pub cols: u32,
+    /// capsule 直径 (mm、K-Cup=53 / Nespresso=39 / Dolce Gusto=55、default 53、range 35-60)
+    pub capsule_diameter: f32,
+}
+
+impl Default for KcupHolderUiState {
+    fn default() -> Self {
+        Self {
+            rows: 3,
+            cols: 4,
+            capsule_diameter: 53.0,
+        }
+    }
+}
+
+impl KcupHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "kcup_holder({}, {}, {})",
+            self.rows, self.cols, self.capsule_diameter
+        )
+    }
+}
+
+/// ヘックスキーホルダー customizer UI state
+/// (`hex_key_holder(count, min_key_mm, max_key_mm)`)
+#[derive(Debug, Clone, Copy)]
+pub struct HexKeyHolderUiState {
+    /// key 個数 (default 9、Metric standard、range 5-15)
+    pub count: u32,
+    /// 最小 key 幅 (mm、default 1.5、range 1.0-4.0)
+    pub min_key_mm: f32,
+    /// 最大 key 幅 (mm、default 10.0、range 6.0-15.0)
+    pub max_key_mm: f32,
+}
+
+impl Default for HexKeyHolderUiState {
+    fn default() -> Self {
+        Self {
+            count: 9,
+            min_key_mm: 1.5,
+            max_key_mm: 10.0,
+        }
+    }
+}
+
+impl HexKeyHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "hex_key_holder({}, {}, {})",
+            self.count, self.min_key_mm, self.max_key_mm
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2226,9 +2324,10 @@ mod tests {
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
         CardTrayUiState, CoasterUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
         DrillBitHolderUiState, EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState,
-        GenerationPhase, GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState,
-        LedChannelUiState, MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState,
-        PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
+        GenerationPhase, GridfinityUiState, HairdryerHolderUiState, HeadphoneHolderUiState,
+        HexBitHolderUiState, HexKeyHolderUiState, KcupHolderUiState, LedChannelUiState,
+        MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState, PenCupUiState,
+        PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
         RaspiCaseUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
         StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState,
         UnderDeskMountUiState, UtensilCaddyUiState, WrenchHolderUiState, default_sidecar_port,
@@ -2858,5 +2957,43 @@ mod tests {
         assert_eq!(c.cutlery_tray.to_lol(), "cutlery_tray(3, 35, 220)");
         assert_eq!(c.pill_organizer.to_lol(), "pill_organizer(7, 2, 20)");
         assert_eq!(c.magnetic_strip.to_lol(), "magnetic_strip(8, 6, 30)");
+    }
+
+    // ── Sprint 12 ミックス 3 archetype UI state tests ──
+
+    #[test]
+    fn hairdryer_holder_default_is_dyson() {
+        let h = HairdryerHolderUiState::default();
+        assert!((h.barrel_diameter - 85.0).abs() < 1e-6);
+        assert!((h.holster_depth - 110.0).abs() < 1e-6);
+        assert!((h.wall_thickness - 3.0).abs() < 1e-6);
+        assert_eq!(h.to_lol(), "hairdryer_holder(85, 110, 3)");
+    }
+
+    #[test]
+    fn kcup_holder_default_is_4x3() {
+        let k = KcupHolderUiState::default();
+        assert_eq!(k.rows, 3);
+        assert_eq!(k.cols, 4);
+        assert!((k.capsule_diameter - 53.0).abs() < 1e-6);
+        assert_eq!(k.to_lol(), "kcup_holder(3, 4, 53)");
+    }
+
+    #[test]
+    fn hex_key_holder_default_is_metric_9() {
+        let h = HexKeyHolderUiState::default();
+        assert_eq!(h.count, 9);
+        assert!((h.min_key_mm - 1.5).abs() < 1e-6);
+        assert!((h.max_key_mm - 10.0).abs() < 1e-6);
+        assert_eq!(h.to_lol(), "hex_key_holder(9, 1.5, 10)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_37_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 12 追加後は 37 archetype (+3: hairdryer_holder / kcup_holder / hex_key_holder)
+        assert_eq!(c.hairdryer_holder.to_lol(), "hairdryer_holder(85, 110, 3)");
+        assert_eq!(c.kcup_holder.to_lol(), "kcup_holder(3, 4, 53)");
+        assert_eq!(c.hex_key_holder.to_lol(), "hex_key_holder(9, 1.5, 10)");
     }
 }

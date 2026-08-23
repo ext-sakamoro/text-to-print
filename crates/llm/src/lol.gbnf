@@ -189,6 +189,10 @@ name_3f ::= "box3d"
           | "cutlery_tray"
           | "pill_organizer"
           | "magnetic_strip"
+          # Sprint 12 ミックス (bathroom/kitchen/garage 混合、2026-08-23 追加)
+          | "hairdryer_holder"
+          | "kcup_holder"
+          | "hex_key_holder"
 
 name_4f ::= "rounded_box"
           | "plane"

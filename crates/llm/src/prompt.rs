@@ -94,6 +94,9 @@ mod tests {
             "cutlery_tray",
             "pill_organizer",
             "magnetic_strip",
+            "hairdryer_holder",
+            "kcup_holder",
+            "hex_key_holder",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

@@ -110,6 +110,17 @@
         { "id": "magnet_knife_rail_8", "label": "マグネットバー 8 magnet (kitchen knife rail)", "lol_dsl": "magnetic_strip(8, 6, 30)" },
         { "id": "magnet_tool_large_12", "label": "マグネットバー 12 magnet × Ø10 (large tool rail)", "lol_dsl": "magnetic_strip(12, 10, 40)" }
       ]
+    },
+    {
+      "name": "ミックス (Sprint 12、bathroom/kitchen/garage 混合 3 archetype)",
+      "presets": [
+        { "id": "hairdryer_dyson", "label": "ドライヤーホルダー Dyson Ø85×D110", "lol_dsl": "hairdryer_holder(85, 110, 3)" },
+        { "id": "hairdryer_std_60", "label": "ドライヤーホルダー 汎用 Ø60×D100", "lol_dsl": "hairdryer_holder(60, 100, 3)" },
+        { "id": "kcup_4x3", "label": "K-Cup ホルダー 4×3 = 12 (K-Cup Ø53)", "lol_dsl": "kcup_holder(3, 4, 53)" },
+        { "id": "nespresso_5x2", "label": "Nespresso ホルダー 5×2 = 10 (Ø39)", "lol_dsl": "kcup_holder(2, 5, 39)" },
+        { "id": "hex_key_metric_9", "label": "Allen key Metric 9-piece (1.5-10mm)", "lol_dsl": "hex_key_holder(9, 1.5, 10)" },
+        { "id": "hex_key_sae_12", "label": "Allen key SAE 12-piece (1.6-9.5mm)", "lol_dsl": "hex_key_holder(12, 1.6, 9.5)" }
+      ]
     }
   ]
 }
