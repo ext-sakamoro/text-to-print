@@ -176,6 +176,17 @@
         { "id": "jewelry_3_tier", "label": "ジュエリー スタンド 3 tier (Ø100×H100)", "lol_dsl": "jewelry_stand(3, 100, 100)" },
         { "id": "jewelry_4_tier_large", "label": "ジュエリー スタンド 4 tier large (Ø130×H150)", "lol_dsl": "jewelry_stand(4, 130, 150)" }
       ]
+    },
+    {
+      "name": "ミックス 7 (Sprint 18、electronics + kitchen + garage 各 1、multi-component)",
+      "presets": [
+        { "id": "phone_dock_standard", "label": "充電ドック standard (80×100×Ø8 貫通)", "lol_dsl": "phone_dock(80, 100, 8)" },
+        { "id": "phone_dock_tablet", "label": "充電ドック tablet (120×150×Ø10 貫通)", "lol_dsl": "phone_dock(120, 150, 10)" },
+        { "id": "cutting_board_3", "label": "まな板ラック standard (3 slot × W12 × H220)", "lol_dsl": "cutting_board_rack(3, 12, 220)" },
+        { "id": "cutting_board_4_large", "label": "まな板ラック large (4 slot × W20 × H280)", "lol_dsl": "cutting_board_rack(4, 20, 280)" },
+        { "id": "tape_packing_standard", "label": "テープ dispenser 包装用 (Ø76×W50)", "lol_dsl": "tape_dispenser(76, 50, 3)" },
+        { "id": "tape_masking", "label": "テープ dispenser 養生 (Ø90×W48)", "lol_dsl": "tape_dispenser(90, 48, 3)" }
+      ]
     }
   ]
 }

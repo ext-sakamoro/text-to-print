@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 52 archetype 一覧 (2026-08-24 Sprint 17 更新)
+## 既存 55 archetype 一覧 (2026-08-24 Sprint 18 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 + printer 3 + drawer-wall 3 + mix 3 + mix2 3 + mix3 3 + mix4 3 + mix5 3 + mix6 3 archetype** (各既実装 category 残 mix 継続)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 + printer 3 + drawer-wall 3 + mix 3 + mix2 3 + mix3 3 + mix4 3 + mix5 3 + mix6 3 + mix7 3 archetype** (各既実装 category 残 mix 継続、Sprint 18 で multi-component composite 対応)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|

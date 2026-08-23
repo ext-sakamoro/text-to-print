@@ -125,6 +125,9 @@ mod tests {
             "dry_box",
             "outdoor_enclosure",
             "jewelry_stand",
+            "phone_dock",
+            "cutting_board_rack",
+            "tape_dispenser",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

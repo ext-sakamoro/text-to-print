@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 52 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 55 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1263,7 +1263,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14) +
 /// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15) +
 /// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16) +
-/// mix6 3 (dry_box / outdoor_enclosure / jewelry_stand、Sprint 17)
+/// mix6 3 (dry_box / outdoor_enclosure / jewelry_stand、Sprint 17) +
+/// mix7 3 (phone_dock / cutting_board_rack / tape_dispenser、Sprint 18、multi-component)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1372,6 +1373,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_outdoor_enclosure_customizer(ui, state);
                 ui.separator();
                 show_jewelry_stand_customizer(ui, state);
+                ui.separator();
+                show_phone_dock_customizer(ui, state);
+                ui.separator();
+                show_cutting_board_rack_customizer(ui, state);
+                ui.separator();
+                show_tape_dispenser_customizer(ui, state);
             });
         },
     );
@@ -3298,6 +3305,126 @@ fn show_jewelry_stand_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, j_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 充電ドック customizer
+/// (`width × upright_height × cable_diameter`、electronics § 4、multi-component)
+///
+/// Base + tilted upright (15deg 傾斜) + USB-C ケーブル貫通穴 (through-hole vertical)
+fn show_phone_dock_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("📱 充電ドック (base + tilted upright + USB-C 貫通、multi-component)")
+            .strong(),
+    );
+
+    let p = &mut state.customizer_state.phone_dock;
+    ui.horizontal(|ui| {
+        ui.label("base 幅 (mm):");
+        ui.add(egui::Slider::new(&mut p.width, 60.0..=120.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("upright 高さ (mm):");
+        ui.add(egui::Slider::new(&mut p.upright_height, 60.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("USB-C 貫通穴 Ø (mm):");
+        ui.add(egui::Slider::new(&mut p.cable_diameter, 6.0..=12.0).step_by(0.5));
+    });
+
+    let p_copy = *p;
+    let label = format!(
+        "充電ドック W{} × H{}mm × Ø{} 貫通",
+        p_copy.width, p_copy.upright_height, p_copy.cable_diameter
+    );
+    ui.label(
+        "プリセット目安: standard (80×100×Ø8) / small (60×80×Ø6) / large tablet (120×150×Ø10)",
+    );
+    ui.label("固定: base 60mm 奥行 × 6mm 厚、upright 4mm 厚、15deg 傾斜、charger 下配線");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, p_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// まな板ラック customizer
+/// (`slot_count × slot_width × height`、kitchen § 6.6)
+///
+/// Tall vertical slots (build_plate_rack の tall + deep 版)
+fn show_cutting_board_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🍳 まな板ラック (tall vertical slots)").strong());
+
+    let c = &mut state.customizer_state.cutting_board_rack;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut c.slot_count, 2..=6).text("(2-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut c.slot_width, 8.0..=25.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ラック高さ (mm):");
+        ui.add(egui::Slider::new(&mut c.height, 150.0..=350.0).step_by(10.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "まな板ラック {} slot × W{}mm × H{}mm",
+        c_copy.slot_count, c_copy.slot_width, c_copy.height
+    );
+    ui.label("プリセット目安: standard (3 slot × W12 × H220) / large (4 slot × W20 × H280)");
+    ui.label("固定: slot 深 200mm、wall 4mm、floor 8mm (まな板重量支え)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// テープ dispenser customizer
+/// (`inner_diameter × roll_width × wall_thickness`、garage § 8.3、multi-component)
+///
+/// Base plate + back wall + hood + Z-axis axle + tear edge (4 component composite)
+fn show_tape_dispenser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("📼 テープ dispenser (4 component composite + tear edge)").strong(),
+    );
+
+    let t = &mut state.customizer_state.tape_dispenser;
+    ui.horizontal(|ui| {
+        ui.label("ロール内径 (mm):");
+        ui.add(egui::Slider::new(&mut t.inner_diameter, 25.0..=100.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ロール幅 (mm):");
+        ui.add(egui::Slider::new(&mut t.roll_width, 12.0..=100.0).step_by(2.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("壁厚 (mm):");
+        ui.add(egui::Slider::new(&mut t.wall_thickness, 3.0..=8.0).step_by(0.5));
+    });
+
+    let t_copy = *t;
+    let label = format!(
+        "テープ dispenser Ø{} × W{} × wall{}mm",
+        t_copy.inner_diameter, t_copy.roll_width, t_copy.wall_thickness
+    );
+    ui.label(
+        "プリセット目安: 包装用 standard (Ø76×W50) / セロハンテープ (Ø25×W15) / 養生 (Ø90×W48)",
+    );
+    ui.label("固定: 外径 Ø150 hood、tear edge 30deg、base plate + back wall + hood + Z-axis axle 4 component");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, t_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

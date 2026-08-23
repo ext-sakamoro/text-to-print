@@ -213,6 +213,10 @@ name_3f ::= "box3d"
           | "dry_box"
           | "outdoor_enclosure"
           | "jewelry_stand"
+          # Sprint 18 ミックス 7 (electronics + kitchen + garage 各 1、multi-component、2026-08-24 追加)
+          | "phone_dock"
+          | "cutting_board_rack"
+          | "tape_dispenser"
 
 name_4f ::= "rounded_box"
           | "plane"

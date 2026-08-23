@@ -112,6 +112,9 @@ mod tests {
             "dry_box",
             "outdoor_enclosure",
             "jewelry_stand",
+            "phone_dock",
+            "cutting_board_rack",
+            "tape_dispenser",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

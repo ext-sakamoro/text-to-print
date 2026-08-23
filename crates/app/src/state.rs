@@ -206,6 +206,12 @@ pub struct CustomizerState {
     pub outdoor_enclosure: OutdoorEnclosureUiState,
     /// Multi-tier jewelry stand customizer (drawer § 3.4、Sprint 17)
     pub jewelry_stand: JewelryStandUiState,
+    /// Phone charging dock customizer (electronics § 4、Sprint 18)
+    pub phone_dock: PhoneDockUiState,
+    /// Cutting board rack customizer (kitchen § 6.6、Sprint 18)
+    pub cutting_board_rack: CuttingBoardRackUiState,
+    /// Tape dispenser customizer (garage § 8.3、Sprint 18)
+    pub tape_dispenser: TapeDispenserUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1820,6 +1826,101 @@ impl JewelryStandUiState {
     }
 }
 
+// ── Sprint 18 ミックス 7 archetype UI state (phone_dock / cutting_board_rack / tape_dispenser) ──
+
+/// 充電ドック UI state (electronics § 4、base + tilted upright + USB-C 貫通)
+/// (`phone_dock(width, upright_height, cable_diameter)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PhoneDockUiState {
+    /// base 幅 (mm、default 80、range 60-120)
+    pub width: f32,
+    /// upright 高さ (mm、default 100、range 60-150)
+    pub upright_height: f32,
+    /// USB-C 貫通穴直径 (mm、default 8、range 6-12)
+    pub cable_diameter: f32,
+}
+
+impl Default for PhoneDockUiState {
+    fn default() -> Self {
+        Self {
+            width: 80.0,
+            upright_height: 100.0,
+            cable_diameter: 8.0,
+        }
+    }
+}
+
+impl PhoneDockUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "phone_dock({}, {}, {})",
+            self.width, self.upright_height, self.cable_diameter
+        )
+    }
+}
+
+/// まな板ラック UI state (kitchen § 6.6、tall vertical slots)
+/// (`cutting_board_rack(slot_count, slot_width, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CuttingBoardRackUiState {
+    /// slot 個数 (default 3、range 2-6)
+    pub slot_count: u32,
+    /// slot 幅 = まな板厚 clearance (mm、default 12、range 8-25)
+    pub slot_width: f32,
+    /// ラック高さ (mm、default 220、range 150-350)
+    pub height: f32,
+}
+
+impl Default for CuttingBoardRackUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 3,
+            slot_width: 12.0,
+            height: 220.0,
+        }
+    }
+}
+
+impl CuttingBoardRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "cutting_board_rack({}, {}, {})",
+            self.slot_count, self.slot_width, self.height
+        )
+    }
+}
+
+/// テープ dispenser UI state (garage § 8.3、multi-component composite)
+/// (`tape_dispenser(inner_diameter, roll_width, wall_thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct TapeDispenserUiState {
+    /// テープロール内径 (mm、default 76、range 25-100)
+    pub inner_diameter: f32,
+    /// テープロール幅 (mm、default 50、range 12-100)
+    pub roll_width: f32,
+    /// 壁厚 (mm、default 3、range 3-8)
+    pub wall_thickness: f32,
+}
+
+impl Default for TapeDispenserUiState {
+    fn default() -> Self {
+        Self {
+            inner_diameter: 76.0,
+            roll_width: 50.0,
+            wall_thickness: 3.0,
+        }
+    }
+}
+
+impl TapeDispenserUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "tape_dispenser({}, {}, {})",
+            self.inner_diameter, self.roll_width, self.wall_thickness
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2823,18 +2924,19 @@ mod tests {
     use super::{
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
         CardTrayUiState, ChopstickHolderUiState, ClampRackUiState, CoasterUiState,
-        CottonDispenserUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
-        DrillBitHolderUiState, DriverRackUiState, DryBoxUiState, EggTrayUiState,
+        CottonDispenserUiState, CustomizerState, CutleryTrayUiState, CuttingBoardRackUiState,
+        DeskShelfUiState, DrillBitHolderUiState, DriverRackUiState, DryBoxUiState, EggTrayUiState,
         Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
         HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
         JewelryStandUiState, KcupHolderUiState, LedChannelUiState, MagneticStripUiState,
         MonitorRiserUiState, NozzleHolderUiState, OutdoorEnclosureUiState, PenCupUiState,
-        PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
-        RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState, SinkCaddyUiState,
-        SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
-        StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TissueBoxCoverUiState,
-        TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState, UnderDeskMountUiState,
-        UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState, default_sidecar_port,
+        PhaseProgress, PhoneDockUiState, PhoneStandUiState, PillOrganizerUiState,
+        PliersRackUiState, RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState,
+        SinkCaddyUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
+        StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TapeDispenserUiState,
+        TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState,
+        UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState,
+        default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -3692,5 +3794,46 @@ mod tests {
             "outdoor_enclosure(120, 80, 45)"
         );
         assert_eq!(c.jewelry_stand.to_lol(), "jewelry_stand(3, 100, 100)");
+    }
+
+    // ── Sprint 18 ミックス 7 archetype UI state tests ──
+
+    #[test]
+    fn phone_dock_default_is_standard_80x100() {
+        let p = PhoneDockUiState::default();
+        assert!((p.width - 80.0).abs() < 1e-6);
+        assert!((p.upright_height - 100.0).abs() < 1e-6);
+        assert!((p.cable_diameter - 8.0).abs() < 1e-6);
+        assert_eq!(p.to_lol(), "phone_dock(80, 100, 8)");
+    }
+
+    #[test]
+    fn cutting_board_rack_default_is_standard_3() {
+        let c = CuttingBoardRackUiState::default();
+        assert_eq!(c.slot_count, 3);
+        assert!((c.slot_width - 12.0).abs() < 1e-6);
+        assert!((c.height - 220.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "cutting_board_rack(3, 12, 220)");
+    }
+
+    #[test]
+    fn tape_dispenser_default_is_packing_standard() {
+        let t = TapeDispenserUiState::default();
+        assert!((t.inner_diameter - 76.0).abs() < 1e-6);
+        assert!((t.roll_width - 50.0).abs() < 1e-6);
+        assert!((t.wall_thickness - 3.0).abs() < 1e-6);
+        assert_eq!(t.to_lol(), "tape_dispenser(76, 50, 3)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_55_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 18 追加後は 55 archetype (+3: phone_dock / cutting_board_rack / tape_dispenser)
+        assert_eq!(c.phone_dock.to_lol(), "phone_dock(80, 100, 8)");
+        assert_eq!(
+            c.cutting_board_rack.to_lol(),
+            "cutting_board_rack(3, 12, 220)"
+        );
+        assert_eq!(c.tape_dispenser.to_lol(), "tape_dispenser(76, 50, 3)");
     }
 }
