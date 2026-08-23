@@ -113,6 +113,12 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Linux: keyring crate は libdbus-sys 経由で libdbus-1-dev を要求
+      # (Secret Service backend) Windows/macOS は不要
+      - name: Install libdbus-1-dev (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: text-to-print

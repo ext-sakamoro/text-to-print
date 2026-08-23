@@ -7,8 +7,9 @@
 //! - Linux: Secret Service (via libsecret)
 //!
 //! Service name is fixed to [`SERVICE_NAME`]; account names come from
-//! [`text_to_print_llm::openai_compat_backend::OpenAiCompatProvider::keychain_account`]
+//! `text_to_print_llm::openai_compat_backend::OpenAiCompatProvider::keychain_account`
 //! so each provider stores its key under a separate slot
+//! (plain code fence — `core` は `llm` に依存しないため intra-doc link 不可)
 //!
 //! **Never** persist API keys to on-disk config Only the Keychain
 //! backend can be trusted with vendor secrets
