@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 28 archetype 一覧 (2026-08-23 Sprint 9 更新)
+## 既存 31 archetype 一覧 (2026-08-23 Sprint 10 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md` + `organizer-bathroom-garage.md` + `organizer-cable-kitchen.md`)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 + printer 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md` + `organizer-bathroom-garage.md` + `organizer-cable-kitchen.md` + `organizer-printer-modular.md`)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -527,6 +527,9 @@ or all-field 明示 (advanced field も全部書く)
 | 26 | `spice_rack(count, jar_diameter, jar_height)` | 3 | 6 jars × Ø48×H100mm (std spice、shelf + recess + lip) | kitchen § 6.1 |
 | 27 | `egg_tray(rows, cols, cup_depth)` | 3 | 4×3 × 深18mm (12-egg standard、cup Ø40 固定、2D grid) | kitchen § 6.5 |
 | 28 | `utensil_caddy(count, compartment_dia, height)` | 3 | 4 compartment × Ø65×H130mm (spatula/ladle/whisk/tongs) | kitchen § 6.8 |
+| 29 | `filament_spool_holder(spool_od, spool_width, bore_dia)` | 3 | 1kg Ø200×W68×bore52mm (base plate + 垂直 peg、Z-up direct) | printer § 9.1 |
+| 30 | `nozzle_holder(count, hole_diameter, depth)` | 3 | 8 hole × Ø8×D6mm (E3D V6 / Bambu M6) | printer § 9.5 |
+| 31 | `build_plate_rack(slot_count, slot_spacing, height)` | 3 | 5 slot × spacing 15 × H200mm (build plate 5mm 厚、Ender/Bambu 235) | printer § 9.6 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -552,6 +555,7 @@ or all-field 明示 (advanced field も全部書く)
 - ~~electronics-enclosure.md~~ ✅ 3 archetype 完了 (Sprint 7、raspi_case / esp32_enclosure / battery_18650_holder) 残 = phone_dock (§ 4、MagSafe/USB-C shape 特化) / outdoor_enclosure (§ 5、IP sealing + gasket groove) / led_hub_box (§ 6、antenna keep-out + light pipe) は future sprint
 - ~~organizer-bathroom-garage.md~~ ✅ 3 archetype 完了 (Sprint 8、toothbrush_holder / drill_bit_holder / pliers_rack) 残 = bathroom 7 (razor / soap_tray / shower_caddy / towel_hook / cotton_dispenser / hairdryer / tp_holder) + garage 6 (hex_key / tape_dispenser / driver_rack / sandpaper / brush / clamp_rack) は future sprint
 - ~~organizer-cable-kitchen.md~~ ✅ 3 archetype 完了 (Sprint 9、spice_rack / egg_tray / utensil_caddy) 残 = cable § 5 は既存 hobby-diy cable_clip と重複 skip、kitchen § 6 残 6 (wrap_holder / bag_clip_org / can_rack / cutting_board_rack / kcup_holder / sink_caddy) は future sprint
+- ~~organizer-printer-modular.md~~ ✅ 3 archetype 完了 (Sprint 10、filament_spool_holder / nozzle_holder / build_plate_rack) 残 = § 9 残 5 (dry_box / tool_holder / sd_card_holder / swatch_holder / allen_key_holder) + § 10 modular connection systems (Gridfinity/Multiboard/SKADIS/Honeycomb/Lego/Dovetail/T-Slot 等は protocol 仕様書、既存 SKADIS panel / gridfinity_bin で cover 済) は future sprint
 - **organizer-drawer-wall.md** (406 行): カトラリー / 箸 / ジュエリー / 化粧品 / SKADIS / Multiboard → 追加 SKADIS accessory / Multiboard 互換
 - **organizer-cable-kitchen.md** (374 行): ケーブル / ルーター / スパイスラック / K-Cup / 卵ホルダー → `spice_rack` / `kcup_holder` / `egg_holder`
 - **organizer-bathroom-garage.md** (507 行): 歯ブラシ / 電動歯ブラシ / トイレットペーパー / ドライヤー / ドリルビット / ソケットレール → `toothbrush_holder` / `drill_bit_organizer`
@@ -563,7 +567,7 @@ or all-field 明示 (advanced field も全部書く)
 - 単純な box/cylinder 組み合わせで実装可能 (Print-in-Place / articulated は高難度)
 - ALICE-Bamboo に既存 canonical 実装が近い (spec doc + pattern_scores.json)
 
-**次 sprint 推奨**: organizer-printer-modular.md (filament_spool_holder / nozzle_organizer / hotend_holder) or organizer-drawer-wall.md (cutlery / jewelry / cosmetics) or toys-articulated.md (Print-in-Place 関節 / fidget) から 3 archetype 追加 (Sprint 10) 高難度候補: caliper_holder / vise / battery_holder / phone_dock / gear / shower_caddy / tape_dispenser / cutting_board_rack (individually 単発 sprint)
+**次 sprint 推奨**: organizer-drawer-wall.md (cutlery / jewelry / cosmetics) or toys-articulated.md (Print-in-Place 関節 / fidget) から 3 archetype 追加 (Sprint 11) 高難度候補: caliper_holder / vise / battery_holder / phone_dock / gear / shower_caddy / tape_dispenser / cutting_board_rack / dry_box (individually 単発 sprint)
 
 ---
 

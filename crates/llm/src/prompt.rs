@@ -88,6 +88,9 @@ mod tests {
             "spice_rack",
             "egg_tray",
             "utensil_caddy",
+            "filament_spool_holder",
+            "nozzle_holder",
+            "build_plate_rack",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

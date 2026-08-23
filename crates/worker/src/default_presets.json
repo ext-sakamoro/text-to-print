@@ -88,6 +88,17 @@
         { "id": "utensil_caddy_4", "label": "ツールキャディ 4 compartment (Ø65×H130)", "lol_dsl": "utensil_caddy(4, 65, 130)" },
         { "id": "utensil_caddy_small_3", "label": "ツールキャディ 3 compartment (Ø50×H120)", "lol_dsl": "utensil_caddy(3, 50, 120)" }
       ]
+    },
+    {
+      "name": "3D プリンタ周辺 (Sprint 10、organizer-printer-modular.md 由来 3 archetype)",
+      "presets": [
+        { "id": "spool_holder_1kg", "label": "スプールホルダー 1kg (Ø200×W68×bore52)", "lol_dsl": "filament_spool_holder(200, 68, 52)" },
+        { "id": "spool_holder_250g", "label": "スプールホルダー 250g (Ø125×W45×bore30)", "lol_dsl": "filament_spool_holder(125, 45, 30)" },
+        { "id": "nozzle_m6_8", "label": "ノズルホルダー M6 × 8 (E3D/Bambu)", "lol_dsl": "nozzle_holder(8, 8, 6)" },
+        { "id": "nozzle_m6_12", "label": "ノズルホルダー M6 × 12 (large set)", "lol_dsl": "nozzle_holder(12, 8, 6)" },
+        { "id": "plate_rack_5", "label": "ビルドプレートラック 5 slot × H200 (Ender/Bambu 235)", "lol_dsl": "build_plate_rack(5, 15, 200)" },
+        { "id": "plate_rack_8", "label": "ビルドプレートラック 8 slot × H250 (Bambu 256)", "lol_dsl": "build_plate_rack(8, 15, 250)" }
+      ]
     }
   ]
 }

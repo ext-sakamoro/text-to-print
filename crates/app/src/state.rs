@@ -151,6 +151,12 @@ pub struct CustomizerState {
     pub egg_tray: EggTrayUiState,
     /// Utensil caddy customizer (kitchen § 6.8、Sprint 9)
     pub utensil_caddy: UtensilCaddyUiState,
+    /// Filament spool holder customizer (printer § 9.1、Sprint 10)
+    pub filament_spool_holder: FilamentSpoolHolderUiState,
+    /// Nozzle holder customizer (printer § 9.5、Sprint 10)
+    pub nozzle_holder: NozzleHolderUiState,
+    /// Build plate rack customizer (printer § 9.6、Sprint 10)
+    pub build_plate_rack: BuildPlateRackUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1016,6 +1022,98 @@ impl UtensilCaddyUiState {
         format!(
             "utensil_caddy({}, {}, {})",
             self.count, self.compartment_diameter, self.height
+        )
+    }
+}
+
+/// フィラメントスプールホルダー customizer UI state
+/// (`filament_spool_holder(spool_od, spool_width, bore_diameter)`)
+#[derive(Debug, Clone, Copy)]
+pub struct FilamentSpoolHolderUiState {
+    /// spool 外径 (mm、1kg=200 / 250g=125 / 2kg=250、default 200、range 100-300)
+    pub spool_outer_diameter: f32,
+    /// spool 幅 (mm、1kg=68 / 250g=45 / 2kg=80、default 68、range 30-120)
+    pub spool_width: f32,
+    /// spool bore 内径 (mm、std=52 / 2kg=70、default 52、range 30-100)
+    pub bore_diameter: f32,
+}
+
+impl Default for FilamentSpoolHolderUiState {
+    fn default() -> Self {
+        Self {
+            spool_outer_diameter: 200.0,
+            spool_width: 68.0,
+            bore_diameter: 52.0,
+        }
+    }
+}
+
+impl FilamentSpoolHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "filament_spool_holder({}, {}, {})",
+            self.spool_outer_diameter, self.spool_width, self.bore_diameter
+        )
+    }
+}
+
+/// ノズルホルダー customizer UI state (`nozzle_holder(count, hole_diameter, depth)`)
+#[derive(Debug, Clone, Copy)]
+pub struct NozzleHolderUiState {
+    /// hole 個数 (default 8、range 3-15)
+    pub count: u32,
+    /// hole 直径 (mm、E3D V6/Bambu M6=8、default 8、range 6-15)
+    pub hole_diameter: f32,
+    /// hole 深さ (mm、default 6、range 4-15)
+    pub hole_depth: f32,
+}
+
+impl Default for NozzleHolderUiState {
+    fn default() -> Self {
+        Self {
+            count: 8,
+            hole_diameter: 8.0,
+            hole_depth: 6.0,
+        }
+    }
+}
+
+impl NozzleHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "nozzle_holder({}, {}, {})",
+            self.count, self.hole_diameter, self.hole_depth
+        )
+    }
+}
+
+/// ビルドプレートラック customizer UI state
+/// (`build_plate_rack(slot_count, slot_spacing, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct BuildPlateRackUiState {
+    /// slot 個数 (default 5、range 2-10)
+    pub slot_count: u32,
+    /// slot spacing (mm、center-to-center、default 15、range 12-25)
+    pub slot_spacing: f32,
+    /// rack 全高 = plate 接触幅 (mm、default 200、range 150-350)
+    pub height: f32,
+}
+
+impl Default for BuildPlateRackUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 5,
+            slot_spacing: 15.0,
+            height: 200.0,
+        }
+    }
+}
+
+impl BuildPlateRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "build_plate_rack({}, {}, {})",
+            self.slot_count, self.slot_spacing, self.height
         )
     }
 }
@@ -1912,14 +2010,15 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        Battery18650HolderUiState, BusinessCardUiState, CableClipUiState, CardTrayUiState,
-        CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState, EggTrayUiState,
-        Esp32EnclosureUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
-        HexBitHolderUiState, LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
-        PhoneStandUiState, PliersRackUiState, RaspiCaseUiState, SocketRailUiState,
-        SpiceRackUiState, StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState,
-        TokenWellUiState, ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState,
-        WrenchHolderUiState, default_sidecar_port,
+        Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
+        CardTrayUiState, CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState,
+        EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase,
+        GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState, LedChannelUiState,
+        MonitorRiserUiState, NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
+        PliersRackUiState, RaspiCaseUiState, SocketRailUiState, SpiceRackUiState,
+        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
+        ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState, WrenchHolderUiState,
+        default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2467,5 +2566,46 @@ mod tests {
         assert_eq!(c.spice_rack.to_lol(), "spice_rack(6, 48, 100)");
         assert_eq!(c.egg_tray.to_lol(), "egg_tray(3, 4, 18)");
         assert_eq!(c.utensil_caddy.to_lol(), "utensil_caddy(4, 65, 130)");
+    }
+
+    // ── Sprint 10: organizer-printer-modular.md 3 archetype UI state tests ──
+
+    #[test]
+    fn filament_spool_holder_default_is_standard_1kg() {
+        let f = FilamentSpoolHolderUiState::default();
+        assert!((f.spool_outer_diameter - 200.0).abs() < 1e-6);
+        assert!((f.spool_width - 68.0).abs() < 1e-6);
+        assert!((f.bore_diameter - 52.0).abs() < 1e-6);
+        assert_eq!(f.to_lol(), "filament_spool_holder(200, 68, 52)");
+    }
+
+    #[test]
+    fn nozzle_holder_default_is_m6_row_8() {
+        let n = NozzleHolderUiState::default();
+        assert_eq!(n.count, 8);
+        assert!((n.hole_diameter - 8.0).abs() < 1e-6);
+        assert!((n.hole_depth - 6.0).abs() < 1e-6);
+        assert_eq!(n.to_lol(), "nozzle_holder(8, 8, 6)");
+    }
+
+    #[test]
+    fn build_plate_rack_default_is_standard_5() {
+        let r = BuildPlateRackUiState::default();
+        assert_eq!(r.slot_count, 5);
+        assert!((r.slot_spacing - 15.0).abs() < 1e-6);
+        assert!((r.height - 200.0).abs() < 1e-6);
+        assert_eq!(r.to_lol(), "build_plate_rack(5, 15, 200)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_31_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 10 追加後は 31 archetype (+3: filament_spool_holder / nozzle_holder / build_plate_rack)
+        assert_eq!(
+            c.filament_spool_holder.to_lol(),
+            "filament_spool_holder(200, 68, 52)"
+        );
+        assert_eq!(c.nozzle_holder.to_lol(), "nozzle_holder(8, 8, 6)");
+        assert_eq!(c.build_plate_rack.to_lol(), "build_plate_rack(5, 15, 200)");
     }
 }

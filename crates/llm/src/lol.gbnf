@@ -181,6 +181,10 @@ name_3f ::= "box3d"
           | "spice_rack"
           | "egg_tray"
           | "utensil_caddy"
+          # organizer-printer-modular 高階 primitive (Sprint 10、2026-08-23 追加)
+          | "filament_spool_holder"
+          | "nozzle_holder"
+          | "build_plate_rack"
 
 name_4f ::= "rounded_box"
           | "plane"

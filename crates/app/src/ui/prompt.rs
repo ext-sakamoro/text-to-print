@@ -154,78 +154,90 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
         ));
     }
 
-    ui.add_space(4.0);
-    ui.label("3D モデルの説明を入力 (Enter で生成 / Shift+Enter で改行):");
-    // 2026-08-23 期待コントロール — 3B LLM の複合形状生成は実力壁あり、
-    // ヘルプ label で「単純形状のみ推奨、複雑物は下の テンプレート / カスタマイザー」
-    // を案内 詳細: memory/feedback_llm_3b_complex_shape_hallucination.md
-    ui.label(
-        egui::RichText::new(
-            "⚠ LLM Preview 段階: 単純形状 (球 / 立方体 / 円柱) に限定推奨 \
-             複雑物 (マグカップ / 花瓶 等) は下の「テンプレート」/「カスタマイザー」から",
-        )
-        .small()
-        .color(egui::Color32::from_rgb(200, 140, 60)),
-    );
-
     let is_generating = matches!(state.generation_status, GenerationStatus::Generating);
     let sidecar_running = state.sidecar_status.borrow().is_running();
     let can_gen = state.can_generate() && !state.prompt_input.trim().is_empty() && sidecar_running;
 
-    let prompt_id = egui::Id::new("prompt_input");
-    let prompt_widget = egui::TextEdit::multiline(&mut state.prompt_input)
-        .id(prompt_id)
-        .desired_rows(3)
-        .desired_width(f32::INFINITY)
-        .hint_text("例: 20mm の立方体、上面に直径 5mm の穴");
-    let prompt_response = ui.add_enabled(!is_generating, prompt_widget);
-
-    let enter_pressed = prompt_response.has_focus()
-        && ui.input(|i| {
-            i.events.iter().any(|e| {
-                matches!(
-                    e,
-                    egui::Event::Key {
-                        key: egui::Key::Enter,
-                        pressed: true,
-                        modifiers,
-                        ..
-                    } if !modifiers.shift
-                )
-            })
-        });
-
-    if enter_pressed && can_gen && !is_generating {
-        if state.prompt_input.ends_with('\n') {
-            state.prompt_input.pop();
-        }
-        start_generation(state, lang);
-    }
-
-    if !state.prompt_focused_once {
-        ui.memory_mut(|m| m.request_focus(prompt_id));
-        state.prompt_focused_once = true;
-    }
-
-    ui.add_space(4.0);
+    // R3 tab reorder (2026-08-23): templates + customizer are the
+    // primary recommended path Both bypass the LLM entirely and emit
+    // LOL DSL directly, giving deterministic + fast + free generation
+    // The LLM natural-language input is now demoted to an "Experimental"
+    // collapsing panel below with an explicit capability disclaimer
+    ui.add_space(6.0);
+    ui.label(egui::RichText::new(crate::i18n::T::templates_section(lang)).strong());
     show_prompt_templates(ui, state, is_generating);
 
-    ui.add_space(4.0);
+    ui.add_space(6.0);
+    ui.label(egui::RichText::new(crate::i18n::T::customizer_section(lang)).strong());
     show_prompt_customizer(ui, state, is_generating);
 
-    ui.add_space(8.0);
+    ui.add_space(10.0);
+    ui.separator();
+    ui.add_space(6.0);
 
-    if ui
-        .add_enabled(!is_generating && can_gen, egui::Button::new("生成"))
-        .clicked()
-    {
-        start_generation(state, lang);
-    }
+    // Experimental LLM path — collapsed by default so first-time users
+    // land on the working templates/customizer path instead of the
+    // 10-minute LLM wait that ends in a plain cube (see
+    // [[feedback_llm_3b_complex_shape_hallucination]])
+    egui::CollapsingHeader::new(
+        egui::RichText::new(crate::i18n::T::experimental_llm_header(lang))
+            .strong()
+            .color(egui::Color32::from_rgb(200, 140, 60)),
+    )
+    .default_open(false)
+    .id_salt("experimental_llm_section")
+    .show(ui, |ui| {
+        ui.label(
+            egui::RichText::new(crate::i18n::T::experimental_llm_hint(lang))
+                .small()
+                .color(egui::Color32::from_rgb(200, 140, 60)),
+        );
+        ui.add_space(4.0);
+        ui.label("3D モデルの説明を入力 (Enter で生成 / Shift+Enter で改行):");
 
-    if !state.can_generate() && !is_generating {
-        let warn_color = ui.style().visuals.warn_fg_color;
-        ui.colored_label(warn_color, "本日の生成上限に達しました");
-    }
+        let prompt_id = egui::Id::new("prompt_input");
+        let prompt_widget = egui::TextEdit::multiline(&mut state.prompt_input)
+            .id(prompt_id)
+            .desired_rows(3)
+            .desired_width(f32::INFINITY)
+            .hint_text("例: 20mm の立方体、上面に直径 5mm の穴");
+        let prompt_response = ui.add_enabled(!is_generating, prompt_widget);
+
+        let enter_pressed = prompt_response.has_focus()
+            && ui.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        egui::Event::Key {
+                            key: egui::Key::Enter,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if !modifiers.shift
+                    )
+                })
+            });
+
+        if enter_pressed && can_gen && !is_generating {
+            if state.prompt_input.ends_with('\n') {
+                state.prompt_input.pop();
+            }
+            start_generation(state, lang);
+        }
+
+        ui.add_space(6.0);
+        if ui
+            .add_enabled(!is_generating && can_gen, egui::Button::new("生成 (LLM)"))
+            .clicked()
+        {
+            start_generation(state, lang);
+        }
+
+        if !state.can_generate() && !is_generating {
+            let warn_color = ui.style().visuals.warn_fg_color;
+            ui.colored_label(warn_color, "本日の生成上限に達しました");
+        }
+    });
 
     ui.add_space(8.0);
 
@@ -1235,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 28 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 31 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1243,7 +1255,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6) +
 /// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
 /// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8) +
-/// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9)
+/// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9) +
+/// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1304,6 +1317,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_egg_tray_customizer(ui, state);
                 ui.separator();
                 show_utensil_caddy_customizer(ui, state);
+                ui.separator();
+                show_filament_spool_holder_customizer(ui, state);
+                ui.separator();
+                show_nozzle_holder_customizer(ui, state);
+                ui.separator();
+                show_build_plate_rack_customizer(ui, state);
             });
         },
     );
@@ -2337,6 +2356,118 @@ fn show_utensil_caddy_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, u_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// フィラメントスプールホルダー customizer
+/// (`spool_od × spool_width × bore_dia`、printer § 9.1)
+///
+/// base plate + 垂直 peg (spool bore over peg、donut on pole style)
+fn show_filament_spool_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🎞 フィラメントスプールホルダー (base + 垂直 peg)").strong());
+
+    let f = &mut state.customizer_state.filament_spool_holder;
+    ui.horizontal(|ui| {
+        ui.label("spool 外径 (mm):");
+        ui.add(egui::Slider::new(&mut f.spool_outer_diameter, 100.0..=300.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("spool 幅 (mm):");
+        ui.add(egui::Slider::new(&mut f.spool_width, 30.0..=120.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("bore 内径 (mm):");
+        ui.add(egui::Slider::new(&mut f.bore_diameter, 30.0..=100.0).step_by(1.0));
+    });
+
+    let f_copy = *f;
+    let label = format!(
+        "スプールホルダー Ø{}×W{}×bore{}mm",
+        f_copy.spool_outer_diameter, f_copy.spool_width, f_copy.bore_diameter
+    );
+    ui.label(
+        "プリセット目安: 1kg (Ø200×W68×bore52) / 250g (Ø125×W45×bore30) / 2kg (Ø250×W80×bore70)",
+    );
+    ui.label("固定: base_thickness 5mm、peg clearance 1mm (slide fit)、peg 追加高 20mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, f_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ノズルホルダー customizer (`count × hole_diameter × depth`、printer § 9.5)
+///
+/// row 状 small hole for M6 nozzles (E3D V6 / Bambu M6)
+fn show_nozzle_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔩 ノズルホルダー (row 状 M6 nozzle hole)").strong());
+
+    let n = &mut state.customizer_state.nozzle_holder;
+    ui.horizontal(|ui| {
+        ui.label("hole 個数:");
+        ui.add(egui::Slider::new(&mut n.count, 3..=15).text("(3-15)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 直径 (mm):");
+        ui.add(egui::Slider::new(&mut n.hole_diameter, 6.0..=15.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 深さ (mm):");
+        ui.add(egui::Slider::new(&mut n.hole_depth, 4.0..=15.0).step_by(0.5));
+    });
+
+    let n_copy = *n;
+    let label = format!(
+        "ノズルホルダー {} hole × Ø{}×D{}mm",
+        n_copy.count, n_copy.hole_diameter, n_copy.hole_depth
+    );
+    ui.label("プリセット目安: E3D V6/Bambu M6 (Ø8×D6) / large hotend (Ø10-12×D8)");
+    ui.label("Label は user 側で別途印刷 or Sharpie 書込み推奨");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, n_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ビルドプレートラック customizer
+/// (`slot_count × slot_spacing × height`、printer § 9.6)
+///
+/// row 状 vertical slot for 5mm-thick build plates
+fn show_build_plate_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🏗 ビルドプレートラック (row 状 vertical slot)").strong());
+
+    let r = &mut state.customizer_state.build_plate_rack;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut r.slot_count, 2..=10).text("(2-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot spacing (mm):");
+        ui.add(egui::Slider::new(&mut r.slot_spacing, 12.0..=25.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("rack 全高 (mm):");
+        ui.add(egui::Slider::new(&mut r.height, 150.0..=350.0).step_by(5.0));
+    });
+
+    let r_copy = *r;
+    let label = format!(
+        "プレートラック {} slot × spacing {}mm × H{}mm",
+        r_copy.slot_count, r_copy.slot_spacing, r_copy.height
+    );
+    ui.label("プリセット目安: Ender/Bambu 235mm (H200) / Bambu 256mm (H225) / Voron 350mm (H300)");
+    ui.label("固定: slot width 5.5mm (5mm plate + 0.5mm clearance)、depth 60mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, r_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

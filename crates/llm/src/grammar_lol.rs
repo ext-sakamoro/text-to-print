@@ -101,6 +101,9 @@ mod tests {
             "spice_rack",
             "egg_tray",
             "utensil_caddy",
+            "filament_spool_holder",
+            "nozzle_holder",
+            "build_plate_rack",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives
