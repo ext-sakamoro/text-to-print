@@ -1235,14 +1235,15 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 25 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 28 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
 /// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5) +
 /// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6) +
 /// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
-/// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8)
+/// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8) +
+/// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1297,6 +1298,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_drill_bit_holder_customizer(ui, state);
                 ui.separator();
                 show_pliers_rack_customizer(ui, state);
+                ui.separator();
+                show_spice_rack_customizer(ui, state);
+                ui.separator();
+                show_egg_tray_customizer(ui, state);
+                ui.separator();
+                show_utensil_caddy_customizer(ui, state);
             });
         },
     );
@@ -2222,6 +2229,114 @@ fn show_pliers_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, p_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// スパイスラック customizer (`count × jar_diameter × jar_height`、kitchen § 6.1)
+///
+/// 薄 shelf + jar 用 shallow recess (5mm) + 前縁 lip (jar_height × 15%)
+fn show_spice_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧂 スパイスラック (shelf + jar recess + lip)").strong());
+
+    let s = &mut state.customizer_state.spice_rack;
+    ui.horizontal(|ui| {
+        ui.label("jar 個数:");
+        ui.add(egui::Slider::new(&mut s.count, 3..=12).text("(3-12)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("jar 直径 (mm):");
+        ui.add(egui::Slider::new(&mut s.jar_diameter, 40.0..=55.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("jar 高さ (mm):");
+        ui.add(egui::Slider::new(&mut s.jar_height, 70.0..=130.0).step_by(1.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "スパイスラック {} jar × Ø{}×H{}mm",
+        s_copy.count, s_copy.jar_diameter, s_copy.jar_height
+    );
+    ui.label("プリセット目安: small (Ø42×H75) / std (Ø48×H100) / large (Ø52×H120)");
+    ui.label("固定: recess 深 5mm、shelf 厚 5mm、front lip 高 = jar_height × 15%");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 卵トレー customizer (`rows × cols × cup_depth`、kitchen § 6.5)
+///
+/// 2D grid 状 cup、egg cup Ø40mm 固定、pitch 50mm 固定
+fn show_egg_tray_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥚 卵トレー (2D grid、egg cup Ø40mm 固定)").strong());
+
+    let e = &mut state.customizer_state.egg_tray;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut e.rows, 1..=8).text("(1-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut e.cols, 1..=8).text("(1-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cup 深さ (mm):");
+        ui.add(egui::Slider::new(&mut e.cup_depth, 12.0..=25.0).step_by(0.5));
+    });
+
+    let e_copy = *e;
+    let label = format!(
+        "卵トレー {}×{} × 深{}mm",
+        e_copy.rows, e_copy.cols, e_copy.cup_depth
+    );
+    ui.label("プリセット目安: 12-egg tray (4×3) / 6-egg (3×2) / 4×4 (16-egg 大量)");
+    ui.label("固定: egg cup Ø40mm (large egg spec)、pitch 50mm、素材 PETG 推奨 (冷蔵庫用)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, e_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// キッチンツールキャディ customizer (`count × compartment_dia × height`、kitchen § 6.8)
+///
+/// row 状 large cylindrical compartment (spatula / ladle / whisk / tongs 分別)
+fn show_utensil_caddy_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🍴 キッチンツールキャディ (row 状 large compartment)").strong());
+
+    let u = &mut state.customizer_state.utensil_caddy;
+    ui.horizontal(|ui| {
+        ui.label("compartment 個数:");
+        ui.add(egui::Slider::new(&mut u.count, 1..=6).text("(1-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("compartment 内径 (mm):");
+        ui.add(egui::Slider::new(&mut u.compartment_diameter, 45.0..=80.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("compartment 高さ (mm):");
+        ui.add(egui::Slider::new(&mut u.height, 100.0..=180.0).step_by(5.0));
+    });
+
+    let u_copy = *u;
+    let label = format!(
+        "ツールキャディ {} × Ø{}×H{}mm",
+        u_copy.count, u_copy.compartment_diameter, u_copy.height
+    );
+    ui.label("プリセット目安: small (Ø45-50、whisk/peeler) / large (Ø60-70、spatula/ladle)");
+    ui.label("素材: PETG 推奨 (水濺ね対応)、drainage 穴は user 側で追加加工");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, u_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

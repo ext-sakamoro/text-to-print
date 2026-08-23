@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 25 archetype 一覧 (2026-08-23 Sprint 8 更新)
+## 既存 28 archetype 一覧 (2026-08-23 Sprint 9 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md` + `organizer-bathroom-garage.md`)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md` + `organizer-bathroom-garage.md` + `organizer-cable-kitchen.md`)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -524,6 +524,9 @@ or all-field 明示 (advanced field も全部書く)
 | 23 | `toothbrush_holder(count, hole_diameter, height)` | 3 | 4本 × Ø15×H70mm (manual、top 開口) | bathroom § 7.1 |
 | 24 | `drill_bit_holder(min_mm, max_mm, count)` | 3 | 3-13mm × 11 hole (Metric、hole 円形、linear interp) | garage § 8.1 |
 | 25 | `pliers_rack(slot_count, slot_width, slot_depth)` | 3 | 6 slot × W15×D60mm (combi pliers) | garage § 8.4 |
+| 26 | `spice_rack(count, jar_diameter, jar_height)` | 3 | 6 jars × Ø48×H100mm (std spice、shelf + recess + lip) | kitchen § 6.1 |
+| 27 | `egg_tray(rows, cols, cup_depth)` | 3 | 4×3 × 深18mm (12-egg standard、cup Ø40 固定、2D grid) | kitchen § 6.5 |
+| 28 | `utensil_caddy(count, compartment_dia, height)` | 3 | 4 compartment × Ø65×H130mm (spatula/ladle/whisk/tongs) | kitchen § 6.8 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -548,6 +551,7 @@ or all-field 明示 (advanced field も全部書く)
 - ~~tools.md~~ ✅ 3 archetype 完了 (Sprint 6、wrench_holder / socket_rail / hex_bit_holder) 残 = caliper_holder (§ 4、shape 特化) / vise (§ 5、thread SDF) / battery_holder (§ 6、type 別 dims) は future sprint
 - ~~electronics-enclosure.md~~ ✅ 3 archetype 完了 (Sprint 7、raspi_case / esp32_enclosure / battery_18650_holder) 残 = phone_dock (§ 4、MagSafe/USB-C shape 特化) / outdoor_enclosure (§ 5、IP sealing + gasket groove) / led_hub_box (§ 6、antenna keep-out + light pipe) は future sprint
 - ~~organizer-bathroom-garage.md~~ ✅ 3 archetype 完了 (Sprint 8、toothbrush_holder / drill_bit_holder / pliers_rack) 残 = bathroom 7 (razor / soap_tray / shower_caddy / towel_hook / cotton_dispenser / hairdryer / tp_holder) + garage 6 (hex_key / tape_dispenser / driver_rack / sandpaper / brush / clamp_rack) は future sprint
+- ~~organizer-cable-kitchen.md~~ ✅ 3 archetype 完了 (Sprint 9、spice_rack / egg_tray / utensil_caddy) 残 = cable § 5 は既存 hobby-diy cable_clip と重複 skip、kitchen § 6 残 6 (wrap_holder / bag_clip_org / can_rack / cutting_board_rack / kcup_holder / sink_caddy) は future sprint
 - **organizer-drawer-wall.md** (406 行): カトラリー / 箸 / ジュエリー / 化粧品 / SKADIS / Multiboard → 追加 SKADIS accessory / Multiboard 互換
 - **organizer-cable-kitchen.md** (374 行): ケーブル / ルーター / スパイスラック / K-Cup / 卵ホルダー → `spice_rack` / `kcup_holder` / `egg_holder`
 - **organizer-bathroom-garage.md** (507 行): 歯ブラシ / 電動歯ブラシ / トイレットペーパー / ドライヤー / ドリルビット / ソケットレール → `toothbrush_holder` / `drill_bit_organizer`
@@ -559,7 +563,7 @@ or all-field 明示 (advanced field も全部書く)
 - 単純な box/cylinder 組み合わせで実装可能 (Print-in-Place / articulated は高難度)
 - ALICE-Bamboo に既存 canonical 実装が近い (spec doc + pattern_scores.json)
 
-**次 sprint 推奨**: organizer-cable-kitchen.md (spice_rack / kcup_holder / egg_holder) or organizer-printer-modular.md (filament_spool_holder / nozzle_organizer) or organizer-drawer-wall.md (cutlery / jewelry / cosmetics) から 3 archetype 追加 (Sprint 9) 高難度候補: caliper_holder / vise / battery_holder / phone_dock / gear / shower_caddy / tape_dispenser (individually 単発 sprint)
+**次 sprint 推奨**: organizer-printer-modular.md (filament_spool_holder / nozzle_organizer / hotend_holder) or organizer-drawer-wall.md (cutlery / jewelry / cosmetics) or toys-articulated.md (Print-in-Place 関節 / fidget) から 3 archetype 追加 (Sprint 10) 高難度候補: caliper_holder / vise / battery_holder / phone_dock / gear / shower_caddy / tape_dispenser / cutting_board_rack (individually 単発 sprint)
 
 ---
 

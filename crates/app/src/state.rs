@@ -145,6 +145,12 @@ pub struct CustomizerState {
     pub drill_bit_holder: DrillBitHolderUiState,
     /// Pliers rack customizer (garage § 8.4、Sprint 8)
     pub pliers_rack: PliersRackUiState,
+    /// Spice rack customizer (kitchen § 6.1、Sprint 9)
+    pub spice_rack: SpiceRackUiState,
+    /// Egg tray customizer (kitchen § 6.5、Sprint 9)
+    pub egg_tray: EggTrayUiState,
+    /// Utensil caddy customizer (kitchen § 6.8、Sprint 9)
+    pub utensil_caddy: UtensilCaddyUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -920,6 +926,96 @@ impl PliersRackUiState {
         format!(
             "pliers_rack({}, {}, {})",
             self.slot_count, self.slot_width, self.slot_depth
+        )
+    }
+}
+
+/// スパイスラック customizer UI state (`spice_rack(count, jar_diameter, jar_height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SpiceRackUiState {
+    /// jar 個数 (default 6、range 3-12)
+    pub count: u32,
+    /// jar 直径 (mm、small=42 / std=48 / large=52、default 48、range 40-55)
+    pub jar_diameter: f32,
+    /// jar 高さ (mm、default 100、range 70-130、lip 高さ計算に使用)
+    pub jar_height: f32,
+}
+
+impl Default for SpiceRackUiState {
+    fn default() -> Self {
+        Self {
+            count: 6,
+            jar_diameter: 48.0,
+            jar_height: 100.0,
+        }
+    }
+}
+
+impl SpiceRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "spice_rack({}, {}, {})",
+            self.count, self.jar_diameter, self.jar_height
+        )
+    }
+}
+
+/// 卵トレー customizer UI state (`egg_tray(rows, cols, cup_depth)`)
+///
+/// egg cup diameter 40mm 固定、pitch 50mm 固定
+#[derive(Debug, Clone, Copy)]
+pub struct EggTrayUiState {
+    /// 行数 (Z 方向、default 3、range 1-8)
+    pub rows: u32,
+    /// 列数 (X 方向、default 4、range 1-8)
+    pub cols: u32,
+    /// cup depth (mm、default 18、range 12-25)
+    pub cup_depth: f32,
+}
+
+impl Default for EggTrayUiState {
+    fn default() -> Self {
+        Self {
+            rows: 3,
+            cols: 4,
+            cup_depth: 18.0,
+        }
+    }
+}
+
+impl EggTrayUiState {
+    pub fn to_lol(self) -> String {
+        format!("egg_tray({}, {}, {})", self.rows, self.cols, self.cup_depth)
+    }
+}
+
+/// キッチンツールキャディ customizer UI state
+/// (`utensil_caddy(count, compartment_dia, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct UtensilCaddyUiState {
+    /// compartment 個数 (default 4、range 1-6)
+    pub count: u32,
+    /// compartment 内径 (mm、default 65、range 45-80)
+    pub compartment_diameter: f32,
+    /// compartment 高さ (mm、default 130、range 100-180)
+    pub height: f32,
+}
+
+impl Default for UtensilCaddyUiState {
+    fn default() -> Self {
+        Self {
+            count: 4,
+            compartment_diameter: 65.0,
+            height: 130.0,
+        }
+    }
+}
+
+impl UtensilCaddyUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "utensil_caddy({}, {}, {})",
+            self.count, self.compartment_diameter, self.height
         )
     }
 }
@@ -1817,12 +1913,13 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         Battery18650HolderUiState, BusinessCardUiState, CableClipUiState, CardTrayUiState,
-        CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState,
+        CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState, EggTrayUiState,
         Esp32EnclosureUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
         HexBitHolderUiState, LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
         PhoneStandUiState, PliersRackUiState, RaspiCaseUiState, SocketRailUiState,
-        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
-        ToothbrushHolderUiState, UnderDeskMountUiState, WrenchHolderUiState, default_sidecar_port,
+        SpiceRackUiState, StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState,
+        TokenWellUiState, ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState,
+        WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2332,5 +2429,43 @@ mod tests {
         assert_eq!(c.toothbrush_holder.to_lol(), "toothbrush_holder(4, 15, 70)");
         assert_eq!(c.drill_bit_holder.to_lol(), "drill_bit_holder(3, 13, 11)");
         assert_eq!(c.pliers_rack.to_lol(), "pliers_rack(6, 15, 60)");
+    }
+
+    // ── Sprint 9: organizer-cable-kitchen.md 3 archetype UI state tests ──
+
+    #[test]
+    fn spice_rack_default_is_standard_6() {
+        let s = SpiceRackUiState::default();
+        assert_eq!(s.count, 6);
+        assert!((s.jar_diameter - 48.0).abs() < 1e-6);
+        assert!((s.jar_height - 100.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "spice_rack(6, 48, 100)");
+    }
+
+    #[test]
+    fn egg_tray_default_is_4x3() {
+        let e = EggTrayUiState::default();
+        assert_eq!(e.rows, 3);
+        assert_eq!(e.cols, 4);
+        assert!((e.cup_depth - 18.0).abs() < 1e-6);
+        assert_eq!(e.to_lol(), "egg_tray(3, 4, 18)");
+    }
+
+    #[test]
+    fn utensil_caddy_default_is_standard_4() {
+        let u = UtensilCaddyUiState::default();
+        assert_eq!(u.count, 4);
+        assert!((u.compartment_diameter - 65.0).abs() < 1e-6);
+        assert!((u.height - 130.0).abs() < 1e-6);
+        assert_eq!(u.to_lol(), "utensil_caddy(4, 65, 130)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_28_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 9 追加後は 28 archetype (+3: spice_rack / egg_tray / utensil_caddy)
+        assert_eq!(c.spice_rack.to_lol(), "spice_rack(6, 48, 100)");
+        assert_eq!(c.egg_tray.to_lol(), "egg_tray(3, 4, 18)");
+        assert_eq!(c.utensil_caddy.to_lol(), "utensil_caddy(4, 65, 130)");
     }
 }

@@ -177,6 +177,10 @@ name_3f ::= "box3d"
           | "toothbrush_holder"
           | "drill_bit_holder"
           | "pliers_rack"
+          # organizer-cable-kitchen 高階 primitive (Sprint 9、2026-08-23 追加)
+          | "spice_rack"
+          | "egg_tray"
+          | "utensil_caddy"
 
 name_4f ::= "rounded_box"
           | "plane"

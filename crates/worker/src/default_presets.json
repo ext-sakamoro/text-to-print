@@ -77,6 +77,17 @@
         { "id": "pliers_standard_6", "label": "プライヤーラック 6 slot (W15)", "lol_dsl": "pliers_rack(6, 15, 60)" },
         { "id": "pliers_large_4", "label": "プライヤーラック 4 slot (W25、tongue-groove)", "lol_dsl": "pliers_rack(4, 25, 80)" }
       ]
+    },
+    {
+      "name": "キッチン (Sprint 9、organizer-cable-kitchen.md 由来 3 archetype)",
+      "presets": [
+        { "id": "spice_rack_std_6", "label": "スパイスラック std 6 jars (Ø48×H100)", "lol_dsl": "spice_rack(6, 48, 100)" },
+        { "id": "spice_rack_large_8", "label": "スパイスラック large 8 jars (Ø52×H120)", "lol_dsl": "spice_rack(8, 52, 120)" },
+        { "id": "egg_tray_12", "label": "卵トレー 4×3 (12-egg standard)", "lol_dsl": "egg_tray(3, 4, 18)" },
+        { "id": "egg_tray_6", "label": "卵トレー 3×2 (6-egg compact)", "lol_dsl": "egg_tray(2, 3, 18)" },
+        { "id": "utensil_caddy_4", "label": "ツールキャディ 4 compartment (Ø65×H130)", "lol_dsl": "utensil_caddy(4, 65, 130)" },
+        { "id": "utensil_caddy_small_3", "label": "ツールキャディ 3 compartment (Ø50×H120)", "lol_dsl": "utensil_caddy(3, 50, 120)" }
+      ]
     }
   ]
 }

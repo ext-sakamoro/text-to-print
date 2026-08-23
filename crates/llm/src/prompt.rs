@@ -85,6 +85,9 @@ mod tests {
             "toothbrush_holder",
             "drill_bit_holder",
             "pliers_rack",
+            "spice_rack",
+            "egg_tray",
+            "utensil_caddy",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

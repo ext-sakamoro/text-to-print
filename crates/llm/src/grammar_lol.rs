@@ -98,6 +98,9 @@ mod tests {
             "toothbrush_holder",
             "drill_bit_holder",
             "pliers_rack",
+            "spice_rack",
+            "egg_tray",
+            "utensil_caddy",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

@@ -238,11 +238,9 @@ fn export_3mf_via_bamboo(
     }
     let safety_summary = SafetySummary::from_report(&safety_report);
 
-    let aabb_config = TightAabbConfig {
-        initial_half_size: 500.0,
-        bisection_iterations: 24,
-        coarse_subdivisions: 16,
-    };
+    // 2026-08-23: alice-sdf 1.7.7 breaking change (preset + try_new に統一、Default 削除)
+    // 500mm bbox / iter 24 / subdivisions 16 は preset_large() の canonical 値
+    let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
     let padding = Vec3::splat(1.0);
     let min_bounds = aabb.min - padding;
@@ -350,11 +348,9 @@ fn export_step_via_alice_sdf(
     // Vertex / triangle counts via a preview-quality mesh — the exported
     // STEP file uses its own internal tessellation but this at least
     // gives the UI a rough size estimate
-    let aabb_config = TightAabbConfig {
-        initial_half_size: 500.0,
-        bisection_iterations: 24,
-        coarse_subdivisions: 16,
-    };
+    // 2026-08-23: alice-sdf 1.7.7 breaking change (preset + try_new に統一、Default 削除)
+    // 500mm bbox / iter 24 / subdivisions 16 は preset_large() の canonical 値
+    let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
     let padding = Vec3::splat(1.0);
     let mc_config = MarchingCubesConfig {
@@ -573,11 +569,9 @@ pub fn export_mesh_color4(
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
         .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
 
-    let aabb_config = TightAabbConfig {
-        initial_half_size: 500.0,
-        bisection_iterations: 24,
-        coarse_subdivisions: 16,
-    };
+    // 2026-08-23: alice-sdf 1.7.7 breaking change (preset + try_new に統一、Default 削除)
+    // 500mm bbox / iter 24 / subdivisions 16 は preset_large() の canonical 値
+    let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
     let padding = Vec3::splat(1.0);
     let mc_config = MarchingCubesConfig {
