@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 40 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 43 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1259,7 +1259,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10) +
 /// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11) +
 /// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12) +
-/// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13)
+/// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13) +
+/// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1344,6 +1345,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_sock_divider_customizer(ui, state);
                 ui.separator();
                 show_soap_tray_customizer(ui, state);
+                ui.separator();
+                show_razor_holder_customizer(ui, state);
+                ui.separator();
+                show_chopstick_holder_customizer(ui, state);
+                ui.separator();
+                show_swatch_holder_customizer(ui, state);
             });
         },
     );
@@ -2815,6 +2822,119 @@ fn show_soap_tray_customizer(ui: &mut egui::Ui, state: &mut AppState) {
     );
     ui.label("プリセット目安: dual-bottle shampoo (L200×W90) / bar soap (L100×W70) / large tray (L280×W140)");
     ui.label("固定: tray 深 12mm、drain slot 幅 3mm、wall 2.5mm、floor 2mm、素材 PETG 推奨");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// カミソリホルダー customizer
+/// (`slot_width × slot_depth × mount_hole_diameter`、bathroom § 7.2)
+///
+/// wall-mount narrow slot + M4 mount hole (Mach3/Fusion cartridge razor 対応)
+fn show_razor_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪒 カミソリホルダー (wall-mount + mount hole)").strong());
+
+    let r = &mut state.customizer_state.razor_holder;
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut r.slot_width, 8.0..=16.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 深さ (mm):");
+        ui.add(egui::Slider::new(&mut r.slot_depth, 15.0..=30.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("mount 穴径 (mm):");
+        ui.add(egui::Slider::new(&mut r.mount_hole_diameter, 3.0..=6.0).step_by(0.5));
+    });
+
+    let r_copy = *r;
+    let label = format!(
+        "カミソリホルダー W{}×D{}mm × mount Ø{}",
+        r_copy.slot_width, r_copy.slot_depth, r_copy.mount_hole_diameter
+    );
+    ui.label("プリセット目安: Mach3/Fusion cartridge (W12×D22) / safety razor (W10×D25)");
+    ui.label("固定: backplate 80×60mm、素材 PETG 推奨 (moisture resistance)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, r_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 箸ホルダー customizer (`pair_count × slot_width × slot_length`、drawer § 3.3)
+///
+/// row 状 narrow long slots (cutlery_tray より narrow、adult chopsticks 260mm)
+fn show_chopstick_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥢 箸ホルダー (row 状 narrow long slots)").strong());
+
+    let c = &mut state.customizer_state.chopstick_holder;
+    ui.horizontal(|ui| {
+        ui.label("pair 個数:");
+        ui.add(egui::Slider::new(&mut c.pair_count, 2..=10).text("(2-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut c.slot_width, 8.0..=20.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 長 (mm):");
+        ui.add(egui::Slider::new(&mut c.slot_length, 200.0..=330.0).step_by(5.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "箸ホルダー {} pair × W{}×L{}mm",
+        c_copy.pair_count, c_copy.slot_width, c_copy.slot_length
+    );
+    ui.label("プリセット目安: adult (W13×L260) / cooking (W15×L310) / children (W10×L180)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// フィラメントスウォッチホルダー customizer
+/// (`rows × cols × swatch_width`、printer § 9.7)
+///
+/// 2D grid narrow rect slots for filament sample cards
+fn show_swatch_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("🎨 フィラメントスウォッチホルダー (2D grid narrow slots)").strong(),
+    );
+
+    let s = &mut state.customizer_state.swatch_holder;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut s.rows, 2..=20).text("(2-20)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut s.cols, 1..=10).text("(1-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("swatch 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.swatch_width, 20.0..=60.0).step_by(1.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "スウォッチホルダー {}×{} × W{}mm",
+        s_copy.rows, s_copy.cols, s_copy.swatch_width
+    );
+    ui.label(
+        "プリセット目安: standard card (32×70mm) / small square (24×24mm) / full card (60×24.5mm)",
+    );
+    ui.label("固定: swatch 高 70mm、厚 4.5mm、wall 2mm、floor 3mm");
     if ui.button(format!("作成: {label}")).clicked() {
         state.prompt_input.clear();
         state.prompt_focused_once = false;

@@ -182,6 +182,12 @@ pub struct CustomizerState {
     pub sock_divider: SockDividerUiState,
     /// Soap tray customizer (bathroom § 7.3、Sprint 13)
     pub soap_tray: SoapTrayUiState,
+    /// Razor holder customizer (bathroom § 7.2、Sprint 14)
+    pub razor_holder: RazorHolderUiState,
+    /// Chopstick holder customizer (drawer § 3.3、Sprint 14)
+    pub chopstick_holder: ChopstickHolderUiState,
+    /// Filament swatch holder customizer (printer § 9.7、Sprint 14)
+    pub swatch_holder: SwatchHolderUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1418,6 +1424,99 @@ impl SoapTrayUiState {
     }
 }
 
+/// カミソリホルダー customizer UI state
+/// (`razor_holder(slot_width, slot_depth, mount_hole_diameter)`)
+#[derive(Debug, Clone, Copy)]
+pub struct RazorHolderUiState {
+    /// slot 幅 (mm、razor stem、default 12、range 8-16)
+    pub slot_width: f32,
+    /// slot 深さ (mm、default 22、range 15-30)
+    pub slot_depth: f32,
+    /// mount hole 直径 (mm、M4=4.5、default 4.5、range 3-6)
+    pub mount_hole_diameter: f32,
+}
+
+impl Default for RazorHolderUiState {
+    fn default() -> Self {
+        Self {
+            slot_width: 12.0,
+            slot_depth: 22.0,
+            mount_hole_diameter: 4.5,
+        }
+    }
+}
+
+impl RazorHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "razor_holder({}, {}, {})",
+            self.slot_width, self.slot_depth, self.mount_hole_diameter
+        )
+    }
+}
+
+/// 箸ホルダー customizer UI state
+/// (`chopstick_holder(pair_count, slot_width, slot_length)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ChopstickHolderUiState {
+    /// pair 個数 (default 4、range 2-10)
+    pub pair_count: u32,
+    /// slot 幅 (mm、pair 用 12-15、default 13、range 8-20)
+    pub slot_width: f32,
+    /// slot 長 (mm、default 260、range 200-330)
+    pub slot_length: f32,
+}
+
+impl Default for ChopstickHolderUiState {
+    fn default() -> Self {
+        Self {
+            pair_count: 4,
+            slot_width: 13.0,
+            slot_length: 260.0,
+        }
+    }
+}
+
+impl ChopstickHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "chopstick_holder({}, {}, {})",
+            self.pair_count, self.slot_width, self.slot_length
+        )
+    }
+}
+
+/// フィラメントスウォッチホルダー customizer UI state
+/// (`swatch_holder(rows, cols, swatch_width)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SwatchHolderUiState {
+    /// 行数 (default 8、range 2-20)
+    pub rows: u32,
+    /// 列数 (default 4、range 1-10)
+    pub cols: u32,
+    /// swatch 幅 (mm、standard=32 / small=24、default 32、range 20-60)
+    pub swatch_width: f32,
+}
+
+impl Default for SwatchHolderUiState {
+    fn default() -> Self {
+        Self {
+            rows: 8,
+            cols: 4,
+            swatch_width: 32.0,
+        }
+    }
+}
+
+impl SwatchHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "swatch_holder({}, {}, {})",
+            self.rows, self.cols, self.swatch_width
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2420,14 +2519,15 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
-        CardTrayUiState, CoasterUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
-        DrillBitHolderUiState, EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState,
-        GenerationPhase, GridfinityUiState, HairdryerHolderUiState, HeadphoneHolderUiState,
-        HexBitHolderUiState, HexKeyHolderUiState, KcupHolderUiState, LedChannelUiState,
-        MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState, PenCupUiState,
-        PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
-        RaspiCaseUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
-        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
+        CardTrayUiState, ChopstickHolderUiState, CoasterUiState, CustomizerState,
+        CutleryTrayUiState, DeskShelfUiState, DrillBitHolderUiState, EggTrayUiState,
+        Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
+        HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
+        KcupHolderUiState, LedChannelUiState, MagneticStripUiState, MonitorRiserUiState,
+        NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState,
+        PliersRackUiState, RaspiCaseUiState, RazorHolderUiState, SoapTrayUiState,
+        SockDividerUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
+        StorageBoxUiState, SwatchHolderUiState, TissueBoxCoverUiState, TokenWellUiState,
         ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState,
         WrenchHolderUiState, default_sidecar_port,
     };
@@ -3132,5 +3232,43 @@ mod tests {
         assert_eq!(c.wrap_holder.to_lol(), "wrap_holder(55, 305, 3)");
         assert_eq!(c.sock_divider.to_lol(), "sock_divider(4, 80, 89)");
         assert_eq!(c.soap_tray.to_lol(), "soap_tray(200, 90, 6)");
+    }
+
+    // ── Sprint 14 ミックス 3 archetype UI state tests ──
+
+    #[test]
+    fn razor_holder_default_is_cartridge() {
+        let r = RazorHolderUiState::default();
+        assert!((r.slot_width - 12.0).abs() < 1e-6);
+        assert!((r.slot_depth - 22.0).abs() < 1e-6);
+        assert!((r.mount_hole_diameter - 4.5).abs() < 1e-6);
+        assert_eq!(r.to_lol(), "razor_holder(12, 22, 4.5)");
+    }
+
+    #[test]
+    fn chopstick_holder_default_is_adult_4() {
+        let c = ChopstickHolderUiState::default();
+        assert_eq!(c.pair_count, 4);
+        assert!((c.slot_width - 13.0).abs() < 1e-6);
+        assert!((c.slot_length - 260.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "chopstick_holder(4, 13, 260)");
+    }
+
+    #[test]
+    fn swatch_holder_default_is_standard_8x4() {
+        let s = SwatchHolderUiState::default();
+        assert_eq!(s.rows, 8);
+        assert_eq!(s.cols, 4);
+        assert!((s.swatch_width - 32.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "swatch_holder(8, 4, 32)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_43_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 14 追加後は 43 archetype (+3: razor_holder / chopstick_holder / swatch_holder)
+        assert_eq!(c.razor_holder.to_lol(), "razor_holder(12, 22, 4.5)");
+        assert_eq!(c.chopstick_holder.to_lol(), "chopstick_holder(4, 13, 260)");
+        assert_eq!(c.swatch_holder.to_lol(), "swatch_holder(8, 4, 32)");
     }
 }

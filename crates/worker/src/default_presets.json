@@ -132,6 +132,17 @@
         { "id": "soap_tray_dual", "label": "石鹸トレー dual bottle (L200×W90×6 drain)", "lol_dsl": "soap_tray(200, 90, 6)" },
         { "id": "soap_tray_bar", "label": "石鹸トレー bar soap (L100×W70×4 drain)", "lol_dsl": "soap_tray(100, 70, 4)" }
       ]
+    },
+    {
+      "name": "ミックス 3 (Sprint 14、slot pattern 変種 3 archetype)",
+      "presets": [
+        { "id": "razor_cartridge", "label": "カミソリ Mach3/Fusion cartridge (W12×D22×M4)", "lol_dsl": "razor_holder(12, 22, 4.5)" },
+        { "id": "razor_safety", "label": "カミソリ safety razor (W10×D25×M4)", "lol_dsl": "razor_holder(10, 25, 4.5)" },
+        { "id": "chopstick_adult_4", "label": "箸 adult 4 pair (W13×L260)", "lol_dsl": "chopstick_holder(4, 13, 260)" },
+        { "id": "chopstick_cooking_2", "label": "箸 cooking 2 pair (W15×L310)", "lol_dsl": "chopstick_holder(2, 15, 310)" },
+        { "id": "swatch_standard_32", "label": "スウォッチ standard card 8×4 (W32×H70)", "lol_dsl": "swatch_holder(8, 4, 32)" },
+        { "id": "swatch_mini_24", "label": "スウォッチ small square 8×5 (W24×H24)", "lol_dsl": "swatch_holder(8, 5, 24)" }
+      ]
     }
   ]
 }

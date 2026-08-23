@@ -197,6 +197,10 @@ name_3f ::= "box3d"
           | "wrap_holder"
           | "sock_divider"
           | "soap_tray"
+          # Sprint 14 ミックス 3 (slot pattern 変種、2026-08-23 追加)
+          | "razor_holder"
+          | "chopstick_holder"
+          | "swatch_holder"
 
 name_4f ::= "rounded_box"
           | "plane"

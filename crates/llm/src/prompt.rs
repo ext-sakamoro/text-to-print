@@ -100,6 +100,9 @@ mod tests {
             "wrap_holder",
             "sock_divider",
             "soap_tray",
+            "razor_holder",
+            "chopstick_holder",
+            "swatch_holder",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

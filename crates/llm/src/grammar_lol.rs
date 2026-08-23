@@ -113,6 +113,9 @@ mod tests {
             "wrap_holder",
             "sock_divider",
             "soap_tray",
+            "razor_holder",
+            "chopstick_holder",
+            "swatch_holder",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives
