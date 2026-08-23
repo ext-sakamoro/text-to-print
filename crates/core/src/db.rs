@@ -156,6 +156,26 @@ impl Database {
             )",
             [],
         );
+        // 2026-08-23 Network settings (user configurable via Settings UI)
+        // - presets_endpoint: Cloudflare preset library URL 空文字なら default
+        //   (`https://text-to-print.alicelaw.net/api/presets`) 使用、custom URL
+        //   入れれば self-hosted mirror や proxy 経由に切替可
+        // - presets_sync_enabled: 起動時 background sync の有効化、offline
+        //   運用や自 endpoint 固定運用時に 0 で完全 skip 可
+        // - sidecar_port: sidecar alice-llm-server の preferred port、他 app
+        //   と衝突時に user 側で変更可 (port 使用中なら +1 で自動 fallback)
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN presets_endpoint TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN presets_sync_enabled INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN sidecar_port INTEGER NOT NULL DEFAULT 8000",
+            [],
+        );
         Ok(())
     }
 
@@ -356,6 +376,77 @@ impl Database {
         self.conn.execute(
             "UPDATE profiles SET enforce_lol_grammar = ?2, updated_at = datetime('now') WHERE id = ?1",
             rusqlite::params![profile_id, i64::from(value)],
+        )?;
+        Ok(())
+    }
+
+    /// 2026-08-23: Network settings — Cloudflare preset library endpoint
+    ///
+    /// 空文字なら default endpoint (`PresetsClient::default_endpoint()`) 使用
+    /// custom URL 入れれば self-hosted mirror や proxy 経由に切替可
+    pub fn get_presets_endpoint(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT presets_endpoint FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_default();
+        Ok(value)
+    }
+
+    pub fn set_presets_endpoint(&self, profile_id: &str, endpoint: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET presets_endpoint = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, endpoint],
+        )?;
+        Ok(())
+    }
+
+    /// 2026-08-23: Network settings — preset library 起動時 background sync 有効化
+    ///
+    /// `false` で完全 skip (offline 運用 / 自 endpoint 固定 / bundled のみ)
+    pub fn get_presets_sync_enabled(&self, profile_id: &str) -> Result<bool> {
+        let value: i64 = self
+            .conn
+            .query_row(
+                "SELECT presets_sync_enabled FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(1);
+        Ok(value != 0)
+    }
+
+    pub fn set_presets_sync_enabled(&self, profile_id: &str, value: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET presets_sync_enabled = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, i64::from(value)],
+        )?;
+        Ok(())
+    }
+
+    /// 2026-08-23: Network settings — sidecar alice-llm-server preferred port
+    ///
+    /// default 8000 port 使用中の場合は起動時 +1 で自動 fallback (8001)
+    /// user 環境で 8000 / 8001 とも別 app に占有される時に override 可
+    pub fn get_sidecar_port(&self, profile_id: &str) -> Result<u16> {
+        let value: i64 = self
+            .conn
+            .query_row(
+                "SELECT sidecar_port FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(8000);
+        Ok(value.clamp(1024, 65535) as u16)
+    }
+
+    pub fn set_sidecar_port(&self, profile_id: &str, port: u16) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET sidecar_port = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, i64::from(port)],
         )?;
         Ok(())
     }

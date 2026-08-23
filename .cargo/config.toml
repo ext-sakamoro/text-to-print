@@ -1,0 +1,27 @@
+# cargo config (workspace 全体)
+#
+# `~/.cargo/config.toml` (global) より優先されるが、user 個別環境の
+# 上書きが必要な場合は個々の env / RUSTFLAGS で override 可
+
+# --- Path leak 削減 (release binary の /Users/runner/... 消去) ---
+#
+# rustc は panic message や debug info に crate source file path を embed
+# する 通常「/Users/runner/.cargo/registry/src/index.crates.io-.../h2-0.4.16/src/...」
+# のような GitHub Actions runner 環境の path が残り、strings で 900+ 件見える
+#
+# `--remap-path-prefix` で prefix を generic 化、以下 4 系統 cover:
+# 1. GitHub Actions macOS/Linux runner (`/Users/runner`, `/home/runner`)
+# 2. local dev (Mac `/Users/*/.cargo/registry`) — user 名に依らず /cargo に統一
+# 3. rustc target dir (`target/`) — 通常 embed されないが念のため
+#
+# 効果:
+# - path leak 削減 (privacy 系の 弱い懸念、業界慣行では runner path leak は許容)
+# - binary size 数十 KB〜数百 KB 削減 (embed string 短縮)
+# - panic message は "crate/src/file.rs:line" 相当は保持 (line-tables-only 相当)
+#
+# 副作用: `cargo` の rustc invocation 全体に効く、debug build も影響 (問題なし)
+[build]
+rustflags = [
+  "--remap-path-prefix", "/Users/runner/.cargo/registry=/cargo",
+  "--remap-path-prefix", "/home/runner/.cargo/registry=/cargo",
+]

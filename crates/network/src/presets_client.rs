@@ -78,6 +78,27 @@ impl PresetsClient {
         "https://text-to-print.alicelaw.net/api/presets".to_string()
     }
 
+    /// Resolve the effective endpoint URL by precedence:
+    ///   1. `TTP_PRESETS_ENDPOINT` env (dev / one-shot override)
+    ///   2. `db_override` (user Settings で保存した custom URL、空文字なら skip)
+    ///   3. `default_endpoint()` (Cloudflare production)
+    ///
+    /// 空文字 / 全 whitespace の DB override は無視する (default にフォールバック)
+    #[must_use]
+    pub fn resolve_endpoint(db_override: Option<&str>) -> String {
+        if let Ok(env_url) = std::env::var("TTP_PRESETS_ENDPOINT")
+            && !env_url.trim().is_empty()
+        {
+            return env_url;
+        }
+        if let Some(url) = db_override
+            && !url.trim().is_empty()
+        {
+            return url.to_string();
+        }
+        Self::default_endpoint()
+    }
+
     /// Fetch presets, optionally sending `If-None-Match` for cache validation
     ///
     /// # Errors
@@ -175,5 +196,39 @@ mod tests {
     #[test]
     fn presets_client_new_accepts_custom_endpoint() {
         let _ = PresetsClient::new("http://localhost:8787/api/presets".to_string());
+    }
+
+    #[test]
+    fn resolve_endpoint_returns_default_when_no_override() {
+        // Test 前に念のため env をクリア (他 test 走行 order 影響対策)
+        // SAFETY: single-threaded test で set 相当だが cargo test は multi-thread
+        // default、環境変数 race 予防のため常に unset + assert 後即 unset で pair
+        // 実際はここでは検証優先、race 起きても default に戻るだけ
+        unsafe {
+            std::env::remove_var("TTP_PRESETS_ENDPOINT");
+        }
+        assert_eq!(
+            PresetsClient::resolve_endpoint(None),
+            PresetsClient::default_endpoint()
+        );
+        assert_eq!(
+            PresetsClient::resolve_endpoint(Some("")),
+            PresetsClient::default_endpoint()
+        );
+        assert_eq!(
+            PresetsClient::resolve_endpoint(Some("   ")),
+            PresetsClient::default_endpoint()
+        );
+    }
+
+    #[test]
+    fn resolve_endpoint_uses_db_override_when_non_empty() {
+        unsafe {
+            std::env::remove_var("TTP_PRESETS_ENDPOINT");
+        }
+        assert_eq!(
+            PresetsClient::resolve_endpoint(Some("https://mirror.example.com/api/presets")),
+            "https://mirror.example.com/api/presets"
+        );
     }
 }

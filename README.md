@@ -51,35 +51,27 @@ CPU/GPU DeltaNet+Attention and wgpu compute shaders
 ## Screenshots
 
 <!--
-  Screenshots are stored under `docs/images/` and referenced from this
-  section For submission guidelines see below
+  Assets are stored under `docs/images/` and referenced from this section
+  撮影 guide (何を撮るか、file 名、推奨 size、ffmpeg 変換 command) は
+  `docs/images/CAPTURE_GUIDE.md` にまとめている
 -->
+
+### Hero (workflow demo GIF)
+
+![text-to-print — text prompt to Bambu 3MF end-to-end (~20s workflow)](docs/images/hero.gif)
+
+### Stills
 
 | | |
 |--|--|
-| ![Generate tab — 20mm sphere prompt](docs/images/screenshot-generate.png) | ![Settings tab — LoRA share opt-out toggle + dry-run queue count](docs/images/screenshot-settings.png) |
-| Generate tab (prompt → LOL → 3MF preview) | Settings tab (LoRA share opt-out + queue status) |
+| ![App 起動画面 (生成 tab + 3D preview mesh)](docs/images/hero.png) | ![テンプレート section (実績品 preset + cache/Cloud label)](docs/images/template-section.png) |
+| **App hero** — 生成 UI + 3D mesh preview | **Templates** — 即生成 preset + Cloudflare sync source |
+| ![カスタマイザー (slider 操作中)](docs/images/customizer.png) | ![LLM 生成中 (phase progress bar + mesh preview)](docs/images/llm-generation.png) |
+| **Customizer** — slider で寸法 tune → 即生成 | **LLM 経路** — 自然言語 prompt → LOL DSL 生成 |
+| ![Bambu Studio import (出力 3MF)](docs/images/bambu-import.png) | ![実プリント結果 (Bambu H2D 出力品)](docs/images/print-result.jpg) |
+| **Bambu Studio** で開いた view | **実プリント結果** (SKADIS panel 等) |
 
-![Demo — text prompt to 3MF in ~10 seconds](docs/images/demo.gif)
-
-### Screenshot submission
-
-Screenshots and the demo GIF are placeholders until submitted from a live
-build Use the following capture settings for consistency:
-
-- Window size **1600 × 1200** (retina 2x is fine — image gets downscaled)
-- macOS system appearance: **Dark** (matches the app default)
-- Include the top tab bar and status bar
-- PNG for stills, GIF for the demo (max 5 MB, ~15 fps, ~10 s loop)
-
-Submission workflow:
-
-1. Capture PNG stills of the Generate / Settings tabs at the sizes above
-2. Record a 10-second demo GIF of `sphere(20)` prompt → generation → 3MF
-   export (use e.g. `xcap` on Linux, macOS built-in screen recording +
-   `ffmpeg` for GIF encoding, or `LICEcap` cross-platform)
-3. Save into `docs/images/` with the exact names referenced above
-4. Open a PR: `feat(docs): README screenshots + demo GIF`
+撮影 / GIF 変換 guide: [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
 
 ## Pricing
 
@@ -167,6 +159,10 @@ Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-08-23: **β release polish — Settings → Network + path leak 削減 + Screenshots section restructure**
+  - **Settings → Network section** 新設 (`crates/app/src/ui/settings.rs`) preset library endpoint の custom URL 入力 (self-hosted mirror / proxy 経由)、起動時 sync 有効化 toggle (offline 運用対応)、sidecar port override (8000/8001 が他 app と衝突時) 全 3 field を DB `profiles` table に persist、`TTP_PRESETS_ENDPOINT` / `TTP_PRESETS_SYNC_DISABLE` / `TTP_SIDECAR_PORT` env でも override 可
+  - **Path leak 削減** `.cargo/config.toml` に `RUSTFLAGS = ["--remap-path-prefix", ...]` 追加、release binary strings から `/Users/runner/.cargo/registry/...` (GitHub Actions runner path、Rust panic info の副産物) を `/cargo/...` に generic 化 privacy 系の弱い懸念解消 + binary size 数十 KB 削減
+  - **README Screenshots section restructure** Hero GIF + 6 shot grid、`docs/images/CAPTURE_GUIDE.md` に撮影手順集約
 - 2026-08-22: **Sprint X.1 Cloudflare preset library 完了** — worker `/api/presets` KV-backed preset library deploy 完了 (Custom Domain `text-to-print.alicelaw.net`)、app 起動時に background で fetch → ETag/304 cache 経路で 10 preset 同期、UI に "presets: Bundled / Cache / Cloud" 3 tier ラベル表示、DB `presets_cache` (SQLite single row) + `PresetsSnapshot` + `spawn_presets_sync` mpsc → UI 反映 β user が新 preset 追加を起動時に auto propagate 受信可能に 副次で worker crate 0.5→0.8 upgrade (wasm-bindgen schema mismatch fix)、log 増強 (begin/304 info/error Debug/elapsed_ms、silent failure 診断不能事案の反省) 副次実測 β verify で macOS + Tailscale MagicDNS が Cloudflare Custom Domain の A record を silent drop する経路罠を発見、Tailscale 撤去で恒久解決
 - 2026-08-09: **SKADIS panel canonical 化 + Template アーキテクチャ Phase T1** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix (Y板厚 17mm → 5mm、Stadium peg 穴 5×15、connector 穴 44 + mount 穴 6、合計 148 hole 全再現、Bambu production 3MF `~/ALICE-Bamboo/models/wall-organizer/skadis-300x300/skadis_panel_300x300.3mf` と shape 一致) + text-to-print pipeline `should_use_dual_contouring(dims)` helper で `aspect_ratio > 5.0 || min_dim <= 5.0` ベースの DC/MC route 判定 (旧 `thickness_y < 5.0` の Y 軸単独判定で SKADIS panel が MC 経路に落ちて peg 穴消失した bug の根本予防) + Preview resolution 128→96 (Bamboo canonical 準拠、sample 数 2.1M→885K = 2.4x 削減、SKADIS panel 実測 25 分見込 → 5.3s に短縮、285x 高速化) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 (自作 15 items 削除、anti-pattern E 解消、`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1) + UI 経過時間表示 (state.rs `elapsed()` method) 追加
 - 2026-08-08: **3D preview を mesh renderer に置換** (WGSL raymarching 廃止) 生成 pipeline が MC/DC で作った同一 `Mesh` を wgpu vertex/index buffer に upload して Phong lit で描画 viewer と Bambu Studio が同じ形状を表示するため生成結果の確認が信頼できるようになった (旧 raymarching だと Y-up world / camera artifact で違って見える混乱があった) `crates/app/src/sdf/` は名前は残るが中身は mesh pipeline

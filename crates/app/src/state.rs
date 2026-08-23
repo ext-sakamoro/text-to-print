@@ -763,9 +763,15 @@ impl AppState {
         // 2026-08-07: preferred port 8000 は user 環境で Python HTTP server 等が
         // 良く塞ぐため、事前 free port scan 済 chosen port は LlmConfig の
         // endpoint も同期更新 client → sidecar 疎通が確実になる
+        // 2026-08-23: preferred port は Settings → Network から user 変更可
+        //   優先度: TTP_SIDECAR_PORT env → DB profiles.sidecar_port → default 8000
         let (sidecar_tx, sidecar_rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
         let default_llm_config = LlmConfig::default();
-        let preferred_port = default_sidecar_port(&default_llm_config.endpoint);
+        let preferred_port = std::env::var("TTP_SIDECAR_PORT")
+            .ok()
+            .and_then(|s| s.parse::<u16>().ok())
+            .or_else(|| db.get_sidecar_port(&profile_id).ok())
+            .unwrap_or_else(|| default_sidecar_port(&default_llm_config.endpoint));
         let chosen_port =
             text_to_print_llm::sidecar::find_free_port_starting_at(preferred_port, 16)
                 .unwrap_or(preferred_port);
@@ -910,12 +916,30 @@ impl AppState {
 
         // Startup background preset sync (Cloudflare Worker から latest fetch)
         // 失敗しても initial cache/bundled で動く、fetch 成功時に UI 更新
-        spawn_presets_sync(
-            &runtime,
-            db_path.clone(),
-            text_to_print_network::presets_client::PresetsClient::default_endpoint(),
-            result_tx.clone(),
-        );
+        //
+        // 2026-08-23 Settings → Network 対応:
+        //   - Sync 有効判定: TTP_PRESETS_SYNC_DISABLE env で 1 個 → skip 強制、
+        //     env 未設定なら DB profiles.presets_sync_enabled 参照 (default true)
+        //   - Endpoint 解決: TTP_PRESETS_ENDPOINT env > DB presets_endpoint > default
+        //     (PresetsClient::resolve_endpoint に集約)
+        //   - Sync disable 時は log で明示、bundled / cache だけで動作継続
+        let sync_disabled_env = std::env::var("TTP_PRESETS_SYNC_DISABLE")
+            .ok()
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+        let sync_enabled_db = db.get_presets_sync_enabled(&profile_id).unwrap_or(true);
+        if sync_disabled_env || !sync_enabled_db {
+            tracing::info!(
+                env_disabled = sync_disabled_env,
+                db_enabled = sync_enabled_db,
+                "presets sync disabled (settings), using bundled/cache only"
+            );
+        } else {
+            let db_endpoint = db.get_presets_endpoint(&profile_id).unwrap_or_default();
+            let endpoint = text_to_print_network::presets_client::PresetsClient::resolve_endpoint(
+                Some(&db_endpoint),
+            );
+            spawn_presets_sync(&runtime, db_path.clone(), endpoint, result_tx.clone());
+        }
 
         Self {
             data_dir,

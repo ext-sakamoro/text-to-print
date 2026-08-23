@@ -30,6 +30,16 @@ pub struct SettingsState {
     pub checkout_email: String,
     /// Latest checkout attempt outcome for UI feedback
     pub checkout_message: Option<(String, bool)>,
+    /// 2026-08-23 Network Settings — preset endpoint input buffer (空 = default)
+    pub presets_endpoint_input: String,
+    /// 2026-08-23 Network Settings — sidecar port input buffer (string 経由で
+    /// TextEdit と bind、save 時に u16 parse)
+    pub sidecar_port_input: String,
+    /// 2026-08-23 Network Settings — save 結果 message (ok=true / error=false)
+    pub network_message: Option<(String, bool)>,
+    /// 2026-08-23 Network Settings 初期 load 済みフラグ (SettingsState 生成後
+    /// 1 回だけ DB から値を pull、以降は user 編集値を保持)
+    pub network_loaded: bool,
 }
 
 /// Wire format for `POST /stripe/checkout-session` (must match
@@ -399,6 +409,104 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.label("生成上限: 無制限");
         } else {
             ui.label(format!("生成上限: {} 回/日", limit));
+        }
+
+        ui.separator();
+        ui.label(
+            egui::RichText::new("Advanced (次回起動時に反映)")
+                .small()
+                .weak(),
+        );
+
+        // 初回だけ DB から現在値を SettingsState に load
+        if !settings.network_loaded {
+            settings.presets_endpoint_input = state
+                .db
+                .get_presets_endpoint(&state.profile_id)
+                .unwrap_or_default();
+            settings.sidecar_port_input = state
+                .db
+                .get_sidecar_port(&state.profile_id)
+                .unwrap_or(8000)
+                .to_string();
+            settings.network_loaded = true;
+        }
+
+        // Preset library endpoint (custom URL / 空 = default Cloudflare)
+        ui.horizontal(|ui| {
+            ui.label("Preset endpoint:");
+            ui.add(
+                egui::TextEdit::singleline(&mut settings.presets_endpoint_input)
+                    .hint_text("空 = 既定 (Cloudflare)")
+                    .desired_width(340.0),
+            );
+        });
+        ui.label(
+            egui::RichText::new(
+                "空欄なら https://text-to-print.alicelaw.net/api/presets を使用 \
+                 (self-hosted mirror / proxy 経由時のみ変更)",
+            )
+            .small()
+            .weak(),
+        );
+
+        // Preset sync enable toggle
+        let mut sync_enabled = state
+            .db
+            .get_presets_sync_enabled(&state.profile_id)
+            .unwrap_or(true);
+        if ui
+            .checkbox(&mut sync_enabled, "起動時に preset library を同期する")
+            .changed()
+        {
+            let _ = state
+                .db
+                .set_presets_sync_enabled(&state.profile_id, sync_enabled);
+        }
+
+        // Sidecar port (u16)
+        ui.horizontal(|ui| {
+            ui.label("Sidecar port:");
+            ui.add(
+                egui::TextEdit::singleline(&mut settings.sidecar_port_input).desired_width(80.0),
+            );
+            ui.label(
+                egui::RichText::new("(既定 8000、使用中なら +1 で自動 fallback)")
+                    .small()
+                    .weak(),
+            );
+        });
+
+        // Save button
+        if ui.button("Save network settings").clicked() {
+            let endpoint = settings.presets_endpoint_input.trim().to_string();
+            let port_result = settings.sidecar_port_input.trim().parse::<u16>();
+            let mut errors = Vec::new();
+            match port_result {
+                Ok(p) if (1024..=65535).contains(&p) => {
+                    if let Err(e) = state.db.set_sidecar_port(&state.profile_id, p) {
+                        errors.push(format!("port save 失敗: {e}"));
+                    }
+                }
+                _ => errors.push("port は 1024-65535 の整数".to_string()),
+            }
+            if let Err(e) = state.db.set_presets_endpoint(&state.profile_id, &endpoint) {
+                errors.push(format!("endpoint save 失敗: {e}"));
+            }
+            if errors.is_empty() {
+                settings.network_message = Some(("保存完了 次回起動時に反映".to_string(), true));
+            } else {
+                settings.network_message = Some((errors.join(" / "), false));
+            }
+        }
+
+        if let Some((msg, ok)) = &settings.network_message {
+            let color = if *ok {
+                egui::Color32::LIGHT_GREEN
+            } else {
+                egui::Color32::LIGHT_RED
+            };
+            ui.colored_label(color, msg);
         }
     });
 }
