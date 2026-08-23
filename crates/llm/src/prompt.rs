@@ -82,6 +82,9 @@ mod tests {
             "raspi_case",
             "esp32_enclosure",
             "battery_18650_holder",
+            "toothbrush_holder",
+            "drill_bit_holder",
+            "pliers_rack",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

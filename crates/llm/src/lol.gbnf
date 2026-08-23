@@ -173,6 +173,10 @@ name_3f ::= "box3d"
           | "raspi_case"
           | "esp32_enclosure"
           | "battery_18650_holder"
+          # organizer-bathroom-garage 高階 primitive (Sprint 8、2026-08-23 追加)
+          | "toothbrush_holder"
+          | "drill_bit_holder"
+          | "pliers_rack"
 
 name_4f ::= "rounded_box"
           | "plane"

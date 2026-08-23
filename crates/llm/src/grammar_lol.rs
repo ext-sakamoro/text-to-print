@@ -95,6 +95,9 @@ mod tests {
             "raspi_case",
             "esp32_enclosure",
             "battery_18650_holder",
+            "toothbrush_holder",
+            "drill_bit_holder",
+            "pliers_rack",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

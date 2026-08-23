@@ -1235,13 +1235,14 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 22 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 25 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
 /// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5) +
 /// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6) +
-/// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7)
+/// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
+/// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1290,6 +1291,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_esp32_enclosure_customizer(ui, state);
                 ui.separator();
                 show_battery_18650_holder_customizer(ui, state);
+                ui.separator();
+                show_toothbrush_holder_customizer(ui, state);
+                ui.separator();
+                show_drill_bit_holder_customizer(ui, state);
+                ui.separator();
+                show_pliers_rack_customizer(ui, state);
             });
         },
     );
@@ -2108,6 +2115,113 @@ fn show_battery_18650_holder_customizer(ui: &mut egui::Ui, state: &mut AppState)
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, b_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 歯ブラシホルダー customizer (`count × hole_diameter × height`、bathroom § 7.1)
+///
+/// row 状 cylindrical hole、top 開口 (Ø15 manual / Ø40 electric)
+/// 素材は PETG 推奨 (moisture resistance)
+fn show_toothbrush_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪥 歯ブラシホルダー (row 状 hole、top 開口)").strong());
+
+    let t = &mut state.customizer_state.toothbrush_holder;
+    ui.horizontal(|ui| {
+        ui.label("hole 個数:");
+        ui.add(egui::Slider::new(&mut t.count, 1..=8).text("(1-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 直径 (mm):");
+        ui.add(egui::Slider::new(&mut t.hole_diameter, 10.0..=45.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 深さ (mm):");
+        ui.add(egui::Slider::new(&mut t.hole_depth, 50.0..=120.0).step_by(1.0));
+    });
+
+    let t_copy = *t;
+    let label = format!(
+        "歯ブラシホルダー {} × Ø{}×H{}mm",
+        t_copy.count, t_copy.hole_diameter, t_copy.hole_depth
+    );
+    ui.label("プリセット目安: manual (Ø15) / electric Sonicare (Ø32) / electric Oral-B (Ø40)");
+    ui.label("素材: PETG 推奨 (moisture resistance)、drainage 穴は user 側で追加加工推奨");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, t_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ドリルビットホルダー customizer (`min_mm × max_mm × count`、garage § 8.1)
+///
+/// row 状 hole、size linear interpolate (wrench_holder の hole 円形版)
+fn show_drill_bit_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪛 ドリルビットホルダー (row 状 hole、min-max 補間)").strong());
+
+    let d = &mut state.customizer_state.drill_bit_holder;
+    ui.horizontal(|ui| {
+        ui.label("最小径 (mm):");
+        ui.add(egui::Slider::new(&mut d.min_size_mm, 1.0..=8.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("最大径 (mm):");
+        ui.add(egui::Slider::new(&mut d.max_size_mm, 5.0..=20.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 個数:");
+        ui.add(egui::Slider::new(&mut d.count, 5..=25).text("(5-25)"));
+    });
+
+    let d_copy = *d;
+    let label = format!(
+        "ドリルビット {}-{}mm × {}",
+        d_copy.min_size_mm, d_copy.max_size_mm, d_copy.count
+    );
+    ui.label("プリセット目安: Metric 3-13mm × 11 (1mm step) / 1-10mm × 19 (0.5mm step)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, d_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// プライヤーラック customizer (`slot_count × slot_width × slot_depth`、garage § 8.4)
+///
+/// row 状 rect slot、top 開口、pliers 挿入
+fn show_pliers_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔧 プライヤーラック (row 状 rect slot)").strong());
+
+    let p = &mut state.customizer_state.pliers_rack;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut p.slot_count, 3..=12).text("(3-12)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut p.slot_width, 8.0..=30.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 深さ (mm):");
+        ui.add(egui::Slider::new(&mut p.slot_depth, 40.0..=90.0).step_by(1.0));
+    });
+
+    let p_copy = *p;
+    let label = format!(
+        "プライヤーラック {} × W{}×D{}mm",
+        p_copy.slot_count, p_copy.slot_width, p_copy.slot_depth
+    );
+    ui.label("プリセット目安: needle-nose (W10) / combi (W15) / tongue-groove (W20-25)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, p_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

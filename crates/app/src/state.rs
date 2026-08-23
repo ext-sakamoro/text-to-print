@@ -139,6 +139,12 @@ pub struct CustomizerState {
     pub esp32_enclosure: Esp32EnclosureUiState,
     /// 18650 battery holder customizer (electronics-enclosure § 3、Sprint 7)
     pub battery_18650_holder: Battery18650HolderUiState,
+    /// Toothbrush holder customizer (bathroom § 7.1、Sprint 8)
+    pub toothbrush_holder: ToothbrushHolderUiState,
+    /// Drill bit holder customizer (garage § 8.1、Sprint 8)
+    pub drill_bit_holder: DrillBitHolderUiState,
+    /// Pliers rack customizer (garage § 8.4、Sprint 8)
+    pub pliers_rack: PliersRackUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -824,6 +830,96 @@ impl Battery18650HolderUiState {
         format!(
             "battery_18650_holder({}, {}, {})",
             self.cell_count, self.wall_thickness, self.floor_thickness
+        )
+    }
+}
+
+/// 歯ブラシホルダー customizer UI state (`toothbrush_holder(count, hole_diameter, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ToothbrushHolderUiState {
+    /// hole 個数 (default 4、range 1-8)
+    pub count: u32,
+    /// hole 直径 (mm、manual=15 / electric=40、default 15、range 10-45)
+    pub hole_diameter: f32,
+    /// hole 深さ = 全体 height (mm、default 70、range 50-120)
+    pub hole_depth: f32,
+}
+
+impl Default for ToothbrushHolderUiState {
+    fn default() -> Self {
+        Self {
+            count: 4,
+            hole_diameter: 15.0,
+            hole_depth: 70.0,
+        }
+    }
+}
+
+impl ToothbrushHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "toothbrush_holder({}, {}, {})",
+            self.count, self.hole_diameter, self.hole_depth
+        )
+    }
+}
+
+/// ドリルビットホルダー customizer UI state (`drill_bit_holder(min_mm, max_mm, count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct DrillBitHolderUiState {
+    /// 最小ビット径 (mm、default 3.0、range 1.0-8.0)
+    pub min_size_mm: f32,
+    /// 最大ビット径 (mm、default 13.0、range 5.0-20.0)
+    pub max_size_mm: f32,
+    /// hole 個数 (default 11、range 5-25)
+    pub count: u32,
+}
+
+impl Default for DrillBitHolderUiState {
+    fn default() -> Self {
+        Self {
+            min_size_mm: 3.0,
+            max_size_mm: 13.0,
+            count: 11,
+        }
+    }
+}
+
+impl DrillBitHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "drill_bit_holder({}, {}, {})",
+            self.min_size_mm, self.max_size_mm, self.count
+        )
+    }
+}
+
+/// プライヤーラック customizer UI state (`pliers_rack(slot_count, slot_width, slot_depth)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PliersRackUiState {
+    /// slot 個数 (default 6、range 3-12)
+    pub slot_count: u32,
+    /// slot 幅 (mm、needle-nose=10 / combi=15 / tongue-groove=20-25、default 15、range 8-30)
+    pub slot_width: f32,
+    /// slot 深さ (mm、default 60、range 40-90)
+    pub slot_depth: f32,
+}
+
+impl Default for PliersRackUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 6,
+            slot_width: 15.0,
+            slot_depth: 60.0,
+        }
+    }
+}
+
+impl PliersRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "pliers_rack({}, {}, {})",
+            self.slot_count, self.slot_width, self.slot_depth
         )
     }
 }
@@ -1721,11 +1817,12 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         Battery18650HolderUiState, BusinessCardUiState, CableClipUiState, CardTrayUiState,
-        CoasterUiState, CustomizerState, DeskShelfUiState, Esp32EnclosureUiState, GenerationPhase,
-        GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState, LedChannelUiState,
-        MonitorRiserUiState, PenCupUiState, PhaseProgress, PhoneStandUiState, RaspiCaseUiState,
-        SocketRailUiState, StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState,
-        TokenWellUiState, UnderDeskMountUiState, WrenchHolderUiState, default_sidecar_port,
+        CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState,
+        Esp32EnclosureUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
+        HexBitHolderUiState, LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
+        PhoneStandUiState, PliersRackUiState, RaspiCaseUiState, SocketRailUiState,
+        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
+        ToothbrushHolderUiState, UnderDeskMountUiState, WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2197,5 +2294,43 @@ mod tests {
             c.battery_18650_holder.to_lol(),
             "battery_18650_holder(4, 2.5, 0)"
         );
+    }
+
+    // ── Sprint 8: organizer-bathroom-garage.md 3 archetype UI state tests ──
+
+    #[test]
+    fn toothbrush_holder_default_is_manual_4() {
+        let t = ToothbrushHolderUiState::default();
+        assert_eq!(t.count, 4);
+        assert!((t.hole_diameter - 15.0).abs() < 1e-6);
+        assert!((t.hole_depth - 70.0).abs() < 1e-6);
+        assert_eq!(t.to_lol(), "toothbrush_holder(4, 15, 70)");
+    }
+
+    #[test]
+    fn drill_bit_holder_default_is_metric_11() {
+        let d = DrillBitHolderUiState::default();
+        assert!((d.min_size_mm - 3.0).abs() < 1e-6);
+        assert!((d.max_size_mm - 13.0).abs() < 1e-6);
+        assert_eq!(d.count, 11);
+        assert_eq!(d.to_lol(), "drill_bit_holder(3, 13, 11)");
+    }
+
+    #[test]
+    fn pliers_rack_default_is_standard_6() {
+        let p = PliersRackUiState::default();
+        assert_eq!(p.slot_count, 6);
+        assert!((p.slot_width - 15.0).abs() < 1e-6);
+        assert!((p.slot_depth - 60.0).abs() < 1e-6);
+        assert_eq!(p.to_lol(), "pliers_rack(6, 15, 60)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_25_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 8 追加後は 25 archetype (+3: toothbrush_holder / drill_bit_holder / pliers_rack)
+        assert_eq!(c.toothbrush_holder.to_lol(), "toothbrush_holder(4, 15, 70)");
+        assert_eq!(c.drill_bit_holder.to_lol(), "drill_bit_holder(3, 13, 11)");
+        assert_eq!(c.pliers_rack.to_lol(), "pliers_rack(6, 15, 60)");
     }
 }
