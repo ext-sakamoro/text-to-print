@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-20T00:00:00Z",
+  "version": "2026-08-23T00:00:00Z",
   "categories": [
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
@@ -19,6 +19,26 @@
         { "id": "skadis_container", "label": "SKADIS コンテナ", "lol_dsl": "skadis_container()" },
         { "id": "skadis_shelf", "label": "SKADIS シェルフ", "lol_dsl": "skadis_shelf()" },
         { "id": "shelf_divider_560", "label": "棚仕切り 560×250×120", "lol_dsl": "shelf_divider()" }
+      ]
+    },
+    {
+      "name": "生活雑貨 (Phase P.1、products primitive、LLM 経路 fallback 対応)",
+      "presets": [
+        { "id": "mug_50x100", "label": "マグカップ φ50 × H100", "lol_dsl": "mug(50, 100)" },
+        { "id": "mug_80x120", "label": "マグカップ φ80 × H120 (大)", "lol_dsl": "mug(80, 120)" }
+      ]
+    },
+    {
+      "name": "趣味 DIY (Sprint 5、hobby-diy.md 由来 4 archetype)",
+      "presets": [
+        { "id": "cable_clip_hdmi", "label": "ケーブルクリップ HDMI (Ø7)", "lol_dsl": "cable_clip(7, 28)" },
+        { "id": "cable_clip_power", "label": "ケーブルクリップ 電源 (Ø9)", "lol_dsl": "cable_clip(9, 36)" },
+        { "id": "led_channel_ws2812b", "label": "LED channel WS2812B 300mm", "lol_dsl": "led_channel(10, 300)" },
+        { "id": "led_channel_smd3528", "label": "LED channel SMD3528 500mm", "lol_dsl": "led_channel(8, 500)" },
+        { "id": "card_tray_poker", "label": "カードトレー Poker 63×88", "lol_dsl": "card_tray(63, 88, 30)" },
+        { "id": "card_tray_mini_euro", "label": "カードトレー Mini Euro 44×68", "lol_dsl": "card_tray(44, 68, 25)" },
+        { "id": "token_well_dice_4", "label": "トークン井戸 dice 4連 Ø20", "lol_dsl": "token_well(20, 20, 4)" },
+        { "id": "token_well_mini_6", "label": "トークン井戸 mini 6連 Ø25×深35", "lol_dsl": "token_well(25, 35, 6)" }
       ]
     }
   ]

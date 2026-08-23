@@ -119,6 +119,14 @@ pub struct CustomizerState {
     pub tissue_box_cover: TissueBoxCoverUiState,
     /// Storage box customizer (household § 3、Sprint 4、基本形 lid なし)
     pub storage_box: StorageBoxUiState,
+    /// Cable clip customizer (hobby-diy § 2、Sprint 5)
+    pub cable_clip: CableClipUiState,
+    /// LED strip channel customizer (hobby-diy § 3、Sprint 5)
+    pub led_channel: LedChannelUiState,
+    /// Card tray customizer (hobby-diy § 6、Sprint 5)
+    pub card_tray: CardTrayUiState,
+    /// Token well customizer (hobby-diy § 6、Sprint 5)
+    pub token_well: TokenWellUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -511,6 +519,114 @@ impl StorageBoxUiState {
         format!(
             "storage_box({}, {}, {})",
             self.internal_length, self.internal_width, self.internal_height
+        )
+    }
+}
+
+/// ケーブルクリップ customizer UI state (`cable_clip(cable_dia, length)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CableClipUiState {
+    /// ケーブル直径 (mm、default 7 = HDMI、range 3-12)
+    pub cable_diameter: f32,
+    /// クリップ長 (mm、default 28、range 15-60)
+    pub clip_length: f32,
+}
+
+impl Default for CableClipUiState {
+    fn default() -> Self {
+        Self {
+            cable_diameter: 7.0,
+            clip_length: 28.0,
+        }
+    }
+}
+
+impl CableClipUiState {
+    pub fn to_lol(self) -> String {
+        format!("cable_clip({}, {})", self.cable_diameter, self.clip_length)
+    }
+}
+
+/// LED strip channel customizer UI state (`led_channel(strip_width, length)`)
+#[derive(Debug, Clone, Copy)]
+pub struct LedChannelUiState {
+    /// LED strip PCB 幅 (mm、default 10 = WS2812B、range 6-20)
+    pub strip_width: f32,
+    /// channel 全長 (mm、default 300、range 50-1000)
+    pub channel_length: f32,
+}
+
+impl Default for LedChannelUiState {
+    fn default() -> Self {
+        Self {
+            strip_width: 10.0,
+            channel_length: 300.0,
+        }
+    }
+}
+
+impl LedChannelUiState {
+    pub fn to_lol(self) -> String {
+        format!("led_channel({}, {})", self.strip_width, self.channel_length)
+    }
+}
+
+/// カードトレー customizer UI state (`card_tray(card_w, card_h, depth)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CardTrayUiState {
+    /// カード幅 (mm、default 63 = Poker、range 30-80)
+    pub card_width: f32,
+    /// カード高さ (mm、default 88 = Poker、range 50-130)
+    pub card_height: f32,
+    /// tray 内深さ (mm、default 30、range 10-60)
+    pub tray_depth: f32,
+}
+
+impl Default for CardTrayUiState {
+    fn default() -> Self {
+        Self {
+            card_width: 63.0,
+            card_height: 88.0,
+            tray_depth: 30.0,
+        }
+    }
+}
+
+impl CardTrayUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "card_tray({}, {}, {})",
+            self.card_width, self.card_height, self.tray_depth
+        )
+    }
+}
+
+/// トークン井戸 customizer UI state (`token_well(dia, depth, count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct TokenWellUiState {
+    /// well 直径 (mm、default 20、range 8-40)
+    pub well_diameter: f32,
+    /// well 深さ (mm、default 20、range 5-50)
+    pub well_depth: f32,
+    /// well 個数 (row 方向、default 4、range 1-10)
+    pub well_count: u32,
+}
+
+impl Default for TokenWellUiState {
+    fn default() -> Self {
+        Self {
+            well_diameter: 20.0,
+            well_depth: 20.0,
+            well_count: 4,
+        }
+    }
+}
+
+impl TokenWellUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "token_well({}, {}, {})",
+            self.well_diameter, self.well_depth, self.well_count
         )
     }
 }
@@ -1407,10 +1523,11 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        BusinessCardUiState, CoasterUiState, CustomizerState, DeskShelfUiState, GenerationPhase,
-        GridfinityUiState, HeadphoneHolderUiState, MonitorRiserUiState, PenCupUiState,
-        PhaseProgress, PhoneStandUiState, StickyNoteUiState, StorageBoxUiState,
-        TissueBoxCoverUiState, UnderDeskMountUiState, default_sidecar_port,
+        BusinessCardUiState, CableClipUiState, CardTrayUiState, CoasterUiState, CustomizerState,
+        DeskShelfUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
+        LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
+        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
+        UnderDeskMountUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -1754,5 +1871,51 @@ mod tests {
             "tissue_box_cover(231, 116, 53)"
         );
         assert_eq!(c.storage_box.to_lol(), "storage_box(150, 100, 60)");
+    }
+
+    // ── Sprint 5: hobby-diy.md 4 archetype UI state tests ──
+
+    #[test]
+    fn cable_clip_default_is_hdmi() {
+        let c = CableClipUiState::default();
+        assert!((c.cable_diameter - 7.0).abs() < 1e-6);
+        assert!((c.clip_length - 28.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "cable_clip(7, 28)");
+    }
+
+    #[test]
+    fn led_channel_default_is_ws2812b_300mm() {
+        let l = LedChannelUiState::default();
+        assert!((l.strip_width - 10.0).abs() < 1e-6);
+        assert!((l.channel_length - 300.0).abs() < 1e-6);
+        assert_eq!(l.to_lol(), "led_channel(10, 300)");
+    }
+
+    #[test]
+    fn card_tray_default_is_poker() {
+        let t = CardTrayUiState::default();
+        assert!((t.card_width - 63.0).abs() < 1e-6);
+        assert!((t.card_height - 88.0).abs() < 1e-6);
+        assert!((t.tray_depth - 30.0).abs() < 1e-6);
+        assert_eq!(t.to_lol(), "card_tray(63, 88, 30)");
+    }
+
+    #[test]
+    fn token_well_default_is_dice_4() {
+        let t = TokenWellUiState::default();
+        assert!((t.well_diameter - 20.0).abs() < 1e-6);
+        assert!((t.well_depth - 20.0).abs() < 1e-6);
+        assert_eq!(t.well_count, 4);
+        assert_eq!(t.to_lol(), "token_well(20, 20, 4)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_16_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 5 追加後は 16 archetype (organizer PART 1+2 完全 + household 3 + hobby-diy 4)
+        assert_eq!(c.cable_clip.to_lol(), "cable_clip(7, 28)");
+        assert_eq!(c.led_channel.to_lol(), "led_channel(10, 300)");
+        assert_eq!(c.card_tray.to_lol(), "card_tray(63, 88, 30)");
+        assert_eq!(c.token_well.to_lol(), "token_well(20, 20, 4)");
     }
 }

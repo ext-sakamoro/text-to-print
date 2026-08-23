@@ -26,12 +26,12 @@ PRODUCT SHORTCUTS (mm units、common products は必ず使う):
 - ✅ RIGHT: `gridfinity_bin(3,3,6)` (bare、no wrapping)
 
 SHORTCUTs list:
-- 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)`
-- 3-param: `gridfinity_bin(ux, uy, hu)` (42mm grid × 7mm 高) / `sticky_note_holder(pw, pd, h)` / `business_card_holder(cw, ch, st)` / `phone_stand(sw, bh, chd)` / `headphone_holder(al, hw, mw)` / `under_desk_mount(dt, cw, sd)` / `desk_shelf(sw, sd, lh)` / `monitor_riser(w, d, h)` / `tissue_box_cover(il, iw, ih)` / `storage_box(il, iw, ih)` / `skadis_panel(size, t, r)`
+- 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)` `cable_clip(cable_dia, len)` `led_channel(strip_w, len)`
+- 3-param: `gridfinity_bin(ux, uy, hu)` (42mm grid × 7mm 高) / `sticky_note_holder(pw, pd, h)` / `business_card_holder(cw, ch, st)` / `phone_stand(sw, bh, chd)` / `headphone_holder(al, hw, mw)` / `under_desk_mount(dt, cw, sd)` / `desk_shelf(sw, sd, lh)` / `monitor_riser(w, d, h)` / `tissue_box_cover(il, iw, ih)` / `storage_box(il, iw, ih)` / `skadis_panel(size, t, r)` / `card_tray(cw, ch, depth)` / `token_well(dia, depth, count)`
 - 7-param: `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)` (divx=divy=0 で仕切なし)
 - preset (no arg): `wall_hook()` `drawer_organizer()` `shelf_divider()` `skadis_hook_l()` `skadis_hook_j()` `skadis_hook_s()` `skadis_container()` `skadis_clip()` `skadis_shelf()` `skadis_elastic_cord()`
 
-Ex: "Gridfinity 3x3 6U"→`gridfinity_bin(3,3,6)`, "ペン立て 60mm 高100"→`pen_cup(60,100)`, "コースター 100mm 5mm厚"→`coaster(100,5)`
+Ex: "Gridfinity 3x3 6U"→`gridfinity_bin(3,3,6)`, "ペン立て 60mm 高100"→`pen_cup(60,100)`, "HDMIケーブルクリップ"→`cable_clip(7,28)`, "Pokerトレー"→`card_tray(63,88,30)`
 
 Examples:
 

@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 12 archetype 一覧 (2026-08-19 時点)
+## 既存 16 archetype 一覧 (2026-08-23 Sprint 5 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md`)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md`)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -511,6 +511,10 @@ or all-field 明示 (advanced field も全部書く)
 | 10 | `coaster(diameter, thickness)` | 2 | Ø95×5mm (round) | household § 7 |
 | 11 | `tissue_box_cover(internal_l, internal_w, internal_h)` | 3 | 231×116×53mm (US rect) | household § 1 |
 | 12 | `storage_box(internal_l, internal_w, internal_h)` | 3 | 150×100×60mm (medium、基本形 lid なし) | household § 3 |
+| 13 | `cable_clip(cable_diameter, length)` | 2 | Ø7×L28mm (HDMI) | hobby-diy § 2 |
+| 14 | `led_channel(strip_width, length)` | 2 | 10×300mm (WS2812B) | hobby-diy § 3 |
+| 15 | `card_tray(card_w, card_h, depth)` | 3 | 63×88×30mm (Poker、finger notch r=9) | hobby-diy § 6 |
+| 16 | `token_well(dia, depth, count)` | 3 | Ø20×深20mm × 4 (dice) | hobby-diy § 6 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -531,7 +535,7 @@ or all-field 明示 (advanced field も全部書く)
 **ALICE-Bamboo/docs/patterns/** 他 doc に基づく候補:
 
 - ~~household.md~~ ✅ 3 archetype 完了 (Sprint 4、coaster / tissue_box_cover / storage_box) 残 = lid + hinge (Print-in-Place / filament pin / living hinge) は future sprint
-- **hobby-diy.md** (315 行): ケーブル管理 / LED チャネル / ギア / ボードゲームインサート → `cable_organizer` / `led_channel` / `gear`
+- ~~hobby-diy.md~~ ✅ 4 archetype 完了 (Sprint 5、cable_clip / led_channel / card_tray / token_well) 残 = gear (§ 4、involute 歯型 SDF) / bearing_mount (§ 4、608 press-fit) / model train scale accessory (§ 5) は future sprint
 - **tools.md** (424 行): レンチ / ソケット / ヘックスビット / バイス / バッテリー → `wrench_holder` / `socket_rail` / `hex_bit_holder`
 - **electronics-enclosure.md** (411 行): RPi / ESP32 / 18650 / 充電ドック / IP 防水 → `raspberry_pi_case` / `esp32_enclosure` / `18650_holder`
 - **organizer-drawer-wall.md** (406 行): カトラリー / 箸 / ジュエリー / 化粧品 / SKADIS / Multiboard → 追加 SKADIS accessory / Multiboard 互換
@@ -545,7 +549,7 @@ or all-field 明示 (advanced field も全部書く)
 - 単純な box/cylinder 組み合わせで実装可能 (Print-in-Place / articulated は高難度)
 - ALICE-Bamboo に既存 canonical 実装が近い (spec doc + pattern_scores.json)
 
-**次 sprint 推奨**: household.md からティッシュケース / コースター / 収納 BOX の 3 個 (最も需要高、実装単純)
+**次 sprint 推奨**: tools.md (wrench_holder / socket_rail / hex_bit_holder) or electronics-enclosure.md (raspberry_pi_case / esp32_enclosure / 18650_holder) から 3-4 archetype 追加 (Sprint 6)
 
 ---
 

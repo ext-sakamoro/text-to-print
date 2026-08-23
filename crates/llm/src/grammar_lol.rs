@@ -73,6 +73,8 @@ mod tests {
             "shopping_cart_coin",
             "pen_cup",
             "coaster",
+            "cable_clip",
+            "led_channel",
             // 3f primitives
             "gridfinity_bin",
             "sticky_note_holder",
@@ -85,6 +87,8 @@ mod tests {
             "tissue_box_cover",
             "storage_box",
             "skadis_panel",
+            "card_tray",
+            "token_well",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

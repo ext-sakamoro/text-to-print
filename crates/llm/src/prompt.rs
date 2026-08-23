@@ -72,6 +72,10 @@ mod tests {
             "storage_box",
             "wall_hook",
             "skadis_panel",
+            "cable_clip",
+            "led_channel",
+            "card_tray",
+            "token_well",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

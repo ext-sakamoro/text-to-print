@@ -156,6 +156,17 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
 
     ui.add_space(4.0);
     ui.label("3D モデルの説明を入力 (Enter で生成 / Shift+Enter で改行):");
+    // 2026-08-23 期待コントロール — 3B LLM の複合形状生成は実力壁あり、
+    // ヘルプ label で「単純形状のみ推奨、複雑物は下の テンプレート / カスタマイザー」
+    // を案内 詳細: memory/feedback_llm_3b_complex_shape_hallucination.md
+    ui.label(
+        egui::RichText::new(
+            "⚠ LLM Preview 段階: 単純形状 (球 / 立方体 / 円柱) に限定推奨 \
+             複雑物 (マグカップ / 花瓶 等) は下の「テンプレート」/「カスタマイザー」から",
+        )
+        .small()
+        .color(egui::Color32::from_rgb(200, 140, 60)),
+    );
 
     let is_generating = matches!(state.generation_status, GenerationStatus::Generating);
     let sidecar_running = state.sidecar_status.borrow().is_running();
@@ -1224,9 +1235,11 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 9 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 16 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
-///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser)
+///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
+/// household 3 (coaster / tissue_box_cover / storage_box) +
+/// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1255,6 +1268,14 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_tissue_box_cover_customizer(ui, state);
                 ui.separator();
                 show_storage_box_customizer(ui, state);
+                ui.separator();
+                show_cable_clip_customizer(ui, state);
+                ui.separator();
+                show_led_channel_customizer(ui, state);
+                ui.separator();
+                show_card_tray_customizer(ui, state);
+                ui.separator();
+                show_token_well_customizer(ui, state);
             });
         },
     );
@@ -1715,6 +1736,145 @@ fn show_storage_box_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ケーブルクリップ customizer (`cable_diameter × clip_length`、hobby-diy § 2)
+///
+/// Y-axis 沿い cable、+Z 開口 snap-fit (opening ratio 0.7 = 30% 狭い)
+/// USB-A 3.5 / USB-C 4.5 / Ethernet 6 / HDMI 7 / Power 8-10 mm 想定
+fn show_cable_clip_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔌 ケーブルクリップ (snap-fit)").strong());
+
+    let c = &mut state.customizer_state.cable_clip;
+    ui.horizontal(|ui| {
+        ui.label("ケーブル直径 (mm):");
+        ui.add(egui::Slider::new(&mut c.cable_diameter, 3.0..=12.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("クリップ長 (mm):");
+        ui.add(egui::Slider::new(&mut c.clip_length, 15.0..=60.0).step_by(1.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "ケーブルクリップ Ø{}×L{}mm",
+        c_copy.cable_diameter, c_copy.clip_length
+    );
+    ui.label("プリセット目安: USB-C (Ø4.5/L22) / HDMI (Ø7/L28) / 電源 (Ø9/L36)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// LED strip channel customizer (`strip_width × channel_length`、hobby-diy § 3)
+///
+/// Y-axis 沿い strip、+Z 開口 U 溝 (深さ 2.5mm 固定、壁厚 2.0mm)
+/// SMD3528 8mm / WS2812B 10-12mm PCB 対応
+fn show_led_channel_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💡 LED strip channel (U 溝、上端開口)").strong());
+
+    let l = &mut state.customizer_state.led_channel;
+    ui.horizontal(|ui| {
+        ui.label("strip PCB 幅 (mm):");
+        ui.add(egui::Slider::new(&mut l.strip_width, 6.0..=20.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全長 (mm):");
+        ui.add(egui::Slider::new(&mut l.channel_length, 50.0..=1000.0).step_by(10.0));
+    });
+
+    let l_copy = *l;
+    let label = format!(
+        "LED channel {}mm × {}mm",
+        l_copy.strip_width, l_copy.channel_length
+    );
+    ui.label("プリセット目安: SMD3528 (8mm) / WS2812B 標準 (10mm) / 高密度 (12mm)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, l_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// カードトレー customizer (`card_w × card_h × depth`、hobby-diy § 6)
+///
+/// top 開口 + front edge finger 半円 notch (r=9mm 固定)
+/// Poker 63×88 / Mini Euro 44×68 / Standard Euro 59×92 / Tarot 70×120 対応
+fn show_card_tray_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🎴 カードトレー (finger notch 付き)").strong());
+
+    let t = &mut state.customizer_state.card_tray;
+    ui.horizontal(|ui| {
+        ui.label("カード幅 (mm):");
+        ui.add(egui::Slider::new(&mut t.card_width, 30.0..=80.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("カード高さ (mm):");
+        ui.add(egui::Slider::new(&mut t.card_height, 50.0..=130.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("tray 内深さ (mm):");
+        ui.add(egui::Slider::new(&mut t.tray_depth, 10.0..=60.0).step_by(1.0));
+    });
+
+    let t_copy = *t;
+    let label = format!(
+        "カードトレー {}×{}×深{}mm",
+        t_copy.card_width, t_copy.card_height, t_copy.tray_depth
+    );
+    ui.label(
+        "プリセット目安: Poker (63×88) / Mini Euro (44×68) / Std Euro (59×92) / Tarot (70×120)",
+    );
+    ui.label("目安: 深 30mm ≈ 100-150 cards、finger notch r=9mm 固定");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, t_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// トークン井戸 customizer (`dia × depth × count`、hobby-diy § 6)
+///
+/// row 状に count 個の円筒 well、top 開口、印刷正立
+/// shallow token 10-15 / dice/meeples 20-25 / miniatures 30-40 mm 深さ目安
+fn show_token_well_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🎲 トークン井戸 (row 配置 count well)").strong());
+
+    let w = &mut state.customizer_state.token_well;
+    ui.horizontal(|ui| {
+        ui.label("well 直径 (mm):");
+        ui.add(egui::Slider::new(&mut w.well_diameter, 8.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("well 深さ (mm):");
+        ui.add(egui::Slider::new(&mut w.well_depth, 5.0..=50.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("well 個数:");
+        ui.add(egui::Slider::new(&mut w.well_count, 1..=10).text("(1-10)"));
+    });
+
+    let w_copy = *w;
+    let label = format!(
+        "トークン井戸 Ø{}×深{}mm × {}",
+        w_copy.well_diameter, w_copy.well_depth, w_copy.well_count
+    );
+    ui.label("プリセット目安: shallow token (10-15mm) / dice (20-25mm) / miniatures (30-40mm)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, w_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);
