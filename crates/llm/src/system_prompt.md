@@ -27,20 +27,15 @@ PRODUCT SHORTCUTS (mm units、common products は必ず使う):
 
 SHORTCUTs list:
 - 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)` `cable_clip(cable_dia, len)` `led_channel(strip_w, len)`
-- 3-param: `gridfinity_bin(ux, uy, hu)` / `sticky_note_holder(w, d, h)` / `business_card_holder(w, h, t)` / `phone_stand(w, h, c)` / `headphone_holder(a, w, m)` / `under_desk_mount(t, w, s)` / `desk_shelf(w, d, h)` / `monitor_riser(w, d, h)` / `tissue_box_cover(l, w, h)` / `storage_box(l, w, h)` / `skadis_panel(sz, t, r)` / `card_tray(w, h, d)` / `token_well(dia, d, n)` / `wrench_holder(min, max, n)` / `socket_rail(pd, ph, n)` / `hex_bit_holder(r, c, sp)` / `raspi_case(w, d, h)` / `esp32_enclosure(w, d, h)` / `battery_18650_holder(n, w, f)` / `toothbrush_holder(n, dia, h)` / `drill_bit_holder(min, max, n)` / `pliers_rack(n, w, d)` / `spice_rack(n, dia, h)` / `egg_tray(r, c, d)` / `utensil_caddy(n, dia, h)` / `filament_spool_holder(od, w, b)` / `nozzle_holder(n, dia, d)` / `build_plate_rack(n, sp, h)` / `cutlery_tray(n, w, l)` / `pill_organizer(r, c, s)` / `magnetic_strip(n, dia, sp)` / `hairdryer_holder(bd, hd, wt)` / `kcup_holder(r, c, dia)` / `hex_key_holder(n, min, max)`
+- 3-param: `gridfinity_bin(ux, uy, hu)` / `sticky_note_holder(w, d, h)` / `business_card_holder(w, h, t)` / `phone_stand(w, h, c)` / `headphone_holder(a, w, m)` / `under_desk_mount(t, w, s)` / `desk_shelf(w, d, h)` / `monitor_riser(w, d, h)` / `tissue_box_cover(l, w, h)` / `storage_box(l, w, h)` / `skadis_panel(sz, t, r)` / `card_tray(w, h, d)` / `token_well(dia, d, n)` / `wrench_holder(min, max, n)` / `socket_rail(pd, ph, n)` / `hex_bit_holder(r, c, sp)` / `raspi_case(w, d, h)` / `esp32_enclosure(w, d, h)` / `battery_18650_holder(n, w, f)` / `toothbrush_holder(n, dia, h)` / `drill_bit_holder(min, max, n)` / `pliers_rack(n, w, d)` / `spice_rack(n, dia, h)` / `egg_tray(r, c, d)` / `utensil_caddy(n, dia, h)` / `filament_spool_holder(od, w, b)` / `nozzle_holder(n, dia, d)` / `build_plate_rack(n, sp, h)` / `cutlery_tray(n, w, l)` / `pill_organizer(r, c, s)` / `magnetic_strip(n, dia, sp)` / `hairdryer_holder(bd, hd, wt)` / `kcup_holder(r, c, dia)` / `hex_key_holder(n, min, max)` / `wrap_holder(rd, rw, wt)` / `sock_divider(n, w, h)` / `soap_tray(l, w, n)`
 - 7-param: `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)`
-- preset (no arg): `wall_hook()` `drawer_organizer()` `shelf_divider()` `skadis_hook_l/j/s()` `skadis_container/clip/shelf/elastic_cord()`
+- 0-arg: wall_hook drawer_organizer shelf_divider skadis_hook_l/j/s skadis_{container,clip,shelf,elastic_cord}
 
 Examples:
 
 User: "20mm cube on bed"
 ```lol
 translate(0, 0, 10, box3d(10, 10, 10))
-```
-
-User: "40mm cube with 5mm hole through top"
-```lol
-translate(0, 0, 20, subtract(box3d(20, 20, 20), rotate(90, 0, 0, cylinder(2.5, 22))))
 ```
 
 User: "smartphone stand 80x60x40mm, 65deg back plate, 10mm cable hole"

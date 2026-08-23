@@ -121,6 +121,17 @@
         { "id": "hex_key_metric_9", "label": "Allen key Metric 9-piece (1.5-10mm)", "lol_dsl": "hex_key_holder(9, 1.5, 10)" },
         { "id": "hex_key_sae_12", "label": "Allen key SAE 12-piece (1.6-9.5mm)", "lol_dsl": "hex_key_holder(12, 1.6, 9.5)" }
       ]
+    },
+    {
+      "name": "ミックス 2 (Sprint 13、kitchen/drawer/bathroom 新 pattern)",
+      "presets": [
+        { "id": "wrap_holder_12inch", "label": "Wrap ホルダー 12\" foil (Ø55×W305)", "lol_dsl": "wrap_holder(55, 305, 3)" },
+        { "id": "wrap_holder_restaurant", "label": "Wrap ホルダー 18\" restaurant (Ø55×W457)", "lol_dsl": "wrap_holder(55, 457, 3)" },
+        { "id": "sock_divider_4", "label": "靴下 divider 4 cell (W80×H89)", "lol_dsl": "sock_divider(4, 80, 89)" },
+        { "id": "underwear_divider_4", "label": "下着 divider 4 cell (W100×H89)", "lol_dsl": "sock_divider(4, 100, 89)" },
+        { "id": "soap_tray_dual", "label": "石鹸トレー dual bottle (L200×W90×6 drain)", "lol_dsl": "soap_tray(200, 90, 6)" },
+        { "id": "soap_tray_bar", "label": "石鹸トレー bar soap (L100×W70×4 drain)", "lol_dsl": "soap_tray(100, 70, 4)" }
+      ]
     }
   ]
 }

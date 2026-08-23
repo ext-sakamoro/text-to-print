@@ -193,6 +193,10 @@ name_3f ::= "box3d"
           | "hairdryer_holder"
           | "kcup_holder"
           | "hex_key_holder"
+          # Sprint 13 ミックス 2 (kitchen/drawer/bathroom 新 pattern、2026-08-23 追加)
+          | "wrap_holder"
+          | "sock_divider"
+          | "soap_tray"
 
 name_4f ::= "rounded_box"
           | "plane"

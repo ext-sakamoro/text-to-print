@@ -176,6 +176,12 @@ pub struct CustomizerState {
     pub kcup_holder: KcupHolderUiState,
     /// Hex key holder customizer (garage § 8.2、Sprint 12)
     pub hex_key_holder: HexKeyHolderUiState,
+    /// Wrap/foil holder customizer (kitchen § 6.2、Sprint 13)
+    pub wrap_holder: WrapHolderUiState,
+    /// Sock divider customizer (drawer § 3.7、Sprint 13)
+    pub sock_divider: SockDividerUiState,
+    /// Soap tray customizer (bathroom § 7.3、Sprint 13)
+    pub soap_tray: SoapTrayUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1320,6 +1326,98 @@ impl HexKeyHolderUiState {
     }
 }
 
+/// wrap/foil ロールホルダー customizer UI state
+/// (`wrap_holder(roll_diameter, roll_width, wall_thickness)`)
+#[derive(Debug, Clone, Copy)]
+pub struct WrapHolderUiState {
+    /// roll 外径 (mm、standard=55、default 55、range 40-65)
+    pub roll_diameter: f32,
+    /// roll 幅 (mm、standard 12"=305、default 305、range 200-460)
+    pub roll_width: f32,
+    /// 壁厚 (mm、default 3.0、range 2-5)
+    pub wall_thickness: f32,
+}
+
+impl Default for WrapHolderUiState {
+    fn default() -> Self {
+        Self {
+            roll_diameter: 55.0,
+            roll_width: 305.0,
+            wall_thickness: 3.0,
+        }
+    }
+}
+
+impl WrapHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "wrap_holder({}, {}, {})",
+            self.roll_diameter, self.roll_width, self.wall_thickness
+        )
+    }
+}
+
+/// 靴下 divider customizer UI state (`sock_divider(cell_count, cell_width, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SockDividerUiState {
+    /// cell 個数 (default 4、range 2-10)
+    pub cell_count: u32,
+    /// cell 幅 (mm、default 80、range 50-150)
+    pub cell_width: f32,
+    /// height (mm、drawer 高、default 89、range 50-120)
+    pub height: f32,
+}
+
+impl Default for SockDividerUiState {
+    fn default() -> Self {
+        Self {
+            cell_count: 4,
+            cell_width: 80.0,
+            height: 89.0,
+        }
+    }
+}
+
+impl SockDividerUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "sock_divider({}, {}, {})",
+            self.cell_count, self.cell_width, self.height
+        )
+    }
+}
+
+/// 石鹸トレー customizer UI state
+/// (`soap_tray(tray_length, tray_width, drain_slot_count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SoapTrayUiState {
+    /// tray 内 長 (mm、default 200、range 100-300)
+    pub tray_length: f32,
+    /// tray 内 幅 (mm、default 90、range 60-150)
+    pub tray_width: f32,
+    /// drain slot 個数 (default 6、range 2-15)
+    pub drain_slot_count: u32,
+}
+
+impl Default for SoapTrayUiState {
+    fn default() -> Self {
+        Self {
+            tray_length: 200.0,
+            tray_width: 90.0,
+            drain_slot_count: 6,
+        }
+    }
+}
+
+impl SoapTrayUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "soap_tray({}, {}, {})",
+            self.tray_length, self.tray_width, self.drain_slot_count
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2328,9 +2426,10 @@ mod tests {
         HexBitHolderUiState, HexKeyHolderUiState, KcupHolderUiState, LedChannelUiState,
         MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState, PenCupUiState,
         PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
-        RaspiCaseUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
-        StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState,
-        UnderDeskMountUiState, UtensilCaddyUiState, WrenchHolderUiState, default_sidecar_port,
+        RaspiCaseUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
+        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
+        ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState,
+        WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2995,5 +3094,43 @@ mod tests {
         assert_eq!(c.hairdryer_holder.to_lol(), "hairdryer_holder(85, 110, 3)");
         assert_eq!(c.kcup_holder.to_lol(), "kcup_holder(3, 4, 53)");
         assert_eq!(c.hex_key_holder.to_lol(), "hex_key_holder(9, 1.5, 10)");
+    }
+
+    // ── Sprint 13 ミックス 3 archetype UI state tests ──
+
+    #[test]
+    fn wrap_holder_default_is_foil_12inch() {
+        let w = WrapHolderUiState::default();
+        assert!((w.roll_diameter - 55.0).abs() < 1e-6);
+        assert!((w.roll_width - 305.0).abs() < 1e-6);
+        assert!((w.wall_thickness - 3.0).abs() < 1e-6);
+        assert_eq!(w.to_lol(), "wrap_holder(55, 305, 3)");
+    }
+
+    #[test]
+    fn sock_divider_default_is_standard_4() {
+        let d = SockDividerUiState::default();
+        assert_eq!(d.cell_count, 4);
+        assert!((d.cell_width - 80.0).abs() < 1e-6);
+        assert!((d.height - 89.0).abs() < 1e-6);
+        assert_eq!(d.to_lol(), "sock_divider(4, 80, 89)");
+    }
+
+    #[test]
+    fn soap_tray_default_is_dual_bottle() {
+        let s = SoapTrayUiState::default();
+        assert!((s.tray_length - 200.0).abs() < 1e-6);
+        assert!((s.tray_width - 90.0).abs() < 1e-6);
+        assert_eq!(s.drain_slot_count, 6);
+        assert_eq!(s.to_lol(), "soap_tray(200, 90, 6)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_40_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 13 追加後は 40 archetype (+3: wrap_holder / sock_divider / soap_tray)
+        assert_eq!(c.wrap_holder.to_lol(), "wrap_holder(55, 305, 3)");
+        assert_eq!(c.sock_divider.to_lol(), "sock_divider(4, 80, 89)");
+        assert_eq!(c.soap_tray.to_lol(), "soap_tray(200, 90, 6)");
     }
 }

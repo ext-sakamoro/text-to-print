@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 37 archetype 一覧 (2026-08-23 Sprint 12 更新)
+## 既存 40 archetype 一覧 (2026-08-23 Sprint 13 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 + printer 3 + drawer-wall 3 + mix 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md` + `organizer-bathroom-garage.md` + `organizer-cable-kitchen.md` + `organizer-printer-modular.md` + `organizer-drawer-wall.md` + 各既実装 category 残からの mix)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3 + kitchen 3 + printer 3 + drawer-wall 3 + mix 3 + mix2 3 archetype** (各既実装 category 残 mix 継続、新 pattern 2 個 (半円 cradle / frame + partitions) 追加)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -536,6 +536,9 @@ or all-field 明示 (advanced field も全部書く)
 | 35 | `hairdryer_holder(barrel_diameter, holster_depth, wall_thickness)` | 3 | Ø85 × D110mm (Dyson Supersonic、大径 cylindrical holster) | bathroom § 7.7 |
 | 36 | `kcup_holder(rows, cols, capsule_diameter)` | 3 | 4×3 = 12 × Ø53mm (K-Cup standard、2D grid) | kitchen § 6.7 |
 | 37 | `hex_key_holder(count, min_key_mm, max_key_mm)` | 3 | 9-piece 1.5-10mm Metric (block-style Allen key、linear interp) | garage § 8.2 |
+| 38 | `wrap_holder(roll_diameter, roll_width, wall_thickness)` | 3 | Ø55 × W305mm (12" foil、**新 pattern: 半円 cradle**) | kitchen § 6.2 |
+| 39 | `sock_divider(cell_count, cell_width, height)` | 3 | 4 cell × W80×H89mm (**新 pattern: frame + partitions**) | drawer § 3.7 |
+| 40 | `soap_tray(tray_length, tray_width, drain_slot_count)` | 3 | L200×W90 × 6 drain (dual-bottle、tray + drain slots) | bathroom § 7.3 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -564,6 +567,7 @@ or all-field 明示 (advanced field も全部書く)
 - ~~organizer-printer-modular.md~~ ✅ 3 archetype 完了 (Sprint 10、filament_spool_holder / nozzle_holder / build_plate_rack) 残 = § 9 残 5 (dry_box / tool_holder / sd_card_holder / swatch_holder / allen_key_holder) + § 10 modular connection systems (Gridfinity/Multiboard/SKADIS/Honeycomb/Lego/Dovetail/T-Slot 等は protocol 仕様書、既存 SKADIS panel / gridfinity_bin で cover 済) は future sprint
 - ~~organizer-drawer-wall.md~~ ✅ 3 archetype 完了 (Sprint 11、cutlery_tray / pill_organizer / magnetic_strip) 残 = drawer 4 (chopstick_holder / jewelry 4 sub / makeup / sock_divider) + wall 6 (SKADIS/Multiboard/French Cleat/Pegboard/T-Slot/Over-Door) は future sprint (§ 4 は protocol 仕様 系が多い)
 - ~~**Sprint 12 ミックス**~~ ✅ 3 archetype 完了 (bathroom § 7.7 hairdryer_holder + kitchen § 6.7 kcup_holder + garage § 8.2 hex_key_holder) 各既実装 category の残から pick、toys-articulated.md は Print-in-Place SDF が複雑すぎるため skip
+- ~~**Sprint 13 ミックス 2**~~ ✅ 3 archetype 完了 (kitchen § 6.2 wrap_holder + drawer § 3.7 sock_divider + bathroom § 7.3 soap_tray) **新 pattern 2 個**: 半円 cradle (X-axis cyl rotate + subtract from top) + frame with partitions (outer - cavity + partition wall union)
 - **organizer-drawer-wall.md** (406 行): カトラリー / 箸 / ジュエリー / 化粧品 / SKADIS / Multiboard → 追加 SKADIS accessory / Multiboard 互換
 - **organizer-cable-kitchen.md** (374 行): ケーブル / ルーター / スパイスラック / K-Cup / 卵ホルダー → `spice_rack` / `kcup_holder` / `egg_holder`
 - **organizer-bathroom-garage.md** (507 行): 歯ブラシ / 電動歯ブラシ / トイレットペーパー / ドライヤー / ドリルビット / ソケットレール → `toothbrush_holder` / `drill_bit_organizer`

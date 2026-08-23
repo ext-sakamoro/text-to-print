@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 37 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 40 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1258,7 +1258,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9) +
 /// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10) +
 /// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11) +
-/// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12)
+/// mix 3 (hairdryer_holder / kcup_holder / hex_key_holder、Sprint 12) +
+/// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1337,6 +1338,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_kcup_holder_customizer(ui, state);
                 ui.separator();
                 show_hex_key_holder_customizer(ui, state);
+                ui.separator();
+                show_wrap_holder_customizer(ui, state);
+                ui.separator();
+                show_sock_divider_customizer(ui, state);
+                ui.separator();
+                show_soap_tray_customizer(ui, state);
             });
         },
     );
@@ -2702,6 +2709,116 @@ fn show_hex_key_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, h_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// wrap/foil ロールホルダー customizer
+/// (`roll_diameter × roll_width × wall_thickness`、kitchen § 6.2)
+///
+/// 長 body + 上端 半円 cradle (roll が 60% 埋め込む形)
+fn show_wrap_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🎞 Wrap/Foil ロールホルダー (半円 cradle)").strong());
+
+    let w = &mut state.customizer_state.wrap_holder;
+    ui.horizontal(|ui| {
+        ui.label("roll 外径 (mm):");
+        ui.add(egui::Slider::new(&mut w.roll_diameter, 40.0..=65.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("roll 幅 (mm):");
+        ui.add(egui::Slider::new(&mut w.roll_width, 200.0..=460.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("壁厚 (mm):");
+        ui.add(egui::Slider::new(&mut w.wall_thickness, 2.0..=5.0).step_by(0.5));
+    });
+
+    let w_copy = *w;
+    let label = format!(
+        "Wrap ホルダー Ø{}×W{}mm",
+        w_copy.roll_diameter, w_copy.roll_width
+    );
+    ui.label("プリセット目安: 12\" foil (Ø55×W305) / 18\" restaurant (Ø55×W457) / plastic wrap (Ø45×W305)");
+    ui.label("固定: cradle depth ratio 60%、roll clearance 1.5mm/side");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, w_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 靴下 divider customizer (`cell_count × cell_width × height`、drawer § 3.7)
+///
+/// 外周 frame + (count-1) 内部 partition walls
+fn show_sock_divider_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧦 靴下 divider (frame + partition walls)").strong());
+
+    let d = &mut state.customizer_state.sock_divider;
+    ui.horizontal(|ui| {
+        ui.label("cell 個数:");
+        ui.add(egui::Slider::new(&mut d.cell_count, 2..=10).text("(2-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cell 幅 (mm):");
+        ui.add(egui::Slider::new(&mut d.cell_width, 50.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("height (mm):");
+        ui.add(egui::Slider::new(&mut d.height, 50.0..=120.0).step_by(1.0));
+    });
+
+    let d_copy = *d;
+    let label = format!(
+        "靴下 divider {} cell × W{}×H{}mm",
+        d_copy.cell_count, d_copy.cell_width, d_copy.height
+    );
+    ui.label("プリセット目安: sock (4×80×89) / underwear (4×100×89) / bra (3×150×89)");
+    ui.label("固定: cell 奥行 100mm、wall 2.5mm、floor 2mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, d_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 石鹸トレー customizer
+/// (`tray_length × tray_width × drain_slot_count`、bathroom § 7.3)
+///
+/// rect tray + 底面 drain slots
+fn show_soap_tray_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧼 石鹸トレー (tray + drain slots)").strong());
+
+    let s = &mut state.customizer_state.soap_tray;
+    ui.horizontal(|ui| {
+        ui.label("tray 内 長 (mm):");
+        ui.add(egui::Slider::new(&mut s.tray_length, 100.0..=300.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("tray 内 幅 (mm):");
+        ui.add(egui::Slider::new(&mut s.tray_width, 60.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("drain slot 個数:");
+        ui.add(egui::Slider::new(&mut s.drain_slot_count, 2..=15).text("(2-15)"));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "石鹸トレー L{}×W{}mm × {} drain",
+        s_copy.tray_length, s_copy.tray_width, s_copy.drain_slot_count
+    );
+    ui.label("プリセット目安: dual-bottle shampoo (L200×W90) / bar soap (L100×W70) / large tray (L280×W140)");
+    ui.label("固定: tray 深 12mm、drain slot 幅 3mm、wall 2.5mm、floor 2mm、素材 PETG 推奨");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

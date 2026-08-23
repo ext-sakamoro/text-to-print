@@ -110,6 +110,9 @@ mod tests {
             "hairdryer_holder",
             "kcup_holder",
             "hex_key_holder",
+            "wrap_holder",
+            "sock_divider",
+            "soap_tray",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives
