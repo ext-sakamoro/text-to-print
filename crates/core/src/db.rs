@@ -592,10 +592,7 @@ impl Database {
     /// # Errors
     ///
     /// SQLite query / row extraction error
-    pub fn list_llm_provider_configs(
-        &self,
-        profile_id: &str,
-    ) -> Result<Vec<LlmProviderConfigRow>> {
+    pub fn list_llm_provider_configs(&self, profile_id: &str) -> Result<Vec<LlmProviderConfigRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT provider, endpoint, model, max_tokens, temperature, reasoning_effort
              FROM llm_provider_configs
@@ -661,11 +658,7 @@ impl Database {
     /// # Errors
     ///
     /// SQLite DELETE error
-    pub fn delete_llm_provider_config(
-        &self,
-        profile_id: &str,
-        provider: &str,
-    ) -> Result<()> {
+    pub fn delete_llm_provider_config(&self, profile_id: &str, provider: &str) -> Result<()> {
         self.conn.execute(
             "DELETE FROM llm_provider_configs WHERE profile_id = ?1 AND provider = ?2",
             rusqlite::params![profile_id, provider],

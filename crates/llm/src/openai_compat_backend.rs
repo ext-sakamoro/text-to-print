@@ -58,12 +58,20 @@ impl OpenAiCompatProvider {
         }
     }
 
+    /// Provider preset の default model 選定基準 (2026-08-23):
+    /// - OpenAI: 最新 flagship `gpt-5` (課金 model、reasoning_effort=minimal で
+    ///   silent thinking 抑制)
+    /// - Anthropic: 主力 `claude-sonnet-4-5` (課金、Opus と Haiku の中間)
+    /// - Google: **`gemini-2.5-flash`** — 無料枠 (Google AI Studio、~1500 req/day
+    ///   目安) が最も寛容な API path β 公開時の 「無料で試せる BYO LLM」推奨
+    ///   Pro 版 (`gemini-2.5-pro`) を使う user は Model 欄で自由に変更可
+    /// - Custom (Ollama / LM Studio): 一般的な local 14B GGUF slug
     #[must_use]
     pub const fn default_model(self) -> &'static str {
         match self {
             Self::OpenAi => "gpt-5",
             Self::Anthropic => "claude-sonnet-4-5",
-            Self::Google => "gemini-2.5-pro",
+            Self::Google => "gemini-2.5-flash",
             Self::Custom => "qwen2.5-14b-instruct",
         }
     }

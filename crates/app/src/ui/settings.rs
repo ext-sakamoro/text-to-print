@@ -682,6 +682,14 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
             .small()
             .weak(),
     );
+    ui.label(
+        egui::RichText::new(
+            "💡 無料で試すなら Google (Gemini 2.5 Flash) 推奨 \
+             AI Studio (aistudio.google.com/apikey) で API key 取得、無料枠 ~1500 req/day",
+        )
+        .small()
+        .color(egui::Color32::from_rgb(120, 180, 220)),
+    );
 
     let Some(provider) = form.form_provider else {
         ui.add_space(4.0);
@@ -741,11 +749,7 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
                     "none".to_string(),
                     "none (Google Gemini 2.5)",
                 );
-                ui.selectable_value(
-                    &mut form.form_reasoning_effort,
-                    "low".to_string(),
-                    "low",
-                );
+                ui.selectable_value(&mut form.form_reasoning_effort, "low".to_string(), "low");
             });
     });
     ui.label(
@@ -850,11 +854,7 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
 /// Populate the form buffer with the provider's saved config, or fall
 /// back to the preset defaults when nothing is saved yet Clears the API
 /// key input to force explicit re-entry (never surface the stored key)
-fn load_provider_form(
-    state: &AppState,
-    form: &mut ByoLlmSettings,
-    provider: OpenAiCompatProvider,
-) {
+fn load_provider_form(state: &AppState, form: &mut ByoLlmSettings, provider: OpenAiCompatProvider) {
     form.form_provider = Some(provider);
     match state
         .db
@@ -919,8 +919,7 @@ fn save_byo_llm_form(
     // Save API key to Keychain if the user typed something in the input
     let api_key_typed = !form.form_api_key.trim().is_empty();
     if api_key_typed
-        && let Err(e) =
-            keychain::set_api_key(provider.keychain_account(), form.form_api_key.trim())
+        && let Err(e) = keychain::set_api_key(provider.keychain_account(), form.form_api_key.trim())
     {
         form.message = Some((format!("Keychain 保存失敗: {e}"), false));
         return;
@@ -1080,11 +1079,7 @@ fn activate_byo_llm(
 /// edited form config Blocks the UI thread for up to 30 s (acceptable
 /// for a manual Test button) API key resolution: form input takes
 /// priority; falls back to Keychain-stored value
-fn test_byo_llm(
-    state: &AppState,
-    form: &mut ByoLlmSettings,
-    provider: OpenAiCompatProvider,
-) {
+fn test_byo_llm(state: &AppState, form: &mut ByoLlmSettings, provider: OpenAiCompatProvider) {
     let api_key = if !form.form_api_key.trim().is_empty() {
         form.form_api_key.trim().to_string()
     } else {

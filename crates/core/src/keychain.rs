@@ -49,9 +49,7 @@ pub fn get_api_key(provider_account: &str) -> Result<Option<String>> {
     match entry.get_password() {
         Ok(pw) => Ok(Some(pw)),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => {
-            Err(e).with_context(|| format!("failed to read API key for {provider_account}"))
-        }
+        Err(e) => Err(e).with_context(|| format!("failed to read API key for {provider_account}")),
     }
 }
 
