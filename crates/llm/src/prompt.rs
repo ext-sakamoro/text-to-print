@@ -79,6 +79,9 @@ mod tests {
             "wrench_holder",
             "socket_rail",
             "hex_bit_holder",
+            "raspi_case",
+            "esp32_enclosure",
+            "battery_18650_holder",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

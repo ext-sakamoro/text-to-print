@@ -492,9 +492,9 @@ or all-field 明示 (advanced field も全部書く)
 
 ---
 
-## 既存 19 archetype 一覧 (2026-08-23 Sprint 6 更新)
+## 既存 22 archetype 一覧 (2026-08-23 Sprint 7 更新)
 
-**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md`)
+**organizer-gridfinity-desk PART 1 + PART 2 完全 cover + household 3 + hobby-diy 4 + tools 3 + electronics 3 archetype** (`~/ALICE-Bamboo/docs/patterns/organizer-gridfinity-desk.md` + `household.md` + `hobby-diy.md` + `tools.md` + `electronics-enclosure.md`)
 
 | # | LOL DSL | basic param | default 値 | 出典 § |
 |--|--|--|--|--|
@@ -518,6 +518,9 @@ or all-field 明示 (advanced field も全部書く)
 | 17 | `wrench_holder(min_mm, max_mm, count)` | 3 | 8-19mm × 6 (Metric、等間隔補間) | tools § 1 |
 | 18 | `socket_rail(post_dia, post_height, count)` | 3 | Ø12.4×H22mm × 6 (1/2" drive) | tools § 2 |
 | 19 | `hex_bit_holder(rows, cols, spacing)` | 3 | 5×4 grid @ 12mm (20 hole、1/4" bit 固定) | tools § 3 |
+| 20 | `raspi_case(pcb_w, pcb_d, internal_h)` | 3 | 85×56×25mm (RPi 5、Active Cooler、4 standoff + port opening) | electronics § 1 |
+| 21 | `esp32_enclosure(pcb_w, pcb_d, internal_h)` | 3 | 51.6×28.4×15mm (ESP32 DevKit V1、USB opening) | electronics § 2 |
+| 22 | `battery_18650_holder(count, wall, floor)` | 3 | 4 cell × 2.5mm wall × 0 floor (through、Ø18.6×L68 固定) | electronics § 3 |
 
 **Bamboo canonical 既存 4 archetype** (PART 1 系、pattern_sdf.rs 既存)
 
@@ -540,7 +543,7 @@ or all-field 明示 (advanced field も全部書く)
 - ~~household.md~~ ✅ 3 archetype 完了 (Sprint 4、coaster / tissue_box_cover / storage_box) 残 = lid + hinge (Print-in-Place / filament pin / living hinge) は future sprint
 - ~~hobby-diy.md~~ ✅ 4 archetype 完了 (Sprint 5、cable_clip / led_channel / card_tray / token_well) 残 = gear (§ 4、involute 歯型 SDF) / bearing_mount (§ 4、608 press-fit) / model train scale accessory (§ 5) は future sprint
 - ~~tools.md~~ ✅ 3 archetype 完了 (Sprint 6、wrench_holder / socket_rail / hex_bit_holder) 残 = caliper_holder (§ 4、shape 特化) / vise (§ 5、thread SDF) / battery_holder (§ 6、type 別 dims) は future sprint
-- **electronics-enclosure.md** (411 行): RPi / ESP32 / 18650 / 充電ドック / IP 防水 → `raspberry_pi_case` / `esp32_enclosure` / `18650_holder`
+- ~~electronics-enclosure.md~~ ✅ 3 archetype 完了 (Sprint 7、raspi_case / esp32_enclosure / battery_18650_holder) 残 = phone_dock (§ 4、MagSafe/USB-C shape 特化) / outdoor_enclosure (§ 5、IP sealing + gasket groove) / led_hub_box (§ 6、antenna keep-out + light pipe) は future sprint
 - **organizer-drawer-wall.md** (406 行): カトラリー / 箸 / ジュエリー / 化粧品 / SKADIS / Multiboard → 追加 SKADIS accessory / Multiboard 互換
 - **organizer-cable-kitchen.md** (374 行): ケーブル / ルーター / スパイスラック / K-Cup / 卵ホルダー → `spice_rack` / `kcup_holder` / `egg_holder`
 - **organizer-bathroom-garage.md** (507 行): 歯ブラシ / 電動歯ブラシ / トイレットペーパー / ドライヤー / ドリルビット / ソケットレール → `toothbrush_holder` / `drill_bit_organizer`
@@ -552,7 +555,7 @@ or all-field 明示 (advanced field も全部書く)
 - 単純な box/cylinder 組み合わせで実装可能 (Print-in-Place / articulated は高難度)
 - ALICE-Bamboo に既存 canonical 実装が近い (spec doc + pattern_scores.json)
 
-**次 sprint 推奨**: electronics-enclosure.md (raspberry_pi_case / esp32_enclosure / 18650_holder) or organizer-bathroom-garage.md (toothbrush_holder / drill_bit_organizer) から 3 archetype 追加 (Sprint 7) tools.md 残 (caliper_holder / vise / battery_holder) は個別複雑度あり、単発 sprint 可
+**次 sprint 推奨**: organizer-bathroom-garage.md (toothbrush_holder / drill_bit_organizer) or organizer-cable-kitchen.md (spice_rack / kcup_holder) or organizer-printer-modular.md (filament_spool_holder / nozzle_organizer) から 3 archetype 追加 (Sprint 8) 高難度候補: caliper_holder / vise / battery_holder / phone_dock / gear (individually 単発 sprint)
 
 ---
 

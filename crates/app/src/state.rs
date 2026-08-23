@@ -133,6 +133,12 @@ pub struct CustomizerState {
     pub socket_rail: SocketRailUiState,
     /// Hex bit holder customizer (tools § 3、Sprint 6)
     pub hex_bit_holder: HexBitHolderUiState,
+    /// Raspberry Pi case customizer (electronics-enclosure § 1、Sprint 7)
+    pub raspi_case: RaspiCaseUiState,
+    /// ESP32/Arduino enclosure customizer (electronics-enclosure § 2、Sprint 7)
+    pub esp32_enclosure: Esp32EnclosureUiState,
+    /// 18650 battery holder customizer (electronics-enclosure § 3、Sprint 7)
+    pub battery_18650_holder: Battery18650HolderUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -725,6 +731,99 @@ impl HexBitHolderUiState {
         format!(
             "hex_bit_holder({}, {}, {})",
             self.rows, self.cols, self.spacing
+        )
+    }
+}
+
+/// Raspberry Pi ケース customizer UI state (`raspi_case(pcb_w, pcb_d, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct RaspiCaseUiState {
+    /// PCB 幅 (mm、RPi 5/4=85 / Zero 2W=65、default 85)
+    pub pcb_width: f32,
+    /// PCB 奥行 (mm、RPi 5/4=56 / Zero 2W=30、default 56)
+    pub pcb_depth: f32,
+    /// PCB 上の内部高さ (mm、Active Cooler=25 / bare=15、default 25)
+    pub internal_height: f32,
+}
+
+impl Default for RaspiCaseUiState {
+    fn default() -> Self {
+        Self {
+            pcb_width: 85.0,
+            pcb_depth: 56.0,
+            internal_height: 25.0,
+        }
+    }
+}
+
+impl RaspiCaseUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "raspi_case({}, {}, {})",
+            self.pcb_width, self.pcb_depth, self.internal_height
+        )
+    }
+}
+
+/// ESP32/Arduino エンクロージャ customizer UI state (`esp32_enclosure(pcb_w, pcb_d, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct Esp32EnclosureUiState {
+    /// PCB 幅 (mm、ESP32=51.6 / Uno=68.6 / Nano=45.0、default 51.6)
+    pub pcb_width: f32,
+    /// PCB 奥行 (mm、ESP32=28.4 / Uno=53.4 / Nano=18.0、default 28.4)
+    pub pcb_depth: f32,
+    /// PCB 上の内部高さ (mm、default 15、header 露出時 20)
+    pub internal_height: f32,
+}
+
+impl Default for Esp32EnclosureUiState {
+    fn default() -> Self {
+        Self {
+            pcb_width: 51.6,
+            pcb_depth: 28.4,
+            internal_height: 15.0,
+        }
+    }
+}
+
+impl Esp32EnclosureUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "esp32_enclosure({}, {}, {})",
+            self.pcb_width, self.pcb_depth, self.internal_height
+        )
+    }
+}
+
+/// 18650 バッテリーホルダー customizer UI state
+/// (`battery_18650_holder(count, wall_thickness, floor_thickness)`)
+///
+/// cell Ø18.6 × L68mm 固定、count 個 row 配置
+#[derive(Debug, Clone, Copy)]
+pub struct Battery18650HolderUiState {
+    /// cell 個数 (row 方向、default 4、range 1-10)
+    pub cell_count: u32,
+    /// inter-cell wall (mm、thermal safety、default 2.5、range 2.0-4.0)
+    pub wall_thickness: f32,
+    /// 端部 floor 厚 (mm、0 = 両端貫通 / >0 = 片端閉塞、default 0)
+    pub floor_thickness: f32,
+}
+
+impl Default for Battery18650HolderUiState {
+    fn default() -> Self {
+        Self {
+            cell_count: 4,
+            wall_thickness: 2.5,
+            floor_thickness: 0.0,
+        }
+    }
+}
+
+impl Battery18650HolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "battery_18650_holder({}, {}, {})",
+            self.cell_count, self.wall_thickness, self.floor_thickness
         )
     }
 }
@@ -1621,12 +1720,12 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        BusinessCardUiState, CableClipUiState, CardTrayUiState, CoasterUiState, CustomizerState,
-        DeskShelfUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
-        HexBitHolderUiState, LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
-        PhoneStandUiState, SocketRailUiState, StickyNoteUiState, StorageBoxUiState,
-        TissueBoxCoverUiState, TokenWellUiState, UnderDeskMountUiState, WrenchHolderUiState,
-        default_sidecar_port,
+        Battery18650HolderUiState, BusinessCardUiState, CableClipUiState, CardTrayUiState,
+        CoasterUiState, CustomizerState, DeskShelfUiState, Esp32EnclosureUiState, GenerationPhase,
+        GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState, LedChannelUiState,
+        MonitorRiserUiState, PenCupUiState, PhaseProgress, PhoneStandUiState, RaspiCaseUiState,
+        SocketRailUiState, StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState,
+        TokenWellUiState, UnderDeskMountUiState, WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2054,5 +2153,49 @@ mod tests {
         assert_eq!(c.wrench_holder.to_lol(), "wrench_holder(8, 19, 6)");
         assert_eq!(c.socket_rail.to_lol(), "socket_rail(12.4, 22, 6)");
         assert_eq!(c.hex_bit_holder.to_lol(), "hex_bit_holder(5, 4, 12)");
+    }
+
+    // ── Sprint 7: electronics-enclosure.md 3 archetype UI state tests ──
+
+    #[test]
+    fn raspi_case_default_is_rpi5() {
+        let c = RaspiCaseUiState::default();
+        assert!((c.pcb_width - 85.0).abs() < 1e-6);
+        assert!((c.pcb_depth - 56.0).abs() < 1e-6);
+        assert!((c.internal_height - 25.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "raspi_case(85, 56, 25)");
+    }
+
+    #[test]
+    fn esp32_enclosure_default_is_devkit_v1() {
+        let e = Esp32EnclosureUiState::default();
+        assert!((e.pcb_width - 51.6).abs() < 1e-6);
+        assert!((e.pcb_depth - 28.4).abs() < 1e-6);
+        assert!((e.internal_height - 15.0).abs() < 1e-6);
+        assert_eq!(e.to_lol(), "esp32_enclosure(51.6, 28.4, 15)");
+    }
+
+    #[test]
+    fn battery_18650_holder_default_is_row_4_through() {
+        let b = Battery18650HolderUiState::default();
+        assert_eq!(b.cell_count, 4);
+        assert!((b.wall_thickness - 2.5).abs() < 1e-6);
+        assert!((b.floor_thickness - 0.0).abs() < 1e-6);
+        assert_eq!(b.to_lol(), "battery_18650_holder(4, 2.5, 0)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_22_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 7 追加後は 22 archetype (organizer 9 + household 3 + hobby-diy 4 + tools 3 + electronics 3)
+        assert_eq!(c.raspi_case.to_lol(), "raspi_case(85, 56, 25)");
+        assert_eq!(
+            c.esp32_enclosure.to_lol(),
+            "esp32_enclosure(51.6, 28.4, 15)"
+        );
+        assert_eq!(
+            c.battery_18650_holder.to_lol(),
+            "battery_18650_holder(4, 2.5, 0)"
+        );
     }
 }

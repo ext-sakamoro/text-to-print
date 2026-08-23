@@ -53,6 +53,19 @@
         { "id": "hex_bit_4x5_12", "label": "ヘックスビット 4×5 (20 hole) 12mm", "lol_dsl": "hex_bit_holder(5, 4, 12)" },
         { "id": "hex_bit_6x6_10", "label": "ヘックスビット 6×6 (36 hole) 10mm", "lol_dsl": "hex_bit_holder(6, 6, 10)" }
       ]
+    },
+    {
+      "name": "電子機器ケース (Sprint 7、electronics-enclosure.md 由来 3 archetype)",
+      "presets": [
+        { "id": "raspi_5_cooler", "label": "RPi 5 ケース (Active Cooler 25mm)", "lol_dsl": "raspi_case(85, 56, 25)" },
+        { "id": "raspi_5_bare", "label": "RPi 5 ケース (bare 15mm)", "lol_dsl": "raspi_case(85, 56, 15)" },
+        { "id": "raspi_zero_2w", "label": "RPi Zero 2W ケース", "lol_dsl": "raspi_case(65, 30, 15)" },
+        { "id": "esp32_devkit", "label": "ESP32 DevKit V1 ケース", "lol_dsl": "esp32_enclosure(51.6, 28.4, 15)" },
+        { "id": "arduino_uno", "label": "Arduino Uno R3 ケース", "lol_dsl": "esp32_enclosure(68.6, 53.4, 20)" },
+        { "id": "arduino_nano", "label": "Arduino Nano ケース", "lol_dsl": "esp32_enclosure(45, 18, 12)" },
+        { "id": "battery_18650_4", "label": "18650 バッテリー 4 cell (through)", "lol_dsl": "battery_18650_holder(4, 2.5, 0)" },
+        { "id": "battery_18650_2", "label": "18650 バッテリー 2 cell (through)", "lol_dsl": "battery_18650_holder(2, 2.5, 0)" }
+      ]
     }
   ]
 }

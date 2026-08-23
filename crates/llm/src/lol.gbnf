@@ -169,6 +169,10 @@ name_3f ::= "box3d"
           | "wrench_holder"
           | "socket_rail"
           | "hex_bit_holder"
+          # electronics-enclosure 高階 primitive (Sprint 7、2026-08-23 追加)
+          | "raspi_case"
+          | "esp32_enclosure"
+          | "battery_18650_holder"
 
 name_4f ::= "rounded_box"
           | "plane"

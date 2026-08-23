@@ -1235,12 +1235,13 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 19 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 22 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
 /// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5) +
-/// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6)
+/// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6) +
+/// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1283,6 +1284,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_socket_rail_customizer(ui, state);
                 ui.separator();
                 show_hex_bit_holder_customizer(ui, state);
+                ui.separator();
+                show_raspi_case_customizer(ui, state);
+                ui.separator();
+                show_esp32_enclosure_customizer(ui, state);
+                ui.separator();
+                show_battery_18650_holder_customizer(ui, state);
             });
         },
     );
@@ -1988,6 +1995,119 @@ fn show_hex_bit_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, h_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// Raspberry Pi ケース customizer (`pcb_w × pcb_d × internal_h`、electronics § 1)
+///
+/// 4 corner standoff peg (M2.5 pilot) + 長辺 port opening (60mm 幅) + top open
+/// Default: RPi 5 with Active Cooler (85×56×25mm) / bare Pi (h=15) / Zero 2W (65×30×15)
+fn show_raspi_case_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥧 Raspberry Pi ケース (standoff + port opening)").strong());
+
+    let c = &mut state.customizer_state.raspi_case;
+    ui.horizontal(|ui| {
+        ui.label("PCB 幅 (mm):");
+        ui.add(egui::Slider::new(&mut c.pcb_width, 40.0..=120.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("PCB 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut c.pcb_depth, 20.0..=80.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部高さ (mm):");
+        ui.add(egui::Slider::new(&mut c.internal_height, 10.0..=40.0).step_by(1.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "RPi ケース {}×{}×{}mm",
+        c_copy.pcb_width, c_copy.pcb_depth, c_copy.internal_height
+    );
+    ui.label("プリセット目安: RPi 5/4 (85×56、cooler 25 / bare 15) / Zero 2W (65×30×15)");
+    ui.label("固定: 4 corner standoff Ø6mm × H5mm + M2.5 pilot、port opening 60mm 幅");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ESP32/Arduino エンクロージャ customizer (`pcb_w × pcb_d × internal_h`、electronics § 2)
+///
+/// standoff なし friction cradle + 短辺 USB opening (9×5mm) + top open
+/// Default: ESP32 DevKit V1 (51.6×28.4×15) / Arduino Uno R3 (68.6×53.4×20) / Nano (45×18×12)
+fn show_esp32_enclosure_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("🔌 ESP32/Arduino エンクロージャ (friction、USB opening)").strong(),
+    );
+
+    let e = &mut state.customizer_state.esp32_enclosure;
+    ui.horizontal(|ui| {
+        ui.label("PCB 幅 (mm):");
+        ui.add(egui::Slider::new(&mut e.pcb_width, 30.0..=100.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("PCB 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut e.pcb_depth, 15.0..=80.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部高さ (mm):");
+        ui.add(egui::Slider::new(&mut e.internal_height, 8.0..=30.0).step_by(1.0));
+    });
+
+    let e_copy = *e;
+    let label = format!(
+        "MCU ケース {}×{}×{}mm",
+        e_copy.pcb_width, e_copy.pcb_depth, e_copy.internal_height
+    );
+    ui.label("プリセット目安: ESP32 (51.6×28.4×15) / Arduino Uno (68.6×53.4×20) / Nano (45×18×12)");
+    ui.label("固定: USB opening 短辺 9×5mm (USB-C 想定、Micro/Type-A は別途)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, e_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 18650 バッテリーホルダー customizer (`count × wall × floor`、electronics § 3)
+///
+/// row 状 cylindrical cavity (Ø18.6mm × L68mm 固定)
+/// floor=0 なら両端貫通 (cell 挿入 open)、>0 なら片端閉塞 (spring 保持)
+fn show_battery_18650_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔋 18650 バッテリーホルダー (row 状 cavity)").strong());
+
+    let b = &mut state.customizer_state.battery_18650_holder;
+    ui.horizontal(|ui| {
+        ui.label("cell 個数:");
+        ui.add(egui::Slider::new(&mut b.cell_count, 1..=10).text("(1-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("inter-cell 壁厚 (mm):");
+        ui.add(egui::Slider::new(&mut b.wall_thickness, 2.0..=4.0).step_by(0.1));
+    });
+    ui.horizontal(|ui| {
+        ui.label("端部 floor 厚 (mm):");
+        ui.add(egui::Slider::new(&mut b.floor_thickness, 0.0..=5.0).step_by(0.5));
+    });
+
+    let b_copy = *b;
+    let label = format!(
+        "18650 × {} (wall {}mm, floor {}mm)",
+        b_copy.cell_count, b_copy.wall_thickness, b_copy.floor_thickness
+    );
+    ui.label("固定: cell Ø18.6mm × L68mm (18650 Li-ion 標準 + FDM clearance)");
+    ui.label("floor=0 → 両端貫通 / floor>0 → 片端閉塞 (spring 保持)、素材は PETG/ABS 推奨");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, b_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);
