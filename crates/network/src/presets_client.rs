@@ -168,16 +168,16 @@ mod tests {
     fn parse_bundled_default_matches_worker_schema() {
         // network crate 側の default_presets.json は app crate 側と同 schema
         // (worker と app 両方で fallback として使う想定、schema 一致を verify)
-        // 2026-08-23 Sprint 10: 8→9 categories (3D プリンタ周辺 追加)、48→54 preset
+        // 2026-08-23 Sprint 11: 9→10 categories (引き出し/壁 追加)、54→60 preset
         let bundled = include_str!("../../worker/src/default_presets.json");
         let parsed = parse_presets_json(bundled).expect("bundled default parses");
         assert_eq!(
             parsed.categories.len(),
-            9,
-            "seed data: 9 categories (Both auth + FieldTest + 生活雑貨 + 趣味 DIY + 工具ホルダー + 電子機器ケース + バスルーム/ガレージ + キッチン + 3Dプリンタ周辺)"
+            10,
+            "seed data: 10 categories (Both auth + FieldTest + 生活雑貨 + 趣味 DIY + 工具ホルダー + 電子機器ケース + バスルーム/ガレージ + キッチン + 3Dプリンタ周辺 + 引き出し/壁)"
         );
         let total_presets: usize = parsed.categories.iter().map(|c| c.presets.len()).sum();
-        assert_eq!(total_presets, 54, "seed data: 54 preset total");
+        assert_eq!(total_presets, 60, "seed data: 60 preset total");
     }
 
     #[test]

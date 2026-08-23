@@ -104,6 +104,9 @@ mod tests {
             "filament_spool_holder",
             "nozzle_holder",
             "build_plate_rack",
+            "cutlery_tray",
+            "pill_organizer",
+            "magnetic_strip",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

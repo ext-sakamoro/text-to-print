@@ -91,6 +91,9 @@ mod tests {
             "filament_spool_holder",
             "nozzle_holder",
             "build_plate_rack",
+            "cutlery_tray",
+            "pill_organizer",
+            "magnetic_strip",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

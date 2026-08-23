@@ -164,6 +164,12 @@ pub struct CustomizerState {
     pub nozzle_holder: NozzleHolderUiState,
     /// Build plate rack customizer (printer § 9.6、Sprint 10)
     pub build_plate_rack: BuildPlateRackUiState,
+    /// Cutlery tray customizer (drawer § 3.2、Sprint 11)
+    pub cutlery_tray: CutleryTrayUiState,
+    /// Pill organizer customizer (drawer § 3.6、Sprint 11)
+    pub pill_organizer: PillOrganizerUiState,
+    /// Magnetic strip customizer (wall § 4.6、Sprint 11)
+    pub magnetic_strip: MagneticStripUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1125,6 +1131,97 @@ impl BuildPlateRackUiState {
     }
 }
 
+/// カトラリートレー customizer UI state (`cutlery_tray(slot_count, slot_width, slot_length)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CutleryTrayUiState {
+    /// slot 個数 (default 3、range 2-8)
+    pub slot_count: u32,
+    /// slot 幅 (mm、default 35、range 20-60)
+    pub slot_width: f32,
+    /// slot 長 (mm、default 220、range 150-350)
+    pub slot_length: f32,
+}
+
+impl Default for CutleryTrayUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 3,
+            slot_width: 35.0,
+            slot_length: 220.0,
+        }
+    }
+}
+
+impl CutleryTrayUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "cutlery_tray({}, {}, {})",
+            self.slot_count, self.slot_width, self.slot_length
+        )
+    }
+}
+
+/// 薬箱 customizer UI state (`pill_organizer(rows, cols, cell_size)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PillOrganizerUiState {
+    /// 行数 (default 7、weekly = 7 days、range 1-14)
+    pub rows: u32,
+    /// 列数 (default 2、AM/PM、range 1-8)
+    pub cols: u32,
+    /// cell 内寸 (mm 正方形、default 20、range 15-30)
+    pub cell_size: f32,
+}
+
+impl Default for PillOrganizerUiState {
+    fn default() -> Self {
+        Self {
+            rows: 7,
+            cols: 2,
+            cell_size: 20.0,
+        }
+    }
+}
+
+impl PillOrganizerUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "pill_organizer({}, {}, {})",
+            self.rows, self.cols, self.cell_size
+        )
+    }
+}
+
+/// マグネットストリップ customizer UI state
+/// (`magnetic_strip(magnet_count, magnet_diameter, spacing)`)
+#[derive(Debug, Clone, Copy)]
+pub struct MagneticStripUiState {
+    /// magnet 個数 (default 8、range 3-15)
+    pub magnet_count: u32,
+    /// magnet 直径 (mm、6mm or 8mm neodymium、default 6.0、range 4-15)
+    pub magnet_diameter: f32,
+    /// magnet spacing (中心間距離 mm、default 30、range 20-60)
+    pub magnet_spacing: f32,
+}
+
+impl Default for MagneticStripUiState {
+    fn default() -> Self {
+        Self {
+            magnet_count: 8,
+            magnet_diameter: 6.0,
+            magnet_spacing: 30.0,
+        }
+    }
+}
+
+impl MagneticStripUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "magnetic_strip({}, {}, {})",
+            self.magnet_count, self.magnet_diameter, self.magnet_spacing
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -1194,9 +1291,7 @@ pub struct AppState {
     /// (`profiles.openai_compat_active_provider`) and full per-provider
     /// config lives in `llm_provider_configs` table
     pub openai_compat: std::sync::Arc<
-        std::sync::Mutex<
-            Option<text_to_print_llm::openai_compat_backend::OpenAiCompatBackend>,
-        >,
+        std::sync::Mutex<Option<text_to_print_llm::openai_compat_backend::OpenAiCompatBackend>>,
     >,
     /// BYO LLM (2026-08-23): user-supplied GGUF path that overrides the
     /// download path when Embedded is active `None` = use ModelChoice
@@ -2129,14 +2224,14 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
-        CardTrayUiState, CoasterUiState, CustomizerState, DeskShelfUiState, DrillBitHolderUiState,
-        EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase,
-        GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState, LedChannelUiState,
-        MonitorRiserUiState, NozzleHolderUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
-        PliersRackUiState, RaspiCaseUiState, SocketRailUiState, SpiceRackUiState,
-        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
-        ToothbrushHolderUiState, UnderDeskMountUiState, UtensilCaddyUiState, WrenchHolderUiState,
-        default_sidecar_port,
+        CardTrayUiState, CoasterUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
+        DrillBitHolderUiState, EggTrayUiState, Esp32EnclosureUiState, FilamentSpoolHolderUiState,
+        GenerationPhase, GridfinityUiState, HeadphoneHolderUiState, HexBitHolderUiState,
+        LedChannelUiState, MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState,
+        PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
+        RaspiCaseUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
+        StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState,
+        UnderDeskMountUiState, UtensilCaddyUiState, WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -2725,5 +2820,43 @@ mod tests {
         );
         assert_eq!(c.nozzle_holder.to_lol(), "nozzle_holder(8, 8, 6)");
         assert_eq!(c.build_plate_rack.to_lol(), "build_plate_rack(5, 15, 200)");
+    }
+
+    // ── Sprint 11: organizer-drawer-wall.md 3 archetype UI state tests ──
+
+    #[test]
+    fn cutlery_tray_default_is_standard_3() {
+        let c = CutleryTrayUiState::default();
+        assert_eq!(c.slot_count, 3);
+        assert!((c.slot_width - 35.0).abs() < 1e-6);
+        assert!((c.slot_length - 220.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "cutlery_tray(3, 35, 220)");
+    }
+
+    #[test]
+    fn pill_organizer_default_is_weekly_7x2() {
+        let p = PillOrganizerUiState::default();
+        assert_eq!(p.rows, 7);
+        assert_eq!(p.cols, 2);
+        assert!((p.cell_size - 20.0).abs() < 1e-6);
+        assert_eq!(p.to_lol(), "pill_organizer(7, 2, 20)");
+    }
+
+    #[test]
+    fn magnetic_strip_default_is_knife_rail_8() {
+        let m = MagneticStripUiState::default();
+        assert_eq!(m.magnet_count, 8);
+        assert!((m.magnet_diameter - 6.0).abs() < 1e-6);
+        assert!((m.magnet_spacing - 30.0).abs() < 1e-6);
+        assert_eq!(m.to_lol(), "magnetic_strip(8, 6, 30)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_34_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 11 追加後は 34 archetype (+3: cutlery_tray / pill_organizer / magnetic_strip)
+        assert_eq!(c.cutlery_tray.to_lol(), "cutlery_tray(3, 35, 220)");
+        assert_eq!(c.pill_organizer.to_lol(), "pill_organizer(7, 2, 20)");
+        assert_eq!(c.magnetic_strip.to_lol(), "magnetic_strip(8, 6, 30)");
     }
 }

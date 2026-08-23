@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 31 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 34 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1256,7 +1256,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
 /// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8) +
 /// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9) +
-/// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10)
+/// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10) +
+/// drawer-wall 3 (cutlery_tray / pill_organizer / magnetic_strip、Sprint 11)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1323,6 +1324,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_nozzle_holder_customizer(ui, state);
                 ui.separator();
                 show_build_plate_rack_customizer(ui, state);
+                ui.separator();
+                show_cutlery_tray_customizer(ui, state);
+                ui.separator();
+                show_pill_organizer_customizer(ui, state);
+                ui.separator();
+                show_magnetic_strip_customizer(ui, state);
             });
         },
     );
@@ -2468,6 +2475,116 @@ fn show_build_plate_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, r_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// カトラリートレー customizer (`slot_count × slot_width × slot_length`、drawer § 3.2)
+///
+/// row 状 long rect slot (fork/knife/spoon 分別、drawer 引き出し向け)
+fn show_cutlery_tray_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🍴 カトラリートレー (drawer 引き出し用、long slot)").strong());
+
+    let c = &mut state.customizer_state.cutlery_tray;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut c.slot_count, 2..=8).text("(2-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut c.slot_width, 20.0..=60.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 長 (mm):");
+        ui.add(egui::Slider::new(&mut c.slot_length, 150.0..=350.0).step_by(5.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "カトラリートレー {} slot × W{}×L{}mm",
+        c_copy.slot_count, c_copy.slot_width, c_copy.slot_length
+    );
+    ui.label("プリセット目安: fork (W30-35) / knife (W25-30) / spoon (W50-55)、長さ 220mm 標準");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 薬箱 customizer (`rows × cols × cell_size`、drawer § 3.6)
+///
+/// 2D grid rect cells (weekly pill box、egg_tray の rect 版)
+fn show_pill_organizer_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💊 薬箱 (2D grid rect cell、weekly pill box)").strong());
+
+    let p = &mut state.customizer_state.pill_organizer;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut p.rows, 1..=14).text("(1-14)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut p.cols, 1..=8).text("(1-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cell 内寸 (mm):");
+        ui.add(egui::Slider::new(&mut p.cell_size, 15.0..=30.0).step_by(0.5));
+    });
+
+    let p_copy = *p;
+    let label = format!(
+        "薬箱 {}×{} × cell {}mm",
+        p_copy.rows, p_copy.cols, p_copy.cell_size
+    );
+    ui.label("プリセット目安: weekly AM/PM (7×2×20) / small daily (3×1×15) / large (7×4×25)");
+    ui.label("固定: cell 深 15mm、wall 1.5mm、floor 1.5mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, p_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// マグネットストリップ customizer
+/// (`magnet_count × magnet_diameter × spacing`、wall § 4.6)
+///
+/// long thin bar + row of magnet holes (kitchen knife rail / tool retention)
+fn show_magnetic_strip_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🧲 マグネットストリップ (long thin bar + magnet)").strong());
+
+    let m = &mut state.customizer_state.magnetic_strip;
+    ui.horizontal(|ui| {
+        ui.label("magnet 個数:");
+        ui.add(egui::Slider::new(&mut m.magnet_count, 3..=15).text("(3-15)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("magnet 直径 (mm):");
+        ui.add(egui::Slider::new(&mut m.magnet_diameter, 4.0..=15.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("magnet spacing (mm):");
+        ui.add(egui::Slider::new(&mut m.magnet_spacing, 20.0..=60.0).step_by(1.0));
+    });
+
+    let m_copy = *m;
+    let label = format!(
+        "マグネットバー {} × Ø{} spacing {}mm",
+        m_copy.magnet_count, m_copy.magnet_diameter, m_copy.magnet_spacing
+    );
+    ui.label(
+        "プリセット目安: kitchen knife rail (8×Ø6×30) / small tool (5×Ø8×25) / large (12×Ø10×40)",
+    );
+    ui.label("固定: bar 厚 5mm、bar 高 15mm、magnet 埋込 2mm (magnet は user 側で press-fit 挿入)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, m_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

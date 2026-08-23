@@ -185,6 +185,10 @@ name_3f ::= "box3d"
           | "filament_spool_holder"
           | "nozzle_holder"
           | "build_plate_rack"
+          # organizer-drawer-wall 高階 primitive (Sprint 11、2026-08-23 追加)
+          | "cutlery_tray"
+          | "pill_organizer"
+          | "magnetic_strip"
 
 name_4f ::= "rounded_box"
           | "plane"
