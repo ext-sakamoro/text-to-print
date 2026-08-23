@@ -5,5 +5,6 @@ pub mod embedded_backend;
 pub mod fix_prompt;
 pub mod grammar_lol;
 pub mod model;
+pub mod openai_compat_backend;
 pub mod prompt;
 pub mod sidecar;

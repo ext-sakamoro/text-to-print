@@ -32,6 +32,26 @@ pub struct GenerationRow {
     pub manifest_json: Option<String>,
 }
 
+/// BYO LLM (2026-08-23): a persisted OpenAI-compat provider config The
+/// API key itself lives in the OS Keychain and is NOT included here
+///
+/// See `text_to_print_llm::openai_compat_backend` for the runtime
+/// counterpart (`OpenAiCompatConfig`)
+#[derive(Debug, Clone)]
+pub struct LlmProviderConfigRow {
+    /// Stable slug: `"OpenAi"` / `"Anthropic"` / `"Google"` / `"Custom"`
+    pub provider: String,
+    pub endpoint: String,
+    pub model: String,
+    pub max_tokens: u32,
+    pub temperature: f32,
+    /// Provider-specific cost-guard: `"minimal"` (OpenAI) / `"none"`
+    /// (Gemini) / `None` (Anthropic / Custom) See
+    /// `[[llm-api-cost-guard]]` skill and
+    /// `OpenAiCompatProvider::default_reasoning_effort` for the rules
+    pub reasoning_effort: Option<String>,
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -174,6 +194,47 @@ impl Database {
         );
         let _ = self.conn.execute(
             "ALTER TABLE profiles ADD COLUMN sidecar_port INTEGER NOT NULL DEFAULT 8000",
+            [],
+        );
+        // BYO LLM (2026-08-23): OpenAI-compat provider configs
+        //
+        // One row per (profile_id, provider) so the user can store
+        // credentials for multiple providers (OpenAI + Anthropic +
+        // Google + Ollama etc) and switch without re-entering
+        //
+        // API keys live in the OS Keychain (`crate::keychain`) — this
+        // table only holds the non-secret portion of the config
+        let _ = self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS llm_provider_configs (
+                profile_id       TEXT NOT NULL REFERENCES profiles(id),
+                provider         TEXT NOT NULL,
+                endpoint         TEXT NOT NULL,
+                model            TEXT NOT NULL,
+                max_tokens       INTEGER NOT NULL DEFAULT 256,
+                temperature      REAL NOT NULL DEFAULT 0.7,
+                reasoning_effort TEXT,
+                created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (profile_id, provider)
+            )",
+            [],
+        );
+        // BYO LLM (2026-08-23): which OpenAI-compat provider is
+        // currently active for generation Only meaningful when
+        // `backend_kind = 'OpenAiCompat'` Default `OpenAi` chosen to
+        // match Settings UI first-preset landing
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN openai_compat_active_provider TEXT NOT NULL DEFAULT 'OpenAi'",
+            [],
+        );
+        // BYO LLM (2026-08-23): user-supplied GGUF file path that
+        // overrides the built-in ModelChoice download path when the
+        // Embedded backend is active Empty string = not set (use the
+        // download path for the current ModelChoice) When populated,
+        // spawn_embedded_load skips the HF download and loads directly
+        // from this file — user is responsible for placing it on disk
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN custom_gguf_path TEXT NOT NULL DEFAULT ''",
             [],
         );
         Ok(())
@@ -447,6 +508,200 @@ impl Database {
         self.conn.execute(
             "UPDATE profiles SET sidecar_port = ?2, updated_at = datetime('now') WHERE id = ?1",
             rusqlite::params![profile_id, i64::from(port)],
+        )?;
+        Ok(())
+    }
+
+    // ── BYO LLM (2026-08-23): OpenAI-compat provider configs ──
+
+    /// Fetch which OpenAI-compat provider is currently active for
+    /// generation Only meaningful when `backend_kind = 'OpenAiCompat'`
+    /// Missing / unknown rows fall back to `"OpenAi"`
+    ///
+    /// # Errors
+    ///
+    /// SQLite query error other than `NoRows` (which is folded into the
+    /// default)
+    pub fn get_openai_compat_active_provider(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT openai_compat_active_provider FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "OpenAi".to_string());
+        Ok(value)
+    }
+
+    /// Persist which OpenAI-compat provider should route generation
+    /// when the backend kind is `OpenAiCompat`
+    ///
+    /// # Errors
+    ///
+    /// SQLite UPDATE error
+    pub fn set_openai_compat_active_provider(
+        &self,
+        profile_id: &str,
+        provider: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET openai_compat_active_provider = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, provider],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch the stored config for a single (profile, provider) pair
+    /// Returns `Ok(None)` when the user has not configured that
+    /// provider yet
+    ///
+    /// # Errors
+    ///
+    /// SQLite query error other than `NoRows` (which becomes `None`)
+    pub fn get_llm_provider_config(
+        &self,
+        profile_id: &str,
+        provider: &str,
+    ) -> Result<Option<LlmProviderConfigRow>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT provider, endpoint, model, max_tokens, temperature, reasoning_effort
+                 FROM llm_provider_configs
+                 WHERE profile_id = ?1 AND provider = ?2",
+                rusqlite::params![profile_id, provider],
+                |row| {
+                    Ok(LlmProviderConfigRow {
+                        provider: row.get(0)?,
+                        endpoint: row.get(1)?,
+                        model: row.get(2)?,
+                        max_tokens: row.get::<_, i64>(3)?.clamp(1, i64::from(u32::MAX)) as u32,
+                        temperature: row.get::<_, f64>(4)? as f32,
+                        reasoning_effort: row.get(5)?,
+                    })
+                },
+            )
+            .ok();
+        Ok(row)
+    }
+
+    /// List all persisted provider configs for the given profile
+    /// Ordered by provider slug for stable UI rendering
+    ///
+    /// # Errors
+    ///
+    /// SQLite query / row extraction error
+    pub fn list_llm_provider_configs(
+        &self,
+        profile_id: &str,
+    ) -> Result<Vec<LlmProviderConfigRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT provider, endpoint, model, max_tokens, temperature, reasoning_effort
+             FROM llm_provider_configs
+             WHERE profile_id = ?1
+             ORDER BY provider",
+        )?;
+        let rows = stmt.query_map([profile_id], |row| {
+            Ok(LlmProviderConfigRow {
+                provider: row.get(0)?,
+                endpoint: row.get(1)?,
+                model: row.get(2)?,
+                max_tokens: row.get::<_, i64>(3)?.clamp(1, i64::from(u32::MAX)) as u32,
+                temperature: row.get::<_, f64>(4)? as f32,
+                reasoning_effort: row.get(5)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Upsert a provider config Overwrites the previous row for the
+    /// same (profile, provider) pair
+    ///
+    /// # Errors
+    ///
+    /// SQLite upsert error
+    pub fn set_llm_provider_config(
+        &self,
+        profile_id: &str,
+        config: &LlmProviderConfigRow,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO llm_provider_configs
+                (profile_id, provider, endpoint, model, max_tokens, temperature, reasoning_effort, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+             ON CONFLICT(profile_id, provider) DO UPDATE SET
+                endpoint = excluded.endpoint,
+                model = excluded.model,
+                max_tokens = excluded.max_tokens,
+                temperature = excluded.temperature,
+                reasoning_effort = excluded.reasoning_effort,
+                updated_at = datetime('now')",
+            rusqlite::params![
+                profile_id,
+                config.provider,
+                config.endpoint,
+                config.model,
+                i64::from(config.max_tokens),
+                f64::from(config.temperature),
+                config.reasoning_effort,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a stored provider config Idempotent — no error if the row
+    /// does not exist Caller is responsible for removing the associated
+    /// Keychain entry separately via [`crate::keychain::delete_api_key`]
+    ///
+    /// # Errors
+    ///
+    /// SQLite DELETE error
+    pub fn delete_llm_provider_config(
+        &self,
+        profile_id: &str,
+        provider: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM llm_provider_configs WHERE profile_id = ?1 AND provider = ?2",
+            rusqlite::params![profile_id, provider],
+        )?;
+        Ok(())
+    }
+
+    /// BYO LLM (2026-08-23): user-supplied GGUF path that overrides the
+    /// download path when Embedded is active Empty string returned = not
+    /// set (use ModelChoice default) Callers convert `""` to `None`
+    ///
+    /// # Errors
+    ///
+    /// SQLite query error other than `NoRows` (folded into empty string)
+    pub fn get_custom_gguf_path(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT custom_gguf_path FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_default();
+        Ok(value)
+    }
+
+    /// Persist the user-supplied GGUF override path Pass empty string
+    /// to clear the override (revert to ModelChoice default)
+    ///
+    /// # Errors
+    ///
+    /// SQLite UPDATE error
+    pub fn set_custom_gguf_path(&self, profile_id: &str, path: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET custom_gguf_path = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, path],
         )?;
         Ok(())
     }
@@ -778,6 +1033,224 @@ mod tests {
             rows[0].manifest_json.as_deref(),
             Some(r#"{"schema_version":"1","uuid":"def"}"#)
         );
+    }
+
+    // ── BYO LLM (2026-08-23): OpenAI-compat provider config tests ──
+
+    #[test]
+    fn openai_compat_active_provider_defaults_to_openai() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(
+            db.get_openai_compat_active_provider("user1").unwrap(),
+            "OpenAi"
+        );
+    }
+
+    #[test]
+    fn openai_compat_active_provider_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_openai_compat_active_provider("user1", "Anthropic")
+            .unwrap();
+        assert_eq!(
+            db.get_openai_compat_active_provider("user1").unwrap(),
+            "Anthropic"
+        );
+        db.set_openai_compat_active_provider("user1", "Google")
+            .unwrap();
+        assert_eq!(
+            db.get_openai_compat_active_provider("user1").unwrap(),
+            "Google"
+        );
+    }
+
+    #[test]
+    fn openai_compat_active_provider_unknown_profile_defaults_to_openai() {
+        let db = test_db();
+        assert_eq!(
+            db.get_openai_compat_active_provider("nonexistent").unwrap(),
+            "OpenAi"
+        );
+    }
+
+    #[test]
+    fn llm_provider_config_get_returns_none_when_missing() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert!(
+            db.get_llm_provider_config("user1", "OpenAi")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn llm_provider_config_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        let cfg = LlmProviderConfigRow {
+            provider: "OpenAi".to_string(),
+            endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+            model: "gpt-5".to_string(),
+            max_tokens: 512,
+            temperature: 0.5,
+            reasoning_effort: Some("minimal".to_string()),
+        };
+        db.set_llm_provider_config("user1", &cfg).unwrap();
+
+        let got = db.get_llm_provider_config("user1", "OpenAi").unwrap();
+        let row = got.expect("just inserted");
+        assert_eq!(row.provider, "OpenAi");
+        assert_eq!(row.endpoint, cfg.endpoint);
+        assert_eq!(row.model, cfg.model);
+        assert_eq!(row.max_tokens, 512);
+        assert!((row.temperature - 0.5).abs() < 1e-6);
+        assert_eq!(row.reasoning_effort.as_deref(), Some("minimal"));
+    }
+
+    #[test]
+    fn llm_provider_config_upsert_overwrites_previous_row() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        let cfg1 = LlmProviderConfigRow {
+            provider: "Anthropic".to_string(),
+            endpoint: "https://api.anthropic.com/v1/chat/completions".to_string(),
+            model: "claude-sonnet-4-5".to_string(),
+            max_tokens: 256,
+            temperature: 0.7,
+            reasoning_effort: None,
+        };
+        db.set_llm_provider_config("user1", &cfg1).unwrap();
+
+        let cfg2 = LlmProviderConfigRow {
+            provider: "Anthropic".to_string(),
+            endpoint: "https://api.anthropic.com/v1/chat/completions".to_string(),
+            model: "claude-opus-4-7".to_string(),
+            max_tokens: 1024,
+            temperature: 0.3,
+            reasoning_effort: None,
+        };
+        db.set_llm_provider_config("user1", &cfg2).unwrap();
+
+        let got = db.get_llm_provider_config("user1", "Anthropic").unwrap();
+        let row = got.expect("upsert should keep row");
+        assert_eq!(row.model, "claude-opus-4-7");
+        assert_eq!(row.max_tokens, 1024);
+
+        // Only one row per (profile, provider)
+        let all = db.list_llm_provider_configs("user1").unwrap();
+        assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn llm_provider_config_list_ordered_by_provider() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        for provider in ["OpenAi", "Google", "Anthropic", "Custom"] {
+            db.set_llm_provider_config(
+                "user1",
+                &LlmProviderConfigRow {
+                    provider: provider.to_string(),
+                    endpoint: format!("https://{provider}.example/v1/chat/completions"),
+                    model: format!("{provider}-model"),
+                    max_tokens: 256,
+                    temperature: 0.7,
+                    reasoning_effort: None,
+                },
+            )
+            .unwrap();
+        }
+        let all = db.list_llm_provider_configs("user1").unwrap();
+        let slugs: Vec<&str> = all.iter().map(|r| r.provider.as_str()).collect();
+        assert_eq!(slugs, vec!["Anthropic", "Custom", "Google", "OpenAi"]);
+    }
+
+    #[test]
+    fn llm_provider_config_delete_is_idempotent() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        // Delete when nothing exists — no error
+        db.delete_llm_provider_config("user1", "OpenAi").unwrap();
+
+        db.set_llm_provider_config(
+            "user1",
+            &LlmProviderConfigRow {
+                provider: "OpenAi".to_string(),
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                model: "gpt-5".to_string(),
+                max_tokens: 256,
+                temperature: 0.7,
+                reasoning_effort: Some("minimal".to_string()),
+            },
+        )
+        .unwrap();
+        assert!(
+            db.get_llm_provider_config("user1", "OpenAi")
+                .unwrap()
+                .is_some()
+        );
+
+        db.delete_llm_provider_config("user1", "OpenAi").unwrap();
+        assert!(
+            db.get_llm_provider_config("user1", "OpenAi")
+                .unwrap()
+                .is_none()
+        );
+
+        // Delete again — still no error
+        db.delete_llm_provider_config("user1", "OpenAi").unwrap();
+    }
+
+    #[test]
+    fn custom_gguf_path_defaults_to_empty() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(db.get_custom_gguf_path("user1").unwrap(), "");
+    }
+
+    #[test]
+    fn custom_gguf_path_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_custom_gguf_path("user1", "/tmp/qwen2.5-14b.gguf")
+            .unwrap();
+        assert_eq!(
+            db.get_custom_gguf_path("user1").unwrap(),
+            "/tmp/qwen2.5-14b.gguf"
+        );
+        // Clear via empty string
+        db.set_custom_gguf_path("user1", "").unwrap();
+        assert_eq!(db.get_custom_gguf_path("user1").unwrap(), "");
+    }
+
+    #[test]
+    fn custom_gguf_path_unknown_profile_returns_empty() {
+        let db = test_db();
+        assert_eq!(db.get_custom_gguf_path("nonexistent").unwrap(), "");
+    }
+
+    #[test]
+    fn llm_provider_configs_are_per_profile() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.get_or_create_profile("user2").unwrap();
+
+        db.set_llm_provider_config(
+            "user1",
+            &LlmProviderConfigRow {
+                provider: "OpenAi".to_string(),
+                endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
+                model: "gpt-5".to_string(),
+                max_tokens: 256,
+                temperature: 0.7,
+                reasoning_effort: Some("minimal".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(db.list_llm_provider_configs("user1").unwrap().len(), 1);
+        assert_eq!(db.list_llm_provider_configs("user2").unwrap().len(), 0);
     }
 
     #[test]

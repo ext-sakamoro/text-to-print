@@ -2,10 +2,15 @@ use egui::Ui;
 use serde::{Deserialize, Serialize};
 
 use crate::state::AppState;
+use text_to_print_core::db::LlmProviderConfigRow;
+use text_to_print_core::keychain;
 use text_to_print_core::license::{LicenseKey, LicenseVerifier};
 use text_to_print_core::tier::Tier;
 use text_to_print_llm::backend_kind::{BackendKind, ExecutionMode};
 use text_to_print_llm::model::ModelChoice;
+use text_to_print_llm::openai_compat_backend::{
+    OpenAiCompatBackend, OpenAiCompatConfig, OpenAiCompatProvider,
+};
 
 pub const LICENSE_PUBLIC_KEY: [u8; 32] = [
     0x05, 0x7f, 0x9c, 0x5f, 0xdb, 0x3f, 0x6f, 0x93, 0x69, 0x11, 0xd9, 0x16, 0x85, 0xb1, 0x82, 0x5b,
@@ -40,6 +45,47 @@ pub struct SettingsState {
     /// 2026-08-23 Network Settings 初期 load 済みフラグ (SettingsState 生成後
     /// 1 回だけ DB から値を pull、以降は user 編集値を保持)
     pub network_loaded: bool,
+    /// BYO LLM (2026-08-23): form buffer for the currently-being-edited
+    /// OpenAI-compat provider See [`ByoLlmSettings`] for field docs
+    pub byo_llm: ByoLlmSettings,
+}
+
+/// UI form state for the BYO LLM (bring-your-own OpenAI-compat provider)
+/// section of Settings The runtime backend lives in
+/// [`AppState::openai_compat`]; this struct only holds unsaved edits
+///
+/// The `form_api_key` field is cleared after a successful save so the
+/// key never lingers in application memory beyond the Keychain
+#[derive(Default)]
+pub struct ByoLlmSettings {
+    /// Which provider preset is being edited in the form Independent of
+    /// `state.db.get_openai_compat_active_provider()` (the currently
+    /// active provider for generation)
+    pub form_provider: Option<OpenAiCompatProvider>,
+    pub form_endpoint: String,
+    pub form_model: String,
+    /// TextEdit-bound string; parsed to `u32` on save
+    pub form_max_tokens: String,
+    /// TextEdit-bound string; parsed to `f32` on save
+    pub form_temperature: String,
+    /// `"minimal"` (OpenAI) / `"none"` (Gemini) / empty (Anthropic /
+    /// Custom) Blank string maps to `None` (omitted from request body)
+    pub form_reasoning_effort: String,
+    /// API key input Password-style widget (masked), cleared after save
+    /// Never persisted to disk — only forwarded to OS Keychain
+    pub form_api_key: String,
+    /// Persist / test result message (green = success, red = error)
+    pub message: Option<(String, bool)>,
+    /// Cached list of already-configured provider slugs (from
+    /// `list_llm_provider_configs`) Used to render "quick-load" buttons
+    /// so the user can switch between saved provider configs
+    pub configured_providers: Vec<String>,
+    /// Which provider is currently the active generation target Loaded
+    /// from `profiles.openai_compat_active_provider`
+    pub active_provider: String,
+    /// One-shot init flag SettingsState is reused across UI frames;
+    /// this ensures we hit the DB once at startup, not on every repaint
+    pub loaded: bool,
 }
 
 /// Wire format for `POST /stripe/checkout-session` (must match
@@ -213,10 +259,12 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
     // LLM 設定
     ui.collapsing("LLM", |ui| {
         // Stage 3-C.6: inference backend picker
+        // BYO LLM (2026-08-23): added OpenAiCompat variant for remote
+        // API providers (OpenAI / Anthropic / Google / Ollama)
         ui.label("Inference backend:");
         let current_kind = state.backend_kind;
         let mut new_kind = current_kind;
-        ui.horizontal(|ui| {
+        ui.vertical(|ui| {
             ui.selectable_value(
                 &mut new_kind,
                 BackendKind::Sidecar,
@@ -226,6 +274,11 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 &mut new_kind,
                 BackendKind::Embedded,
                 BackendKind::Embedded.label(),
+            );
+            ui.selectable_value(
+                &mut new_kind,
+                BackendKind::OpenAiCompat,
+                BackendKind::OpenAiCompat.label(),
             );
         });
         if new_kind != current_kind {
@@ -254,6 +307,48 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 .on_hover_text(
                     "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい",
                 );
+
+            // BYO LLM (2026-08-23): custom GGUF path override
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new("Custom GGUF (Model 選択より優先)").strong());
+            let display_path = state
+                .custom_gguf_path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "(未設定、上の Model dropdown を使用)".to_string());
+            ui.label(
+                egui::RichText::new(display_path)
+                    .small()
+                    .color(if state.custom_gguf_path.is_some() {
+                        egui::Color32::LIGHT_GREEN
+                    } else {
+                        ui.style().visuals.weak_text_color()
+                    }),
+            );
+            ui.horizontal(|ui| {
+                if ui
+                    .button("GGUF ファイル選択")
+                    .on_hover_text(
+                        "HF DL を skip して指定 path から直接ロード \
+                         qwen2.5-14b-instruct-q4_k_m.gguf 等の大型モデルを \
+                         user 側で DL / 配置して使用",
+                    )
+                    .clicked()
+                    && let Some(path) = rfd::FileDialog::new()
+                        .add_filter("GGUF", &["gguf"])
+                        .pick_file()
+                {
+                    state.set_custom_gguf_path(Some(path));
+                }
+                if state.custom_gguf_path.is_some()
+                    && ui
+                        .button("クリア")
+                        .on_hover_text("override 解除、上の Model dropdown に戻す")
+                        .clicked()
+                {
+                    state.set_custom_gguf_path(None);
+                }
+            });
         }
         ui.add_space(6.0);
 
@@ -322,6 +417,13 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
                 tracing::warn!(error = %e, "failed to persist enforce_lol_grammar toggle");
             }
         }
+    });
+
+    ui.add_space(8.0);
+
+    // BYO LLM (2026-08-23): OpenAI-compat provider configuration
+    ui.collapsing("BYO LLM (OpenAI / Claude / Gemini / Ollama)", |ui| {
+        show_byo_llm(ui, state, &mut settings.byo_llm);
     });
 
     ui.add_space(8.0);
@@ -509,6 +611,584 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.colored_label(color, msg);
         }
     });
+}
+
+/// BYO LLM (2026-08-23) UI section — provider preset picker, per-provider
+/// config form (endpoint / model / max_tokens / temperature /
+/// reasoning_effort / API key), Save / Test / Delete / Activate actions,
+/// and per-generation cost estimate
+fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
+    // ── 1. One-shot init from DB ──────────────────────────────
+    if !form.loaded {
+        form.configured_providers = state
+            .db
+            .list_llm_provider_configs(&state.profile_id)
+            .map(|rows| rows.into_iter().map(|r| r.provider).collect())
+            .unwrap_or_default();
+        form.active_provider = state
+            .db
+            .get_openai_compat_active_provider(&state.profile_id)
+            .unwrap_or_else(|_| "OpenAi".to_string());
+        // Auto-load the active provider into the form so users see the
+        // current settings immediately when opening the section
+        let active = OpenAiCompatProvider::from_db_str(&form.active_provider);
+        load_provider_form(state, form, active);
+        form.loaded = true;
+    }
+
+    // ── 2. Info banner ────────────────────────────────────────
+    ui.label(
+        egui::RichText::new(
+            "リモート LLM API 設定 (OpenAI / Anthropic / Google / Ollama 等) \
+             保存された provider のうち 1 つを 'アクティブ' として生成に使用します",
+        )
+        .small()
+        .weak(),
+    );
+    ui.add_space(4.0);
+    if state.backend_kind != BackendKind::OpenAiCompat {
+        ui.colored_label(
+            ui.style().visuals.warn_fg_color,
+            "現在の Inference backend は BYO LLM ではありません 上の picker で 'BYO LLM' を選択すると有効",
+        );
+        ui.add_space(4.0);
+    }
+
+    // ── 3. Provider preset buttons ────────────────────────────
+    ui.label("Provider preset:");
+    ui.horizontal_wrapped(|ui| {
+        for p in [
+            OpenAiCompatProvider::OpenAi,
+            OpenAiCompatProvider::Anthropic,
+            OpenAiCompatProvider::Google,
+            OpenAiCompatProvider::Custom,
+        ] {
+            let is_configured = form.configured_providers.iter().any(|s| s == p.to_db_str());
+            let is_active = form.active_provider == p.to_db_str();
+            let mut label = p.label().to_string();
+            if is_active {
+                label = format!("★ {label}");
+            } else if is_configured {
+                label = format!("● {label}");
+            }
+            let selected = form.form_provider == Some(p);
+            if ui.selectable_label(selected, label).clicked() {
+                load_provider_form(state, form, p);
+            }
+        }
+    });
+    ui.label(
+        egui::RichText::new("★ = アクティブ (生成に使用中) / ● = 保存済 (未アクティブ)")
+            .small()
+            .weak(),
+    );
+
+    let Some(provider) = form.form_provider else {
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("上のボタンで provider を選択").weak());
+        return;
+    };
+
+    // ── 4. Form fields ────────────────────────────────────────
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.label("Endpoint:");
+        ui.add(egui::TextEdit::singleline(&mut form.form_endpoint).desired_width(420.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("Model:");
+        ui.add(egui::TextEdit::singleline(&mut form.form_model).desired_width(300.0))
+            .on_hover_text(
+                "例: OpenAI: gpt-5 / o1 / gpt-4o-mini \
+                 Anthropic: claude-sonnet-4-5 / claude-opus-4-7 \
+                 Google: gemini-2.5-pro / gemini-2.5-flash \
+                 Ollama: qwen2.5-14b-instruct",
+            );
+    });
+    ui.horizontal(|ui| {
+        ui.label("Max tokens:");
+        ui.add(egui::TextEdit::singleline(&mut form.form_max_tokens).desired_width(80.0));
+        ui.label(
+            egui::RichText::new("(既定 256、大きくすると 1 生成コスト増)")
+                .small()
+                .weak(),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label("Temperature:");
+        ui.add(egui::TextEdit::singleline(&mut form.form_temperature).desired_width(60.0));
+        ui.label(egui::RichText::new("(0.0-2.0、既定 0.7)").small().weak());
+    });
+
+    // Reasoning effort (cost guard)
+    ui.horizontal(|ui| {
+        ui.label("Reasoning effort:");
+        egui::ComboBox::from_id_salt("byo_llm_reasoning_effort")
+            .selected_text(if form.form_reasoning_effort.is_empty() {
+                "(未指定)"
+            } else {
+                form.form_reasoning_effort.as_str()
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut form.form_reasoning_effort, String::new(), "(未指定)");
+                ui.selectable_value(
+                    &mut form.form_reasoning_effort,
+                    "minimal".to_string(),
+                    "minimal (OpenAI GPT-5 / o-series)",
+                );
+                ui.selectable_value(
+                    &mut form.form_reasoning_effort,
+                    "none".to_string(),
+                    "none (Google Gemini 2.5)",
+                );
+                ui.selectable_value(
+                    &mut form.form_reasoning_effort,
+                    "low".to_string(),
+                    "low",
+                );
+            });
+    });
+    ui.label(
+        egui::RichText::new(
+            "OpenAI GPT-5/o-series は 'minimal' 推奨 (silent thinking 課金抑制) \
+             Google Gemini 2.5 は 'none' 推奨 (silent thinking 抑制) \
+             Anthropic / Ollama は空欄で OK",
+        )
+        .small()
+        .weak(),
+    );
+
+    // API key input
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.label("API key:");
+        ui.add(
+            egui::TextEdit::singleline(&mut form.form_api_key)
+                .password(true)
+                .desired_width(320.0)
+                .hint_text("Keychain 保存、平文 disk 化なし"),
+        );
+    });
+    let key_status = match keychain::get_api_key(provider.keychain_account()) {
+        Ok(Some(_)) => "Keychain に保存済",
+        Ok(None) => "未保存",
+        Err(_) => "Keychain 読出エラー",
+    };
+    ui.label(
+        egui::RichText::new(format!("Keychain 状態: {key_status}"))
+            .small()
+            .weak(),
+    );
+
+    // ── 5. Action buttons ─────────────────────────────────────
+    ui.add_space(6.0);
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("保存").clicked() {
+            save_byo_llm_form(state, form, provider);
+        }
+        if ui
+            .button("テスト送信 (~16 tokens)")
+            .on_hover_text("フォーム内容で 1 回だけ生成 (最大 30 秒 UI ブロック)")
+            .clicked()
+        {
+            test_byo_llm(state, form, provider);
+        }
+        if ui.button("削除").clicked() {
+            delete_byo_llm_form(state, form, provider);
+        }
+        let is_saved = form
+            .configured_providers
+            .iter()
+            .any(|s| s == provider.to_db_str());
+        let is_active = form.active_provider == provider.to_db_str();
+        if is_saved
+            && !is_active
+            && ui
+                .button("この provider をアクティブ化")
+                .on_hover_text("生成時にこの provider を使うよう切替")
+                .clicked()
+        {
+            activate_byo_llm(state, form, provider);
+        }
+    });
+
+    // ── 6. Cost estimate ──────────────────────────────────────
+    ui.add_space(6.0);
+    match estimate_cost_per_generation(&form.form_model) {
+        Some(usd) => {
+            ui.label(
+                egui::RichText::new(format!(
+                    "予想コスト: 約 ${usd:.4} / 生成 (system_prompt ~4K in + ~500 out トークン想定、rate は 2026-08-23 時点、実際は provider の pricing page で確認)"
+                ))
+                .small(),
+            );
+        }
+        None => {
+            ui.label(
+                egui::RichText::new(
+                    "予想コスト: rate table に model なし (Custom / 独自 model 使用時) \
+                     API 課金は provider の pricing page で確認",
+                )
+                .small()
+                .weak(),
+            );
+        }
+    }
+
+    // ── 7. Message ────────────────────────────────────────────
+    if let Some((msg, ok)) = &form.message {
+        ui.add_space(4.0);
+        let color = if *ok {
+            egui::Color32::LIGHT_GREEN
+        } else {
+            egui::Color32::LIGHT_RED
+        };
+        ui.colored_label(color, msg);
+    }
+}
+
+/// Populate the form buffer with the provider's saved config, or fall
+/// back to the preset defaults when nothing is saved yet Clears the API
+/// key input to force explicit re-entry (never surface the stored key)
+fn load_provider_form(
+    state: &AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+) {
+    form.form_provider = Some(provider);
+    match state
+        .db
+        .get_llm_provider_config(&state.profile_id, provider.to_db_str())
+    {
+        Ok(Some(row)) => {
+            form.form_endpoint = row.endpoint;
+            form.form_model = row.model;
+            form.form_max_tokens = row.max_tokens.to_string();
+            form.form_temperature = format!("{:.2}", row.temperature);
+            form.form_reasoning_effort = row.reasoning_effort.unwrap_or_default();
+        }
+        _ => {
+            form.form_endpoint = provider.default_endpoint().to_string();
+            form.form_model = provider.default_model().to_string();
+            form.form_max_tokens = "256".to_string();
+            form.form_temperature = "0.7".to_string();
+            form.form_reasoning_effort = provider
+                .default_reasoning_effort()
+                .unwrap_or("")
+                .to_string();
+        }
+    }
+    form.form_api_key.clear();
+    form.message = None;
+}
+
+/// Persist the form buffer to DB (`llm_provider_configs`) and OS
+/// Keychain (`crate::keychain`) If a value was typed into the API key
+/// field, it overwrites the Keychain entry; otherwise the existing
+/// stored key (if any) is reused Rebuilds the runtime backend if the
+/// saved provider matches the current active provider
+fn save_byo_llm_form(
+    state: &mut AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+) {
+    // Parse + validate
+    let max_tokens = match form.form_max_tokens.trim().parse::<u32>() {
+        Ok(v) if v > 0 => v,
+        _ => {
+            form.message = Some(("max_tokens は正の整数".to_string(), false));
+            return;
+        }
+    };
+    let temperature = match form.form_temperature.trim().parse::<f32>() {
+        Ok(v) if (0.0..=2.0).contains(&v) => v,
+        _ => {
+            form.message = Some(("temperature は 0.0-2.0 の実数".to_string(), false));
+            return;
+        }
+    };
+    if form.form_endpoint.trim().is_empty() {
+        form.message = Some(("endpoint が空".to_string(), false));
+        return;
+    }
+    if form.form_model.trim().is_empty() {
+        form.message = Some(("model が空".to_string(), false));
+        return;
+    }
+
+    // Save API key to Keychain if the user typed something in the input
+    let api_key_typed = !form.form_api_key.trim().is_empty();
+    if api_key_typed
+        && let Err(e) =
+            keychain::set_api_key(provider.keychain_account(), form.form_api_key.trim())
+    {
+        form.message = Some((format!("Keychain 保存失敗: {e}"), false));
+        return;
+    }
+
+    // Resolve API key from Keychain (either just-saved or previously-saved)
+    let api_key = match keychain::get_api_key(provider.keychain_account()) {
+        Ok(Some(k)) => k,
+        Ok(None) => {
+            form.message = Some((
+                "API key が未入力 (Keychain にも保存なし)".to_string(),
+                false,
+            ));
+            return;
+        }
+        Err(e) => {
+            form.message = Some((format!("Keychain 読出失敗: {e}"), false));
+            return;
+        }
+    };
+
+    let reasoning_effort = if form.form_reasoning_effort.trim().is_empty() {
+        None
+    } else {
+        Some(form.form_reasoning_effort.trim().to_string())
+    };
+
+    let row = LlmProviderConfigRow {
+        provider: provider.to_db_str().to_string(),
+        endpoint: form.form_endpoint.trim().to_string(),
+        model: form.form_model.trim().to_string(),
+        max_tokens,
+        temperature,
+        reasoning_effort: reasoning_effort.clone(),
+    };
+    if let Err(e) = state.db.set_llm_provider_config(&state.profile_id, &row) {
+        form.message = Some((format!("DB 保存失敗: {e}"), false));
+        return;
+    }
+
+    // Rebuild the in-memory backend when this provider is currently active
+    // or when the user is switching to BYO LLM as their backend kind
+    if form.active_provider == provider.to_db_str()
+        || state.backend_kind == BackendKind::OpenAiCompat
+    {
+        let cfg = OpenAiCompatConfig {
+            provider,
+            endpoint: row.endpoint.clone(),
+            api_key,
+            model: row.model.clone(),
+            reasoning_effort,
+        };
+        if let Ok(mut slot) = state.openai_compat.lock() {
+            *slot = Some(OpenAiCompatBackend::new(cfg));
+        }
+    }
+
+    if !form
+        .configured_providers
+        .iter()
+        .any(|s| s == provider.to_db_str())
+    {
+        form.configured_providers
+            .push(provider.to_db_str().to_string());
+        form.configured_providers.sort();
+    }
+    form.form_api_key.clear();
+    form.message = Some(("保存完了".to_string(), true));
+}
+
+/// Remove the saved config for a provider Deletes both the DB row and
+/// the Keychain entry Idempotent — no error if either is already absent
+fn delete_byo_llm_form(
+    state: &mut AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+) {
+    if let Err(e) = state
+        .db
+        .delete_llm_provider_config(&state.profile_id, provider.to_db_str())
+    {
+        form.message = Some((format!("DB 削除失敗: {e}"), false));
+        return;
+    }
+    if let Err(e) = keychain::delete_api_key(provider.keychain_account()) {
+        form.message = Some((format!("Keychain 削除失敗: {e}"), false));
+        return;
+    }
+    if form.active_provider == provider.to_db_str()
+        && let Ok(mut slot) = state.openai_compat.lock()
+    {
+        *slot = None;
+    }
+    form.configured_providers
+        .retain(|s| s != provider.to_db_str());
+    form.form_api_key.clear();
+    form.message = Some(("削除完了".to_string(), true));
+}
+
+/// Mark the given provider as the active generation target Persists the
+/// choice in DB (`profiles.openai_compat_active_provider`) and
+/// populates the runtime backend slot from the stored DB row + Keychain
+fn activate_byo_llm(
+    state: &mut AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+) {
+    if let Err(e) = state
+        .db
+        .set_openai_compat_active_provider(&state.profile_id, provider.to_db_str())
+    {
+        form.message = Some((format!("active provider 保存失敗: {e}"), false));
+        return;
+    }
+    form.active_provider = provider.to_db_str().to_string();
+    let row = match state
+        .db
+        .get_llm_provider_config(&state.profile_id, provider.to_db_str())
+    {
+        Ok(Some(r)) => r,
+        _ => {
+            form.message = Some((
+                "この provider は未保存 まず '保存' して下さい".to_string(),
+                false,
+            ));
+            return;
+        }
+    };
+    let api_key = match keychain::get_api_key(provider.keychain_account()) {
+        Ok(Some(k)) => k,
+        Ok(None) => {
+            form.message = Some((
+                "Keychain に API key なし まず '保存' して下さい".to_string(),
+                false,
+            ));
+            return;
+        }
+        Err(e) => {
+            form.message = Some((format!("Keychain 読出失敗: {e}"), false));
+            return;
+        }
+    };
+    let cfg = OpenAiCompatConfig {
+        provider,
+        endpoint: row.endpoint,
+        api_key,
+        model: row.model,
+        reasoning_effort: row.reasoning_effort,
+    };
+    if let Ok(mut slot) = state.openai_compat.lock() {
+        *slot = Some(OpenAiCompatBackend::new(cfg));
+    }
+    form.message = Some((format!("{} をアクティブ化しました", provider.label()), true));
+}
+
+/// Fire a short synthetic generation request against the currently-
+/// edited form config Blocks the UI thread for up to 30 s (acceptable
+/// for a manual Test button) API key resolution: form input takes
+/// priority; falls back to Keychain-stored value
+fn test_byo_llm(
+    state: &AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+) {
+    let api_key = if !form.form_api_key.trim().is_empty() {
+        form.form_api_key.trim().to_string()
+    } else {
+        match keychain::get_api_key(provider.keychain_account()) {
+            Ok(Some(k)) => k,
+            _ => {
+                form.message = Some((
+                    "API key が form / Keychain のどちらにもなし".to_string(),
+                    false,
+                ));
+                return;
+            }
+        }
+    };
+    if form.form_endpoint.trim().is_empty() {
+        form.message = Some(("endpoint が空".to_string(), false));
+        return;
+    }
+    if form.form_model.trim().is_empty() {
+        form.message = Some(("model が空".to_string(), false));
+        return;
+    }
+    let cfg = OpenAiCompatConfig {
+        provider,
+        endpoint: form.form_endpoint.trim().to_string(),
+        api_key,
+        model: form.form_model.trim().to_string(),
+        reasoning_effort: if form.form_reasoning_effort.trim().is_empty() {
+            None
+        } else {
+            Some(form.form_reasoning_effort.trim().to_string())
+        },
+    };
+    let backend = OpenAiCompatBackend::new(cfg);
+    let params = text_to_print_llm::backend_kind::InferenceParams {
+        max_tokens: 16,
+        temperature: 0.0,
+        top_k: 40,
+        grammar: None,
+    };
+    let outcome = state.runtime.block_on(async move {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            backend.generate(
+                "You are a test responder. Reply with exactly: OK",
+                "Reply with the exact word OK.",
+                &params,
+            ),
+        )
+        .await
+    });
+    form.message = Some(match outcome {
+        Ok(Ok(reply)) => {
+            let preview: String = reply.chars().take(80).collect();
+            (format!("成功: {preview}"), true)
+        }
+        Ok(Err(e)) => (format!("失敗: {e}"), false),
+        Err(_) => ("失敗: 30 秒でタイムアウト".to_string(), false),
+    });
+}
+
+/// Rough per-generation cost estimate in USD Assumes 4 000 input
+/// tokens (typical system_prompt) + 500 output tokens (typical mug /
+/// bowl generation) Returns `None` when the model is not in the rate
+/// table (Custom / Ollama / unknown release)
+///
+/// Rate reference: 2026-08-23 public pricing pages; prices drift, so
+/// the UI labels the number as "estimate" and points users at the
+/// provider's own pricing page for authoritative numbers
+fn estimate_cost_per_generation(model: &str) -> Option<f64> {
+    const INPUT_TOKENS: f64 = 4_000.0;
+    const OUTPUT_TOKENS: f64 = 500.0;
+    let m = model.trim().to_lowercase();
+    // (input_usd_per_1M, output_usd_per_1M)
+    let rate: Option<(f64, f64)> = if m.contains("gpt-5") {
+        Some((2.00, 10.00))
+    } else if m.contains("o1-mini") || m.contains("o3-mini") {
+        Some((3.00, 12.00))
+    } else if m.contains("o1") || m.contains("o3") {
+        Some((15.00, 60.00))
+    } else if m.contains("gpt-4o-mini") || m.contains("gpt-4.1-mini") {
+        Some((0.15, 0.60))
+    } else if m.contains("gpt-4o") || m.contains("gpt-4.1") {
+        Some((5.00, 15.00))
+    } else if m.contains("claude-opus") {
+        Some((15.00, 75.00))
+    } else if m.contains("claude-sonnet") {
+        Some((3.00, 15.00))
+    } else if m.contains("claude-haiku") {
+        Some((0.80, 4.00))
+    } else if m.contains("gemini-2.5-pro") {
+        Some((1.25, 10.00))
+    } else if m.contains("gemini-2.5-flash") {
+        Some((0.30, 2.50))
+    } else if m.contains("gemini-1.5-pro") {
+        Some((1.25, 5.00))
+    } else if m.contains("gemini-1.5-flash") {
+        Some((0.075, 0.30))
+    } else {
+        None
+    };
+    rate.map(|(in_rate, out_rate)| {
+        (INPUT_TOKENS / 1_000_000.0) * in_rate + (OUTPUT_TOKENS / 1_000_000.0) * out_rate
+    })
 }
 
 fn apply_license(state: &mut AppState, settings: &mut SettingsState) {

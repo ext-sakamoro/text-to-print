@@ -120,6 +120,37 @@ impl T {
         }
     }
 
+    // R3 tab reorder (2026-08-23): templates / customizer are primary,
+    // LLM natural language input is marked Experimental
+    pub fn templates_section(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "テンプレート (推奨) — クリックで即生成、LLM 経由なし",
+            Lang::En => "Templates (recommended) — instant generation, no LLM",
+        }
+    }
+    pub fn customizer_section(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "カスタマイザー (推奨) — サイズ指定して生成、LLM 経由なし",
+            Lang::En => "Customizer (recommended) — parametric generation, no LLM",
+        }
+    }
+    pub fn experimental_llm_header(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "🧪 実験機能: LLM 自然言語入力 (単純形状のみ推奨)",
+            Lang::En => "🧪 Experimental: LLM natural-language input (simple shapes only)",
+        }
+    }
+    pub fn experimental_llm_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "現在のローカル LLM (Qwen 3-4B) は複合形状 (マグカップ / 花瓶 等) を正しく生成できません 複雑な形状は上の テンプレート / カスタマイザー、または 設定 → BYO LLM で Claude / GPT / Gemini 等の高性能 API を接続してください"
+            }
+            Lang::En => {
+                "The default local LLM (Qwen 3-4B) cannot compose complex shapes (mugs, vases, etc.) reliably For complex shapes use Templates / Customizer above, or connect a high-capacity API (Claude / GPT / Gemini) via Settings → BYO LLM"
+            }
+        }
+    }
+
     // History
     pub fn generation_history(l: Lang) -> &'static str {
         match l {

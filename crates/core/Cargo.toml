@@ -25,6 +25,7 @@ base64 = "0.22"
 hex = "0.4"
 sha2 = { workspace = true }
 zip = { workspace = true }
+keyring = { workspace = true }
 
 [[bin]]
 name = "gen-license-key"

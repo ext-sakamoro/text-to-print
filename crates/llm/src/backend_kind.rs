@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::backend::LlmConfig;
 use crate::embedded_backend::EmbeddedBackend;
+use crate::openai_compat_backend::OpenAiCompatBackend;
 
 /// Which backend the app should route generation requests through
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -28,6 +29,10 @@ pub enum BackendKind {
     Sidecar,
     /// In-process embedded inference via `alice-llm` rlib
     Embedded,
+    /// BYO LLM (2026-08-23): OpenAI-compatible remote HTTP endpoint
+    /// (OpenAI / Anthropic / Google / Ollama / LM Studio / ...) Config
+    /// + API key live in [`crate::openai_compat_backend`]
+    OpenAiCompat,
 }
 
 impl BackendKind {
@@ -37,6 +42,7 @@ impl BackendKind {
         match self {
             Self::Sidecar => "Sidecar (HTTP)",
             Self::Embedded => "Embedded (in-process)",
+            Self::OpenAiCompat => "BYO LLM (OpenAI-compat API)",
         }
     }
 
@@ -47,6 +53,7 @@ impl BackendKind {
         match self {
             Self::Sidecar => "Sidecar",
             Self::Embedded => "Embedded",
+            Self::OpenAiCompat => "OpenAiCompat",
         }
     }
 
@@ -56,6 +63,7 @@ impl BackendKind {
     pub fn from_db_str(s: &str) -> Self {
         match s {
             "Embedded" => Self::Embedded,
+            "OpenAiCompat" => Self::OpenAiCompat,
             _ => Self::Sidecar,
         }
     }
@@ -195,6 +203,11 @@ impl From<&LlmConfig> for InferenceParams {
 pub enum LlmBackend {
     Sidecar(LlmConfig),
     Embedded(EmbeddedBackend),
+    /// BYO LLM: remote OpenAI-compatible HTTP endpoint (see
+    /// [`crate::openai_compat_backend`]) Grammar-constrained decoding
+    /// is not supported — vendor endpoints do not accept GBNF, so the
+    /// `params.grammar` field is ignored when this variant is active
+    OpenAiCompat(OpenAiCompatBackend),
 }
 
 impl LlmBackend {
@@ -204,6 +217,7 @@ impl LlmBackend {
         match self {
             Self::Sidecar(_) => BackendKind::Sidecar,
             Self::Embedded(_) => BackendKind::Embedded,
+            Self::OpenAiCompat(_) => BackendKind::OpenAiCompat,
         }
     }
 
@@ -237,6 +251,7 @@ impl LlmBackend {
                 .await
             }
             Self::Embedded(inner) => inner.generate(system, user, params).await,
+            Self::OpenAiCompat(inner) => inner.generate(system, user, params).await,
         }
     }
 }
@@ -295,6 +310,27 @@ mod tests {
     fn from_db_str_unknown_falls_back_to_sidecar() {
         assert_eq!(BackendKind::from_db_str("garbage"), BackendKind::Sidecar);
         assert_eq!(BackendKind::from_db_str(""), BackendKind::Sidecar);
+    }
+
+    #[test]
+    fn openai_compat_kind_present_and_roundtrips() {
+        assert_eq!(BackendKind::OpenAiCompat.to_db_str(), "OpenAiCompat");
+        assert_eq!(
+            BackendKind::from_db_str("OpenAiCompat"),
+            BackendKind::OpenAiCompat
+        );
+        assert!(!BackendKind::OpenAiCompat.label().is_empty());
+    }
+
+    #[test]
+    fn openai_compat_variant_reports_openai_compat_kind() {
+        use crate::openai_compat_backend::{
+            OpenAiCompatBackend, OpenAiCompatConfig, OpenAiCompatProvider,
+        };
+        let cfg =
+            OpenAiCompatConfig::from_preset(OpenAiCompatProvider::OpenAi, "sk-xxx".to_string());
+        let backend = LlmBackend::OpenAiCompat(OpenAiCompatBackend::new(cfg));
+        assert_eq!(backend.kind(), BackendKind::OpenAiCompat);
     }
 
     #[test]

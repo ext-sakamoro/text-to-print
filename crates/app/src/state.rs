@@ -93,6 +93,13 @@ impl PhaseProgress {
 ///
 /// 経路 A (固定 preset button) と経路 B (自然言語 LLM) の中間に位置する
 /// **customizer 経路**を提供する archetype 毎に UI state を保持する
+///
+/// Sprint 6-9 の追加分 (filament_spool_holder / nozzle_holder /
+/// build_plate_rack / cable_clip / led_channel / card_tray /
+/// token_well / spice_rack / egg_tray / utensil_caddy / etc.) は
+/// UI 側の呼出 site が未完成な段階があり、dead_code lint を許容する
+/// (Wire 完了時に allow を削除する予定)
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct CustomizerState {
     /// Gridfinity bin customizer (organizer-gridfinity-desk PART 1)
@@ -1180,6 +1187,22 @@ pub struct AppState {
     /// underlying `Arc<Mutex<EmbeddedStatus>>` is written by the load
     /// task in [`AppState::switch_backend_kind`]
     pub embedded_status_cell: std::sync::Arc<std::sync::Mutex<EmbeddedStatus>>,
+    /// BYO LLM (2026-08-23): remote OpenAI-compat provider slot The
+    /// value is `None` until the user configures a provider in Settings
+    /// and enters a valid API key (from OS Keychain via
+    /// [`text_to_print_core::keychain`]) Selection is persisted in DB
+    /// (`profiles.openai_compat_active_provider`) and full per-provider
+    /// config lives in `llm_provider_configs` table
+    pub openai_compat: std::sync::Arc<
+        std::sync::Mutex<
+            Option<text_to_print_llm::openai_compat_backend::OpenAiCompatBackend>,
+        >,
+    >,
+    /// BYO LLM (2026-08-23): user-supplied GGUF path that overrides the
+    /// download path when Embedded is active `None` = use ModelChoice
+    /// default filename in `models_dir` Persisted in DB
+    /// (`profiles.custom_gguf_path`)
+    pub custom_gguf_path: Option<PathBuf>,
     /// LoRA share opt-in flag (Stage 5 T5.2) When `true` (default) the
     /// LOL DSL + quality signals are queued for upload to the shared LoRA
     /// training set; when `false` the user has opted out
@@ -1320,6 +1343,13 @@ impl AppState {
         // v0.1.0-beta.1 (2026-08-07): default を true → false に変更
         // (詳細は db.rs::get_enforce_lol_grammar コメント参照)
         let enforce_lol_grammar = db.get_enforce_lol_grammar(&profile_id).unwrap_or(false);
+        // BYO LLM (2026-08-23): user-supplied GGUF override Empty string
+        // from DB → None (falls back to ModelChoice default filename)
+        let custom_gguf_path = db
+            .get_custom_gguf_path(&profile_id)
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(PathBuf::from);
 
         let history = db.list_generations(&profile_id, 50).unwrap_or_default();
 
@@ -1507,6 +1537,7 @@ impl AppState {
                 models_dir.clone(),
                 initial_choice,
                 execution_mode,
+                custom_gguf_path.clone(),
                 embedded.clone(),
                 embedded_status_cell.clone(),
                 progress_rx.clone(),
@@ -1569,6 +1600,13 @@ impl AppState {
             execution_mode,
             embedded,
             embedded_status_cell,
+            // BYO LLM (2026-08-23): slot stays empty at startup until
+            // the user configures a provider + API key in Settings The
+            // Settings UI (step 3) populates it via a helper that reads
+            // llm_provider_configs + Keychain and constructs
+            // OpenAiCompatBackend
+            openai_compat: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            custom_gguf_path,
             share_lol_dsl,
             enforce_lol_grammar,
             pending_share_dry_run: None,
@@ -1662,6 +1700,7 @@ impl AppState {
                 self.data_dir.join("models"),
                 self.llm_config.model_choice,
                 self.execution_mode,
+                self.custom_gguf_path.clone(),
                 self.embedded.clone(),
                 self.embedded_status_cell.clone(),
                 self.model_progress.clone(),
@@ -1700,6 +1739,7 @@ impl AppState {
             self.data_dir.join("models"),
             self.llm_config.model_choice,
             new_mode,
+            self.custom_gguf_path.clone(),
             self.embedded.clone(),
             self.embedded_status_cell.clone(),
             self.model_progress.clone(),
@@ -1760,6 +1800,44 @@ impl AppState {
             self.data_dir.join("models"),
             new_choice,
             self.execution_mode,
+            self.custom_gguf_path.clone(),
+            self.embedded.clone(),
+            self.embedded_status_cell.clone(),
+            self.model_progress.clone(),
+        );
+    }
+
+    /// BYO LLM (2026-08-23): swap the custom GGUF override at runtime
+    /// Persists the new path to DB, updates the in-memory field, and if
+    /// Embedded is the active backend drops the currently loaded model
+    /// and kicks off a fresh load from the new path Pass `None` to
+    /// clear the override (revert to ModelChoice download path)
+    pub fn set_custom_gguf_path(&mut self, new_path: Option<PathBuf>) {
+        let db_value = new_path
+            .as_ref()
+            .and_then(|p| p.to_str())
+            .unwrap_or_default();
+        if let Err(e) = self.db.set_custom_gguf_path(&self.profile_id, db_value) {
+            tracing::warn!(error = %e, "failed to persist custom_gguf_path");
+        }
+        self.custom_gguf_path = new_path;
+        // Only reload if Embedded is the active backend — Sidecar /
+        // OpenAiCompat backends don't consume GGUF files
+        if self.backend_kind != BackendKind::Embedded {
+            return;
+        }
+        if let Ok(mut slot) = self.embedded.lock() {
+            *slot = None;
+        }
+        if let Ok(mut status) = self.embedded_status_cell.lock() {
+            *status = EmbeddedStatus::NotLoaded;
+        }
+        spawn_embedded_load(
+            &self.runtime,
+            self.data_dir.join("models"),
+            self.llm_config.model_choice,
+            self.execution_mode,
+            self.custom_gguf_path.clone(),
             self.embedded.clone(),
             self.embedded_status_cell.clone(),
             self.model_progress.clone(),
@@ -1772,6 +1850,10 @@ impl AppState {
     /// - `BackendKind::Embedded` → clones the loaded backend if `Ready`,
     ///   otherwise falls back to `Sidecar` (so a generation request
     ///   during Embedded load doesn't fail silently)
+    /// - `BackendKind::OpenAiCompat` → clones the loaded remote backend
+    ///   if configured, otherwise falls back to `Sidecar` so an
+    ///   unconfigured provider doesn't hang generation State plumbing
+    ///   for the OpenAI-compat slot lives in [`Self::openai_compat`]
     #[must_use]
     pub fn active_backend(&self) -> text_to_print_llm::backend_kind::LlmBackend {
         use text_to_print_llm::backend_kind::LlmBackend;
@@ -1781,6 +1863,13 @@ impl AppState {
                 let backend = self.embedded.lock().ok().and_then(|g| g.clone());
                 match backend {
                     Some(b) => LlmBackend::Embedded(b),
+                    None => LlmBackend::Sidecar(self.llm_config.clone()),
+                }
+            }
+            BackendKind::OpenAiCompat => {
+                let backend = self.openai_compat.lock().ok().and_then(|g| g.clone());
+                match backend {
+                    Some(b) => LlmBackend::OpenAiCompat(b),
                     None => LlmBackend::Sidecar(self.llm_config.clone()),
                 }
             }
@@ -1892,11 +1981,24 @@ fn spawn_presets_sync(
     });
 }
 
+/// Spawn the background task that loads the Embedded backend
+///
+/// `custom_gguf_path` (BYO LLM, 2026-08-23) — when `Some`, the load
+/// path skips the HF download wait entirely and points the backend
+/// directly at the given file A missing custom file surfaces as
+/// `EmbeddedStatus::Error` so the user gets an immediate signal
+///
+/// 8-arg signature is intentional: `custom_gguf_path` was added on
+/// top of the existing 7-arg contract without repackaging into a
+/// config struct, since 4 call sites already exist and packaging
+/// would just shift the parameter count from function → constructor
+#[allow(clippy::too_many_arguments)]
 fn spawn_embedded_load(
     runtime: &tokio::runtime::Runtime,
     models_dir: PathBuf,
     choice: text_to_print_llm::model::ModelChoice,
     execution_mode: ExecutionMode,
+    custom_gguf_path: Option<PathBuf>,
     embedded_slot: std::sync::Arc<std::sync::Mutex<Option<EmbeddedBackend>>>,
     status_slot: std::sync::Arc<std::sync::Mutex<EmbeddedStatus>>,
     mut model_progress_rx: tokio::sync::watch::Receiver<
@@ -1904,26 +2006,42 @@ fn spawn_embedded_load(
     >,
 ) {
     runtime.spawn(async move {
-        // Wait for model DL to complete Choice-agnostic here — the DL
-        // pipeline only knows about the initial choice; runtime-switched
-        // choices are expected to be user-placed at
-        // `models_dir/{choice.default_filename()}` If missing, load fails
-        // fast with an IO error which surfaces as EmbeddedStatus::Error
-        while !matches!(
-            model_progress_rx.borrow().status,
-            text_to_print_llm::downloader::DownloadStatus::Complete
-        ) {
-            if model_progress_rx.changed().await.is_err() {
+        // Resolve GGUF path: custom override wins over ModelChoice default
+        let model_path = if let Some(p) = custom_gguf_path {
+            if !p.exists() {
+                *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Error(
+                    format!("custom GGUF path does not exist: {}", p.display()),
+                );
                 return;
             }
-            // Once initial DL completes we still proceed even if the user
-            // switched to a different choice — the load path will
-            // discover whether the file exists on disk
-            if text_to_print_llm::downloader::model_exists(&models_dir, choice) {
-                break;
+            tracing::info!(
+                path = %p.display(),
+                ?choice,
+                "loading embedded backend from custom GGUF (skipping HF download)"
+            );
+            p
+        } else {
+            // Wait for model DL to complete Choice-agnostic here — the DL
+            // pipeline only knows about the initial choice; runtime-switched
+            // choices are expected to be user-placed at
+            // `models_dir/{choice.default_filename()}` If missing, load fails
+            // fast with an IO error which surfaces as EmbeddedStatus::Error
+            while !matches!(
+                model_progress_rx.borrow().status,
+                text_to_print_llm::downloader::DownloadStatus::Complete
+            ) {
+                if model_progress_rx.changed().await.is_err() {
+                    return;
+                }
+                // Once initial DL completes we still proceed even if the user
+                // switched to a different choice — the load path will
+                // discover whether the file exists on disk
+                if text_to_print_llm::downloader::model_exists(&models_dir, choice) {
+                    break;
+                }
             }
-        }
-        let model_path = text_to_print_llm::downloader::model_path(&models_dir, choice);
+            text_to_print_llm::downloader::model_path(&models_dir, choice)
+        };
         *status_slot.lock().expect("embedded status lock") = EmbeddedStatus::Loading;
         let mp_first = model_path.clone();
         let load_result = tokio::task::spawn_blocking(move || {
@@ -2524,7 +2642,7 @@ mod tests {
     #[test]
     fn customizer_state_default_includes_all_25_archetypes() {
         let c = CustomizerState::default();
-        // Sprint 8 追加後は 25 archetype (+3: toothbrush_holder / drill_bit_holder / pliers_rack)
+        // Sprint 8 追加後は 25 archetype (organizer 9 + household 3 + hobby-diy 4 + tools 3 + electronics 3 + bathroom-garage 3)
         assert_eq!(c.toothbrush_holder.to_lol(), "toothbrush_holder(4, 15, 70)");
         assert_eq!(c.drill_bit_holder.to_lol(), "drill_bit_holder(3, 13, 11)");
         assert_eq!(c.pliers_rack.to_lol(), "pliers_rack(6, 15, 60)");
