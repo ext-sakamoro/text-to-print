@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 49 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 52 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1262,7 +1262,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// mix2 3 (wrap_holder / sock_divider / soap_tray、Sprint 13) +
 /// mix3 3 (razor_holder / chopstick_holder / swatch_holder、Sprint 14) +
 /// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15) +
-/// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16)
+/// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16) +
+/// mix6 3 (dry_box / outdoor_enclosure / jewelry_stand、Sprint 17)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1365,6 +1366,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_sink_caddy_customizer(ui, state);
                 ui.separator();
                 show_clamp_rack_customizer(ui, state);
+                ui.separator();
+                show_dry_box_customizer(ui, state);
+                ui.separator();
+                show_outdoor_enclosure_customizer(ui, state);
+                ui.separator();
+                show_jewelry_stand_customizer(ui, state);
             });
         },
     );
@@ -3180,6 +3187,117 @@ fn show_clamp_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// フィラメント dry box customizer
+/// (`rows × cols × filament_diameter`、printer § 9.3)
+///
+/// 2D grid cyl cavity for filament spools (utensil_caddy の 2D grid 版)
+fn show_dry_box_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📦 フィラメント dry box (2D grid spool cavity)").strong());
+
+    let d = &mut state.customizer_state.dry_box;
+    ui.horizontal(|ui| {
+        ui.label("spool 行数:");
+        ui.add(egui::Slider::new(&mut d.rows, 1..=4).text("(1-4)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("spool 列数:");
+        ui.add(egui::Slider::new(&mut d.cols, 1..=4).text("(1-4)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("spool 外径 (mm):");
+        ui.add(egui::Slider::new(&mut d.filament_diameter, 60.0..=90.0).step_by(2.0));
+    });
+
+    let d_copy = *d;
+    let label = format!(
+        "dry box {}×{} spool × Ø{}mm",
+        d_copy.rows, d_copy.cols, d_copy.filament_diameter
+    );
+    ui.label("プリセット目安: 4 spool 2×2 (1kg PLA 4本 × Ø68) / 2 spool 2×1 (Ø68)");
+    ui.label("固定: spool 幅 70mm、wall 3mm、floor 3mm (lid + 除湿剤 slot は別 print)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, d_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 屋外用 IP54 密閉筐体 customizer
+/// (`internal_w × internal_d × internal_h`、electronics § 5)
+///
+/// raspi_case + gasket groove (top rim seal for O-ring)
+fn show_outdoor_enclosure_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🛡 屋外用 IP54 密閉筐体 (raspi_case + gasket groove)").strong());
+
+    let e = &mut state.customizer_state.outdoor_enclosure;
+    ui.horizontal(|ui| {
+        ui.label("内部 幅 (mm):");
+        ui.add(egui::Slider::new(&mut e.internal_width, 80.0..=200.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut e.internal_depth, 60.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 高さ (mm):");
+        ui.add(egui::Slider::new(&mut e.internal_height, 30.0..=100.0).step_by(5.0));
+    });
+
+    let e_copy = *e;
+    let label = format!(
+        "IP54 筐体 内部 W{}×D{}×H{}mm",
+        e_copy.internal_width, e_copy.internal_depth, e_copy.internal_height
+    );
+    ui.label("プリセット目安: Arduino UNO (120×80×45) / Raspi 5 (100×70×35) / large (160×110×60)");
+    ui.label("固定: 壁 3.5mm、gasket 溝 W2×D1.5mm (O-ring 対応、lid は別 print)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, e_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ジュエリー段付きスタンド customizer
+/// (`tier_count × bottom_tier_diameter × height`、drawer § 3.4)
+///
+/// Multi-tier disk stack + central pillar (wedding cake style)
+fn show_jewelry_stand_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💍 ジュエリー段付きスタンド (multi-tier disk stack)").strong());
+
+    let j = &mut state.customizer_state.jewelry_stand;
+    ui.horizontal(|ui| {
+        ui.label("tier 段数:");
+        ui.add(egui::Slider::new(&mut j.tier_count, 2..=5).text("(2-5)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("最下段直径 (mm):");
+        ui.add(egui::Slider::new(&mut j.bottom_tier_diameter, 60.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全高 (mm):");
+        ui.add(egui::Slider::new(&mut j.height, 60.0..=200.0).step_by(10.0));
+    });
+
+    let j_copy = *j;
+    let label = format!(
+        "ジュエリー スタンド {} tier × Ø{}mm × H{}mm",
+        j_copy.tier_count, j_copy.bottom_tier_diameter, j_copy.height
+    );
+    ui.label("プリセット目安: standard 3 tier (Ø100×H100) / small 2 tier (Ø80×H70) / large 4 tier (Ø130×H150)");
+    ui.label("固定: tier 厚 5mm、pillar Ø10mm、上段ほど 70% 小径 (wedding cake style)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, j_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

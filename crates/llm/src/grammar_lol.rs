@@ -122,6 +122,9 @@ mod tests {
             "cotton_dispenser",
             "sink_caddy",
             "clamp_rack",
+            "dry_box",
+            "outdoor_enclosure",
+            "jewelry_stand",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

@@ -200,6 +200,12 @@ pub struct CustomizerState {
     pub sink_caddy: SinkCaddyUiState,
     /// Clamp wall rack customizer (garage § 8.8、Sprint 16)
     pub clamp_rack: ClampRackUiState,
+    /// Filament dry box customizer (printer § 9.3、Sprint 17)
+    pub dry_box: DryBoxUiState,
+    /// Outdoor IP54 enclosure customizer (electronics § 5、Sprint 17)
+    pub outdoor_enclosure: OutdoorEnclosureUiState,
+    /// Multi-tier jewelry stand customizer (drawer § 3.4、Sprint 17)
+    pub jewelry_stand: JewelryStandUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1719,6 +1725,101 @@ impl ClampRackUiState {
     }
 }
 
+// ── Sprint 17 ミックス 6 archetype UI state (dry_box / outdoor_enclosure / jewelry_stand) ──
+
+/// フィラメント dry box UI state (printer § 9.3、2D grid spool cavity)
+/// (`dry_box(rows, cols, filament_diameter)`)
+#[derive(Debug, Clone, Copy)]
+pub struct DryBoxUiState {
+    /// spool 行数 (default 2、range 1-4)
+    pub rows: u32,
+    /// spool 列数 (default 2、range 1-4)
+    pub cols: u32,
+    /// spool 外径 (mm、default 68、range 60-90)
+    pub filament_diameter: f32,
+}
+
+impl Default for DryBoxUiState {
+    fn default() -> Self {
+        Self {
+            rows: 2,
+            cols: 2,
+            filament_diameter: 68.0,
+        }
+    }
+}
+
+impl DryBoxUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "dry_box({}, {}, {})",
+            self.rows, self.cols, self.filament_diameter
+        )
+    }
+}
+
+/// 屋外用 IP54 密閉筐体 UI state (electronics § 5、raspi_case + gasket groove)
+/// (`outdoor_enclosure(internal_w, internal_d, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct OutdoorEnclosureUiState {
+    /// 内部 幅 (mm、default 120、range 80-200)
+    pub internal_width: f32,
+    /// 内部 奥行 (mm、default 80、range 60-150)
+    pub internal_depth: f32,
+    /// 内部 高さ (mm、default 45、range 30-100)
+    pub internal_height: f32,
+}
+
+impl Default for OutdoorEnclosureUiState {
+    fn default() -> Self {
+        Self {
+            internal_width: 120.0,
+            internal_depth: 80.0,
+            internal_height: 45.0,
+        }
+    }
+}
+
+impl OutdoorEnclosureUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "outdoor_enclosure({}, {}, {})",
+            self.internal_width, self.internal_depth, self.internal_height
+        )
+    }
+}
+
+/// ジュエリー段付きスタンド UI state (drawer § 3.4、multi-tier disk stack)
+/// (`jewelry_stand(tier_count, bottom_tier_diameter, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct JewelryStandUiState {
+    /// tier 段数 (default 3、range 2-5)
+    pub tier_count: u32,
+    /// 最下段直径 (mm、default 100、range 60-150)
+    pub bottom_tier_diameter: f32,
+    /// 全高 (mm、default 100、range 60-200)
+    pub height: f32,
+}
+
+impl Default for JewelryStandUiState {
+    fn default() -> Self {
+        Self {
+            tier_count: 3,
+            bottom_tier_diameter: 100.0,
+            height: 100.0,
+        }
+    }
+}
+
+impl JewelryStandUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "jewelry_stand({}, {}, {})",
+            self.tier_count, self.bottom_tier_diameter, self.height
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2723,11 +2824,12 @@ mod tests {
         Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
         CardTrayUiState, ChopstickHolderUiState, ClampRackUiState, CoasterUiState,
         CottonDispenserUiState, CustomizerState, CutleryTrayUiState, DeskShelfUiState,
-        DrillBitHolderUiState, DriverRackUiState, EggTrayUiState, Esp32EnclosureUiState,
-        FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState, HairdryerHolderUiState,
-        HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState, KcupHolderUiState,
-        LedChannelUiState, MagneticStripUiState, MonitorRiserUiState, NozzleHolderUiState,
-        PenCupUiState, PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
+        DrillBitHolderUiState, DriverRackUiState, DryBoxUiState, EggTrayUiState,
+        Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
+        HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
+        JewelryStandUiState, KcupHolderUiState, LedChannelUiState, MagneticStripUiState,
+        MonitorRiserUiState, NozzleHolderUiState, OutdoorEnclosureUiState, PenCupUiState,
+        PhaseProgress, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
         RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState, SinkCaddyUiState,
         SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
         StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TissueBoxCoverUiState,
@@ -3549,5 +3651,46 @@ mod tests {
         assert_eq!(c.cotton_dispenser.to_lol(), "cotton_dispenser(80, 90, 100)");
         assert_eq!(c.sink_caddy.to_lol(), "sink_caddy(200, 100, 8)");
         assert_eq!(c.clamp_rack.to_lol(), "clamp_rack(5, 30, 150)");
+    }
+
+    // ── Sprint 17 ミックス 6 archetype UI state tests ──
+
+    #[test]
+    fn dry_box_default_is_standard_2x2() {
+        let d = DryBoxUiState::default();
+        assert_eq!(d.rows, 2);
+        assert_eq!(d.cols, 2);
+        assert!((d.filament_diameter - 68.0).abs() < 1e-6);
+        assert_eq!(d.to_lol(), "dry_box(2, 2, 68)");
+    }
+
+    #[test]
+    fn outdoor_enclosure_default_is_ip54_120x80() {
+        let e = OutdoorEnclosureUiState::default();
+        assert!((e.internal_width - 120.0).abs() < 1e-6);
+        assert!((e.internal_depth - 80.0).abs() < 1e-6);
+        assert!((e.internal_height - 45.0).abs() < 1e-6);
+        assert_eq!(e.to_lol(), "outdoor_enclosure(120, 80, 45)");
+    }
+
+    #[test]
+    fn jewelry_stand_default_is_standard_3_tier() {
+        let j = JewelryStandUiState::default();
+        assert_eq!(j.tier_count, 3);
+        assert!((j.bottom_tier_diameter - 100.0).abs() < 1e-6);
+        assert!((j.height - 100.0).abs() < 1e-6);
+        assert_eq!(j.to_lol(), "jewelry_stand(3, 100, 100)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_52_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 17 追加後は 52 archetype (+3: dry_box / outdoor_enclosure / jewelry_stand)
+        assert_eq!(c.dry_box.to_lol(), "dry_box(2, 2, 68)");
+        assert_eq!(
+            c.outdoor_enclosure.to_lol(),
+            "outdoor_enclosure(120, 80, 45)"
+        );
+        assert_eq!(c.jewelry_stand.to_lol(), "jewelry_stand(3, 100, 100)");
     }
 }

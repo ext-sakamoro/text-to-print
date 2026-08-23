@@ -209,6 +209,10 @@ name_3f ::= "box3d"
           | "cotton_dispenser"
           | "sink_caddy"
           | "clamp_rack"
+          # Sprint 17 ミックス 6 (printer + electronics + drawer 各 1、2026-08-24 追加)
+          | "dry_box"
+          | "outdoor_enclosure"
+          | "jewelry_stand"
 
 name_4f ::= "rounded_box"
           | "plane"

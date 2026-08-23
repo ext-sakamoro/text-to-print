@@ -109,6 +109,9 @@ mod tests {
             "cotton_dispenser",
             "sink_caddy",
             "clamp_rack",
+            "dry_box",
+            "outdoor_enclosure",
+            "jewelry_stand",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

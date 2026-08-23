@@ -165,6 +165,17 @@
         { "id": "clamp_standard_5", "label": "クランプラック standard (5 hook × W30 × H150)", "lol_dsl": "clamp_rack(5, 30, 150)" },
         { "id": "clamp_workshop_8", "label": "クランプラック workshop (8 hook × W50 × H250)", "lol_dsl": "clamp_rack(8, 50, 250)" }
       ]
+    },
+    {
+      "name": "ミックス 6 (Sprint 17、printer + electronics + drawer 各 1)",
+      "presets": [
+        { "id": "dry_box_2x2", "label": "dry box 4 spool 2×2 (1kg PLA × Ø68)", "lol_dsl": "dry_box(2, 2, 68)" },
+        { "id": "dry_box_2x1", "label": "dry box 2 spool 2×1 (Ø68)", "lol_dsl": "dry_box(2, 1, 68)" },
+        { "id": "outdoor_arduino", "label": "IP54 筐体 Arduino UNO (120×80×45)", "lol_dsl": "outdoor_enclosure(120, 80, 45)" },
+        { "id": "outdoor_raspi5", "label": "IP54 筐体 Raspi 5 (100×70×35)", "lol_dsl": "outdoor_enclosure(100, 70, 35)" },
+        { "id": "jewelry_3_tier", "label": "ジュエリー スタンド 3 tier (Ø100×H100)", "lol_dsl": "jewelry_stand(3, 100, 100)" },
+        { "id": "jewelry_4_tier_large", "label": "ジュエリー スタンド 4 tier large (Ø130×H150)", "lol_dsl": "jewelry_stand(4, 130, 150)" }
+      ]
     }
   ]
 }
