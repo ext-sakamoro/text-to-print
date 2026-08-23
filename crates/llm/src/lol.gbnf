@@ -165,6 +165,10 @@ name_3f ::= "box3d"
           # hobby-diy 高階 primitive (Sprint 5、2026-08-23 追加)
           | "card_tray"
           | "token_well"
+          # tools 高階 primitive (Sprint 6、2026-08-23 追加)
+          | "wrench_holder"
+          | "socket_rail"
+          | "hex_bit_holder"
 
 name_4f ::= "rounded_box"
           | "plane"

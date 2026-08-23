@@ -40,6 +40,19 @@
         { "id": "token_well_dice_4", "label": "トークン井戸 dice 4連 Ø20", "lol_dsl": "token_well(20, 20, 4)" },
         { "id": "token_well_mini_6", "label": "トークン井戸 mini 6連 Ø25×深35", "lol_dsl": "token_well(25, 35, 6)" }
       ]
+    },
+    {
+      "name": "工具ホルダー (Sprint 6、tools.md 由来 3 archetype)",
+      "presets": [
+        { "id": "wrench_metric_8_19_6", "label": "レンチ Metric 8-19mm × 6 slot", "lol_dsl": "wrench_holder(8, 19, 6)" },
+        { "id": "wrench_metric_8_24_8", "label": "レンチ Metric 8-24mm × 8 slot", "lol_dsl": "wrench_holder(8, 24, 8)" },
+        { "id": "wrench_sae_6_25_8", "label": "レンチ SAE 6-25mm × 8 slot", "lol_dsl": "wrench_holder(6.35, 25.4, 8)" },
+        { "id": "socket_quarter_6", "label": "ソケットレール 1/4\" × 6 post", "lol_dsl": "socket_rail(6.0, 15, 6)" },
+        { "id": "socket_half_6", "label": "ソケットレール 1/2\" × 6 post", "lol_dsl": "socket_rail(12.4, 22, 6)" },
+        { "id": "socket_three_eighth_8", "label": "ソケットレール 3/8\" × 8 post", "lol_dsl": "socket_rail(9.2, 18, 8)" },
+        { "id": "hex_bit_4x5_12", "label": "ヘックスビット 4×5 (20 hole) 12mm", "lol_dsl": "hex_bit_holder(5, 4, 12)" },
+        { "id": "hex_bit_6x6_10", "label": "ヘックスビット 6×6 (36 hole) 10mm", "lol_dsl": "hex_bit_holder(6, 6, 10)" }
+      ]
     }
   ]
 }

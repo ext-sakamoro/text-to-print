@@ -89,6 +89,9 @@ mod tests {
             "skadis_panel",
             "card_tray",
             "token_well",
+            "wrench_holder",
+            "socket_rail",
+            "hex_bit_holder",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

@@ -127,6 +127,12 @@ pub struct CustomizerState {
     pub card_tray: CardTrayUiState,
     /// Token well customizer (hobby-diy § 6、Sprint 5)
     pub token_well: TokenWellUiState,
+    /// Wrench holder customizer (tools § 1、Sprint 6)
+    pub wrench_holder: WrenchHolderUiState,
+    /// Socket rail customizer (tools § 2、Sprint 6)
+    pub socket_rail: SocketRailUiState,
+    /// Hex bit holder customizer (tools § 3、Sprint 6)
+    pub hex_bit_holder: HexBitHolderUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -627,6 +633,98 @@ impl TokenWellUiState {
         format!(
             "token_well({}, {}, {})",
             self.well_diameter, self.well_depth, self.well_count
+        )
+    }
+}
+
+/// レンチホルダー customizer UI state (`wrench_holder(min_mm, max_mm, count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct WrenchHolderUiState {
+    /// 最小レンチ幅 (mm、default 8、range 6-22)
+    pub min_size_mm: f32,
+    /// 最大レンチ幅 (mm、default 19、range 8-32)
+    pub max_size_mm: f32,
+    /// slot 個数 (default 6、range 3-12)
+    pub count: u32,
+}
+
+impl Default for WrenchHolderUiState {
+    fn default() -> Self {
+        Self {
+            min_size_mm: 8.0,
+            max_size_mm: 19.0,
+            count: 6,
+        }
+    }
+}
+
+impl WrenchHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "wrench_holder({}, {}, {})",
+            self.min_size_mm, self.max_size_mm, self.count
+        )
+    }
+}
+
+/// ソケットレール customizer UI state (`socket_rail(post_dia, post_height, count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SocketRailUiState {
+    /// post 直径 (mm、1/4"=6.0 / 3/8"=9.2 / 1/2"=12.4 / 3/4"=18.7、default 12.4)
+    pub post_diameter: f32,
+    /// post 高さ (mm、default 22、range 12-30)
+    pub post_height: f32,
+    /// post 個数 (default 6、range 3-15)
+    pub post_count: u32,
+}
+
+impl Default for SocketRailUiState {
+    fn default() -> Self {
+        Self {
+            post_diameter: 12.4,
+            post_height: 22.0,
+            post_count: 6,
+        }
+    }
+}
+
+impl SocketRailUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "socket_rail({}, {}, {})",
+            self.post_diameter, self.post_height, self.post_count
+        )
+    }
+}
+
+/// ヘックスビットホルダー customizer UI state (`hex_bit_holder(rows, cols, spacing)`)
+///
+/// 1/4" bit 想定、hex hole は 6.85mm across-flats × 14mm depth 固定
+#[derive(Debug, Clone, Copy)]
+pub struct HexBitHolderUiState {
+    /// 行数 (Y 方向、default 5、range 1-10)
+    pub rows: u32,
+    /// 列数 (X 方向、default 4、range 1-10)
+    pub cols: u32,
+    /// hole 中心間 pitch (mm、default 12、range 10-20)
+    pub spacing: f32,
+}
+
+impl Default for HexBitHolderUiState {
+    fn default() -> Self {
+        Self {
+            rows: 5,
+            cols: 4,
+            spacing: 12.0,
+        }
+    }
+}
+
+impl HexBitHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "hex_bit_holder({}, {}, {})",
+            self.rows, self.cols, self.spacing
         )
     }
 }
@@ -1525,9 +1623,10 @@ mod tests {
     use super::{
         BusinessCardUiState, CableClipUiState, CardTrayUiState, CoasterUiState, CustomizerState,
         DeskShelfUiState, GenerationPhase, GridfinityUiState, HeadphoneHolderUiState,
-        LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress, PhoneStandUiState,
-        StickyNoteUiState, StorageBoxUiState, TissueBoxCoverUiState, TokenWellUiState,
-        UnderDeskMountUiState, default_sidecar_port,
+        HexBitHolderUiState, LedChannelUiState, MonitorRiserUiState, PenCupUiState, PhaseProgress,
+        PhoneStandUiState, SocketRailUiState, StickyNoteUiState, StorageBoxUiState,
+        TissueBoxCoverUiState, TokenWellUiState, UnderDeskMountUiState, WrenchHolderUiState,
+        default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -1917,5 +2016,43 @@ mod tests {
         assert_eq!(c.led_channel.to_lol(), "led_channel(10, 300)");
         assert_eq!(c.card_tray.to_lol(), "card_tray(63, 88, 30)");
         assert_eq!(c.token_well.to_lol(), "token_well(20, 20, 4)");
+    }
+
+    // ── Sprint 6: tools.md 3 archetype UI state tests ──
+
+    #[test]
+    fn wrench_holder_default_is_metric_6() {
+        let w = WrenchHolderUiState::default();
+        assert!((w.min_size_mm - 8.0).abs() < 1e-6);
+        assert!((w.max_size_mm - 19.0).abs() < 1e-6);
+        assert_eq!(w.count, 6);
+        assert_eq!(w.to_lol(), "wrench_holder(8, 19, 6)");
+    }
+
+    #[test]
+    fn socket_rail_default_is_half_inch_6() {
+        let s = SocketRailUiState::default();
+        assert!((s.post_diameter - 12.4).abs() < 1e-6);
+        assert!((s.post_height - 22.0).abs() < 1e-6);
+        assert_eq!(s.post_count, 6);
+        assert_eq!(s.to_lol(), "socket_rail(12.4, 22, 6)");
+    }
+
+    #[test]
+    fn hex_bit_holder_default_is_grid_4x5() {
+        let h = HexBitHolderUiState::default();
+        assert_eq!(h.rows, 5);
+        assert_eq!(h.cols, 4);
+        assert!((h.spacing - 12.0).abs() < 1e-6);
+        assert_eq!(h.to_lol(), "hex_bit_holder(5, 4, 12)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_19_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 6 追加後は 19 archetype (organizer 9 + household 3 + hobby-diy 4 + tools 3)
+        assert_eq!(c.wrench_holder.to_lol(), "wrench_holder(8, 19, 6)");
+        assert_eq!(c.socket_rail.to_lol(), "socket_rail(12.4, 22, 6)");
+        assert_eq!(c.hex_bit_holder.to_lol(), "hex_bit_holder(5, 4, 12)");
     }
 }

@@ -76,6 +76,9 @@ mod tests {
             "led_channel",
             "card_tray",
             "token_well",
+            "wrench_holder",
+            "socket_rail",
+            "hex_bit_holder",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

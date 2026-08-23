@@ -1235,11 +1235,12 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 16 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 19 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
-/// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5)
+/// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5) +
+/// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1276,6 +1277,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_card_tray_customizer(ui, state);
                 ui.separator();
                 show_token_well_customizer(ui, state);
+                ui.separator();
+                show_wrench_holder_customizer(ui, state);
+                ui.separator();
+                show_socket_rail_customizer(ui, state);
+                ui.separator();
+                show_hex_bit_holder_customizer(ui, state);
             });
         },
     );
@@ -1875,6 +1882,112 @@ fn show_token_well_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, w_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// レンチホルダー customizer (`min_mm × max_mm × count`、tools § 1)
+///
+/// min-max mm を count 個 等間隔補間 (例: 8, 10, 12, 14, 16, 18)
+/// Metric 標準 8-19 (6 slot) / 8-24 (8 slot) / SAE 1/4"-1" 相当は 6.35-25.4mm
+fn show_wrench_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔧 レンチホルダー (row 状 slot、min-max 等間隔)").strong());
+
+    let w = &mut state.customizer_state.wrench_holder;
+    ui.horizontal(|ui| {
+        ui.label("最小サイズ (mm):");
+        ui.add(egui::Slider::new(&mut w.min_size_mm, 6.0..=22.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("最大サイズ (mm):");
+        ui.add(egui::Slider::new(&mut w.max_size_mm, 8.0..=32.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut w.count, 3..=12).text("(3-12)"));
+    });
+
+    let w_copy = *w;
+    let label = format!(
+        "レンチホルダー {}-{}mm × {}",
+        w_copy.min_size_mm, w_copy.max_size_mm, w_copy.count
+    );
+    ui.label("プリセット目安: Metric 8-19 (6 slot) / 8-24 (8 slot) / SAE 6-25 (1/4-1 inch)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, w_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ソケットレール customizer (`post_dia × post_height × count`、tools § 2)
+///
+/// base plate 上に post を row 配置 1/4"=6.0 / 3/8"=9.2 / 1/2"=12.4 / 3/4"=18.7
+fn show_socket_rail_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔩 ソケットレール (base + row post)").strong());
+
+    let s = &mut state.customizer_state.socket_rail;
+    ui.horizontal(|ui| {
+        ui.label("post 直径 (mm):");
+        ui.add(egui::Slider::new(&mut s.post_diameter, 5.0..=25.0).step_by(0.1));
+    });
+    ui.horizontal(|ui| {
+        ui.label("post 高さ (mm):");
+        ui.add(egui::Slider::new(&mut s.post_height, 12.0..=30.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("post 個数:");
+        ui.add(egui::Slider::new(&mut s.post_count, 3..=15).text("(3-15)"));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "ソケットレール Ø{}×H{}mm × {}",
+        s_copy.post_diameter, s_copy.post_height, s_copy.post_count
+    );
+    ui.label("Drive 目安: 1/4\"=6.0mm / 3/8\"=9.2mm / 1/2\"=12.4mm / 3/4\"=18.7mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ヘックスビットホルダー customizer (`rows × cols × spacing`、tools § 3)
+///
+/// grid 状 hex hole、1/4" bit 想定 (across-flats 6.85mm × depth 14mm 固定)
+fn show_hex_bit_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔷 ヘックスビットホルダー (1/4\" bit、grid)").strong());
+
+    let h = &mut state.customizer_state.hex_bit_holder;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut h.rows, 1..=10).text("(1-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut h.cols, 1..=10).text("(1-10)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hole 間 pitch (mm):");
+        ui.add(egui::Slider::new(&mut h.spacing, 10.0..=20.0).step_by(0.5));
+    });
+
+    let h_copy = *h;
+    let label = format!(
+        "ビットホルダー {}×{} @ {}mm",
+        h_copy.rows, h_copy.cols, h_copy.spacing
+    );
+    ui.label("固定: hex 6.85mm across-flats / depth 14mm (1/4\" bit 標準)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, h_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);
