@@ -221,6 +221,12 @@ Requires:
 - ALICE ecosystem sibling checkouts at `../ALICE-SDF`, `../ALICE-LOL`,
   `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`, `../ALICE-LLM`
 
+> **Note**: `ALICE-Bamboo` (+ transitive dep `ALICE-Print`) are **private repos**
+> Source build には `Contents: Read-only` scope の Fine-grained PAT が必要
+> (詳細 `.github/workflows/ci.yml` の `ALICE_ECO_TOKEN` セットアップ手順)
+> エンドユーザーは [Releases](https://github.com/ext-sakamoro/text-to-print/releases)
+> から バイナリ DL 推奨 (`.tar.gz` / `.msi` / `.deb` / `.AppImage`)
+
 The release installers (`.msi` follow-up pending, `.deb`, `.AppImage`,
 `.tar.gz`, `.zip`) bundle `alice-llm-server` next to the desktop binary
 `crates/llm/src/sidecar.rs::resolve_bin_path` looks in the exe directory
