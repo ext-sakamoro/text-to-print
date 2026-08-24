@@ -87,7 +87,7 @@ CLAUDE.md 由来: バックエンド API を実装したら **必ず呼び出し
 
 - 「なぜ」を書く (「何」は well-named identifier が既に伝える)
 - 過去 issue や PR # を書かない (rot するため — commit message や PR description に書く)
-- ALICE-*・KARIKARI・最適化ラベルを書かない (SBR / 業務系のみ内部用途)
+- ALICE-*・KARIKARI・最適化ラベルを書かない (内部レビュー用途のみ)
 
 ### 依存追加ポリシー
 
