@@ -131,6 +131,9 @@ mod tests {
             "shower_caddy",
             "caliper_holder",
             "bag_clip_org",
+            "can_rack",
+            "led_hub_box",
+            "makeup_organizer",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives

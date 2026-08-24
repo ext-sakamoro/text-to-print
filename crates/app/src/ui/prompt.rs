@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 58 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 61 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1265,7 +1265,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16) +
 /// mix6 3 (dry_box / outdoor_enclosure / jewelry_stand、Sprint 17) +
 /// mix7 3 (phone_dock / cutting_board_rack / tape_dispenser、Sprint 18、multi-component) +
-/// mix8 3 (shower_caddy / caliper_holder / bag_clip_org、Sprint 19、multi-component)
+/// mix8 3 (shower_caddy / caliper_holder / bag_clip_org、Sprint 19、multi-component) +
+/// mix9 3 (can_rack / led_hub_box / makeup_organizer、Sprint 20、kitchen+electronics 100% 完走)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1386,6 +1387,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_caliper_holder_customizer(ui, state);
                 ui.separator();
                 show_bag_clip_org_customizer(ui, state);
+                ui.separator();
+                show_can_rack_customizer(ui, state);
+                ui.separator();
+                show_led_hub_box_customizer(ui, state);
+                ui.separator();
+                show_makeup_organizer_customizer(ui, state);
             });
         },
     );
@@ -3546,6 +3553,121 @@ fn show_bag_clip_org_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, b_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 缶ラック customizer
+/// (`rows × can_diameter × tilt_angle_deg`、kitchen § 6.4、multi-tier)
+///
+/// Gravity feed tilted shelf (2 tier tilted shelf + 側壁 + 前 lip、cans 転がって前へ)
+fn show_can_rack_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥫 缶ラック (gravity feed tilted shelf、multi-tier)").strong());
+
+    let c = &mut state.customizer_state.can_rack;
+    ui.horizontal(|ui| {
+        ui.label("段数:");
+        ui.add(egui::Slider::new(&mut c.rows, 1..=4).text("(1-4)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("缶直径 (mm):");
+        ui.add(egui::Slider::new(&mut c.can_diameter, 50.0..=80.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("傾斜角 (deg):");
+        ui.add(egui::Slider::new(&mut c.tilt_angle_deg, 5.0..=20.0).step_by(1.0));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "缶ラック {} tier × Ø{}mm × {}deg tilt",
+        c_copy.rows, c_copy.can_diameter, c_copy.tilt_angle_deg
+    );
+    ui.label("プリセット目安: standard (2 tier × Coke 350ml Ø66 × 10deg) / short can (3 tier × Ø55 × 12deg)");
+    ui.label("固定: 6 缶/段、shelf 3mm、side wall 3mm、front lip 15mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// LED hub 筐体 customizer
+/// (`internal_w × internal_d × internal_h`、electronics § 6、multi-component)
+///
+/// raspi_case + front LED window + top-right antenna hole (3-component composite)
+fn show_led_hub_box_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("💡 LED hub 筐体 (raspi_case + LED window + antenna hole)").strong(),
+    );
+
+    let l = &mut state.customizer_state.led_hub_box;
+    ui.horizontal(|ui| {
+        ui.label("内部 幅 (mm):");
+        ui.add(egui::Slider::new(&mut l.internal_width, 60.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut l.internal_depth, 40.0..=120.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("内部 高さ (mm):");
+        ui.add(egui::Slider::new(&mut l.internal_height, 20.0..=80.0).step_by(5.0));
+    });
+
+    let l_copy = *l;
+    let label = format!(
+        "LED hub 筐体 内部 W{}×D{}×H{}mm",
+        l_copy.internal_width, l_copy.internal_depth, l_copy.internal_height
+    );
+    ui.label("プリセット目安: standard smart hub (80×60×30) / large IoT gateway (120×80×50)");
+    ui.label("固定: 壁 3mm、LED window 40×15mm (front)、antenna Ø12mm (top-right corner)");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, l_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// メイク整理 customizer
+/// (`rows × cols × cell_size`、drawer § 3.5)
+///
+/// 2D grid multi-cell (pill_organizer の large 版、makeup brush / lipstick 用)
+fn show_makeup_organizer_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("💄 メイク整理 (2D grid multi-cell)").strong());
+
+    let m = &mut state.customizer_state.makeup_organizer;
+    ui.horizontal(|ui| {
+        ui.label("行数:");
+        ui.add(egui::Slider::new(&mut m.rows, 2..=6).text("(2-6)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("列数:");
+        ui.add(egui::Slider::new(&mut m.cols, 2..=8).text("(2-8)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cell 一辺 (mm):");
+        ui.add(egui::Slider::new(&mut m.cell_size, 25.0..=80.0).step_by(5.0));
+    });
+
+    let m_copy = *m;
+    let label = format!(
+        "メイク整理 {}×{} × □{}mm",
+        m_copy.rows, m_copy.cols, m_copy.cell_size
+    );
+    ui.label(
+        "プリセット目安: standard (3×4 × 45) / small palette (2×3 × 60) / brush rack (4×6 × 30)",
+    );
+    ui.label("固定: cell 深 40mm、wall 2mm、floor 2.5mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, m_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

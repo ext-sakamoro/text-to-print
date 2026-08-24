@@ -218,6 +218,12 @@ pub struct CustomizerState {
     pub caliper_holder: CaliperHolderUiState,
     /// Bag clip organizer customizer (kitchen § 6.3、Sprint 19)
     pub bag_clip_org: BagClipOrgUiState,
+    /// Can rack customizer (kitchen § 6.4、Sprint 20)
+    pub can_rack: CanRackUiState,
+    /// LED hub box customizer (electronics § 6、Sprint 20)
+    pub led_hub_box: LedHubBoxUiState,
+    /// Makeup organizer customizer (drawer § 3.5、Sprint 20)
+    pub makeup_organizer: MakeupOrganizerUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -2022,6 +2028,101 @@ impl BagClipOrgUiState {
     }
 }
 
+// ── Sprint 20 ミックス 9 archetype UI state (can_rack / led_hub_box / makeup_organizer) ──
+
+/// 缶ラック UI state (kitchen § 6.4、gravity feed tilted shelf、multi-tier)
+/// (`can_rack(rows, can_diameter, tilt_angle_deg)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CanRackUiState {
+    /// 段数 (default 2、range 1-4)
+    pub rows: u32,
+    /// 缶直径 (mm、Coke 350ml=66、default 66、range 50-80)
+    pub can_diameter: f32,
+    /// 傾斜角 (deg、default 10、range 5-20)
+    pub tilt_angle_deg: f32,
+}
+
+impl Default for CanRackUiState {
+    fn default() -> Self {
+        Self {
+            rows: 2,
+            can_diameter: 66.0,
+            tilt_angle_deg: 10.0,
+        }
+    }
+}
+
+impl CanRackUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "can_rack({}, {}, {})",
+            self.rows, self.can_diameter, self.tilt_angle_deg
+        )
+    }
+}
+
+/// LED hub 筐体 UI state (electronics § 6、raspi_case + LED window + antenna hole)
+/// (`led_hub_box(internal_w, internal_d, internal_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct LedHubBoxUiState {
+    /// 内部 幅 (mm、default 80、range 60-150)
+    pub internal_width: f32,
+    /// 内部 奥行 (mm、default 60、range 40-120)
+    pub internal_depth: f32,
+    /// 内部 高さ (mm、default 30、range 20-80)
+    pub internal_height: f32,
+}
+
+impl Default for LedHubBoxUiState {
+    fn default() -> Self {
+        Self {
+            internal_width: 80.0,
+            internal_depth: 60.0,
+            internal_height: 30.0,
+        }
+    }
+}
+
+impl LedHubBoxUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "led_hub_box({}, {}, {})",
+            self.internal_width, self.internal_depth, self.internal_height
+        )
+    }
+}
+
+/// メイク整理 UI state (drawer § 3.5、2D grid multi-cell、pill_organizer 大版)
+/// (`makeup_organizer(rows, cols, cell_size)`)
+#[derive(Debug, Clone, Copy)]
+pub struct MakeupOrganizerUiState {
+    /// 行数 (default 3、range 2-6)
+    pub rows: u32,
+    /// 列数 (default 4、range 2-8)
+    pub cols: u32,
+    /// cell 一辺 (mm、default 45、range 25-80)
+    pub cell_size: f32,
+}
+
+impl Default for MakeupOrganizerUiState {
+    fn default() -> Self {
+        Self {
+            rows: 3,
+            cols: 4,
+            cell_size: 45.0,
+        }
+    }
+}
+
+impl MakeupOrganizerUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "makeup_organizer({}, {}, {})",
+            self.rows, self.cols, self.cell_size
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -3024,21 +3125,21 @@ fn spawn_embedded_load(
 mod tests {
     use super::{
         BagClipOrgUiState, Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState,
-        CableClipUiState, CaliperHolderUiState, CardTrayUiState, ChopstickHolderUiState,
-        ClampRackUiState, CoasterUiState, CottonDispenserUiState, CustomizerState,
-        CutleryTrayUiState, CuttingBoardRackUiState, DeskShelfUiState, DrillBitHolderUiState,
-        DriverRackUiState, DryBoxUiState, EggTrayUiState, Esp32EnclosureUiState,
-        FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState, HairdryerHolderUiState,
-        HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState, JewelryStandUiState,
-        KcupHolderUiState, LedChannelUiState, MagneticStripUiState, MonitorRiserUiState,
-        NozzleHolderUiState, OutdoorEnclosureUiState, PenCupUiState, PhaseProgress,
-        PhoneDockUiState, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
-        RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState, ShowerCaddyUiState,
-        SinkCaddyUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
-        StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TapeDispenserUiState,
-        TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState,
-        UnderDeskMountUiState, UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState,
-        default_sidecar_port,
+        CableClipUiState, CaliperHolderUiState, CanRackUiState, CardTrayUiState,
+        ChopstickHolderUiState, ClampRackUiState, CoasterUiState, CottonDispenserUiState,
+        CustomizerState, CutleryTrayUiState, CuttingBoardRackUiState, DeskShelfUiState,
+        DrillBitHolderUiState, DriverRackUiState, DryBoxUiState, EggTrayUiState,
+        Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
+        HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
+        JewelryStandUiState, KcupHolderUiState, LedChannelUiState, LedHubBoxUiState,
+        MagneticStripUiState, MakeupOrganizerUiState, MonitorRiserUiState, NozzleHolderUiState,
+        OutdoorEnclosureUiState, PenCupUiState, PhaseProgress, PhoneDockUiState, PhoneStandUiState,
+        PillOrganizerUiState, PliersRackUiState, RaspiCaseUiState, RazorHolderUiState,
+        SdCardHolderUiState, ShowerCaddyUiState, SinkCaddyUiState, SoapTrayUiState,
+        SockDividerUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
+        StorageBoxUiState, SwatchHolderUiState, TapeDispenserUiState, TissueBoxCoverUiState,
+        TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState, UnderDeskMountUiState,
+        UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState, default_sidecar_port,
     };
     use std::time::Duration;
 
@@ -3975,5 +4076,43 @@ mod tests {
         assert_eq!(c.shower_caddy.to_lol(), "shower_caddy(2, 250, 120)");
         assert_eq!(c.caliper_holder.to_lol(), "caliper_holder(150, 40, 3)");
         assert_eq!(c.bag_clip_org.to_lol(), "bag_clip_org(8, 8, 100)");
+    }
+
+    // ── Sprint 20 ミックス 9 archetype UI state tests ──
+
+    #[test]
+    fn can_rack_default_is_standard_2_tier() {
+        let c = CanRackUiState::default();
+        assert_eq!(c.rows, 2);
+        assert!((c.can_diameter - 66.0).abs() < 1e-6);
+        assert!((c.tilt_angle_deg - 10.0).abs() < 1e-6);
+        assert_eq!(c.to_lol(), "can_rack(2, 66, 10)");
+    }
+
+    #[test]
+    fn led_hub_box_default_is_standard_80x60() {
+        let l = LedHubBoxUiState::default();
+        assert!((l.internal_width - 80.0).abs() < 1e-6);
+        assert!((l.internal_depth - 60.0).abs() < 1e-6);
+        assert!((l.internal_height - 30.0).abs() < 1e-6);
+        assert_eq!(l.to_lol(), "led_hub_box(80, 60, 30)");
+    }
+
+    #[test]
+    fn makeup_organizer_default_is_standard_3x4() {
+        let m = MakeupOrganizerUiState::default();
+        assert_eq!(m.rows, 3);
+        assert_eq!(m.cols, 4);
+        assert!((m.cell_size - 45.0).abs() < 1e-6);
+        assert_eq!(m.to_lol(), "makeup_organizer(3, 4, 45)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_61_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 20 追加後は 61 archetype (+3: can_rack / led_hub_box / makeup_organizer)
+        assert_eq!(c.can_rack.to_lol(), "can_rack(2, 66, 10)");
+        assert_eq!(c.led_hub_box.to_lol(), "led_hub_box(80, 60, 30)");
+        assert_eq!(c.makeup_organizer.to_lol(), "makeup_organizer(3, 4, 45)");
     }
 }

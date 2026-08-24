@@ -221,6 +221,10 @@ name_3f ::= "box3d"
           | "shower_caddy"
           | "caliper_holder"
           | "bag_clip_org"
+          # Sprint 20 ミックス 9 (kitchen 100% + electronics 100% + drawer、multi-component、2026-08-24 追加)
+          | "can_rack"
+          | "led_hub_box"
+          | "makeup_organizer"
 
 name_4f ::= "rounded_box"
           | "plane"

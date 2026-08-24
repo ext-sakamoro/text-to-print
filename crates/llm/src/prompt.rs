@@ -118,6 +118,9 @@ mod tests {
             "shower_caddy",
             "caliper_holder",
             "bag_clip_org",
+            "can_rack",
+            "led_hub_box",
+            "makeup_organizer",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),
