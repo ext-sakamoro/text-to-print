@@ -1,11 +1,11 @@
-use egui_wgpu::{CallbackResources, CallbackTrait, ScreenDescriptor};
+use egui::TextureId;
 use glam::{Mat4, Vec3};
 use std::sync::{Arc, Mutex};
 
-use super::pipeline::{MeshPipeline, MeshUniforms};
+use super::pipeline::{MeshPipeline, MeshUniforms, COLOR_FORMAT, DEPTH_FORMAT};
 
 /// Camera state shared between the UI (for orbit / dolly / reset) and the
-/// wgpu render callback (for view matrix)
+/// offscreen render pass
 ///
 /// Z-up world: matches Bambu Studio and the 3MF spec so the mesh preview
 /// shows the same orientation as the exported file
@@ -83,13 +83,26 @@ impl Camera {
     }
 }
 
-/// Resources stored in egui's per-frame `CallbackResources` map wgpu
-/// pipeline + uploaded mesh + camera snapshot The UI thread mutates the
-/// camera via `Arc<Mutex<Camera>>` and the render thread reads it inside
-/// `prepare()`
+/// Offscreen render target: color + depth textures at a given size
+/// Recreated when the viewport size changes
+struct OffscreenTargets {
+    size: (u32, u32),
+    /// Color texture view — displayed via egui::Image
+    color_view: wgpu::TextureView,
+    /// Depth texture view — used by the render pass, never displayed
+    depth_view: wgpu::TextureView,
+    /// egui-registered TextureId of the color view
+    egui_id: TextureId,
+}
+
+/// Mesh preview render resources: wgpu pipeline + shared camera +
+/// offscreen render targets All state needed to render one frame of the
+/// mesh preview into a texture that egui can then display via Image
 pub struct MeshResources {
     pub pipeline: MeshPipeline,
     pub camera: Arc<Mutex<Camera>>,
+    /// Lazily created / recreated on viewport size change
+    targets: Option<OffscreenTargets>,
 }
 
 impl MeshResources {
@@ -97,62 +110,108 @@ impl MeshResources {
         Self {
             pipeline: MeshPipeline::new(&render_state.device, render_state.target_format),
             camera: Arc::new(Mutex::new(Camera::default())),
+            targets: None,
         }
     }
-}
 
-/// egui paint callback that renders the currently uploaded mesh with a
-/// depth-tested Phong shader When no mesh is uploaded, the callback is a
-/// no-op and the caller's placeholder background remains visible
-pub struct MeshRenderCallback;
+    /// Ensure offscreen color+depth textures exist at the requested size
+    /// Recreates them (and re-registers the color view with egui) whenever
+    /// the size changes, and unregisters the previous egui texture id
+    fn ensure_targets(&mut self, render_state: &egui_wgpu::RenderState, size: (u32, u32)) {
+        if let Some(t) = &self.targets
+            && t.size == size
+        {
+            return;
+        }
 
-impl CallbackTrait for MeshRenderCallback {
-    fn prepare(
-        &self,
-        _device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        screen_descriptor: &ScreenDescriptor,
-        _egui_encoder: &mut wgpu::CommandEncoder,
-        callback_resources: &mut CallbackResources,
-    ) -> Vec<wgpu::CommandBuffer> {
-        let Some(resources) = callback_resources.get_mut::<MeshResources>() else {
-            return Vec::new();
-        };
-        let [w, h] = screen_descriptor.size_in_pixels;
+        let device = &render_state.device;
+        let color_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("mesh_view offscreen color"),
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: COLOR_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let color_view = color_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let camera = resources
+        let depth_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("mesh_view offscreen depth"),
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_view = depth_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Free the previous egui texture id (if any) before registering
+        // the new one, so egui's texture atlas doesn't leak
+        let mut renderer = render_state.renderer.write();
+        if let Some(prev) = self.targets.take() {
+            renderer.free_texture(&prev.egui_id);
+        }
+        let egui_id = renderer.register_native_texture(
+            device,
+            &color_view,
+            wgpu::FilterMode::Linear,
+        );
+        drop(renderer);
+
+        self.targets = Some(OffscreenTargets {
+            size,
+            color_view,
+            depth_view,
+            egui_id,
+        });
+    }
+
+    /// Render one frame of the mesh preview to the offscreen color+depth
+    /// texture, returning the egui TextureId that displays the result
+    /// via egui::Image
+    ///
+    /// Returns `None` when no mesh has been uploaded yet
+    pub fn render_frame(
+        &mut self,
+        render_state: &egui_wgpu::RenderState,
+        size: (u32, u32),
+    ) -> Option<TextureId> {
+        self.pipeline.mesh.as_ref()?;
+
+        self.ensure_targets(render_state, size);
+        let targets = self.targets.as_ref()?;
+
+        let camera = self
             .camera
             .lock()
             .map(|c| c.clone())
             .unwrap_or_default();
-        let aspect = (w as f32 / h.max(1) as f32).max(0.1);
+        let aspect = (size.0 as f32 / size.1.max(1) as f32).max(0.1);
         let view = Mat4::look_at_rh(camera.position, camera.target, camera.up);
         let proj = Mat4::perspective_rh(camera.fov, aspect, camera.near, camera.far);
         let uniforms = MeshUniforms::from_camera(camera.position, proj * view);
-        queue.write_buffer(
-            &resources.pipeline.uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[uniforms]),
+
+        self.pipeline.render(
+            &render_state.device,
+            &render_state.queue,
+            &targets.color_view,
+            &targets.depth_view,
+            uniforms,
         );
-        Vec::new()
+
+        Some(targets.egui_id)
     }
 
-    fn paint(
-        &self,
-        _info: egui::PaintCallbackInfo,
-        render_pass: &mut wgpu::RenderPass<'static>,
-        callback_resources: &CallbackResources,
-    ) {
-        let Some(resources) = callback_resources.get::<MeshResources>() else {
-            return;
-        };
-        let Some(mesh) = &resources.pipeline.mesh else {
-            return;
-        };
-        render_pass.set_pipeline(&resources.pipeline.render_pipeline);
-        render_pass.set_bind_group(0, &resources.pipeline.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
-    }
 }

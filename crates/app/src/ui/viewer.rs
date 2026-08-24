@@ -2,7 +2,6 @@ use egui::Ui;
 use glam::Vec3;
 use std::sync::Arc;
 
-use crate::sdf::MeshRenderCallback;
 use crate::state::{AppState, GenerationStatus};
 
 /// Mesh preview viewer state
@@ -99,12 +98,39 @@ fn compute_aabb(mesh: &alice_sdf::mesh::Mesh) -> (Vec3, Vec3) {
     (mn, mx)
 }
 
-pub fn show(ui: &mut Ui, state: &AppState, viewer: &mut MeshViewer) {
+pub fn show(
+    ui: &mut Ui,
+    state: &AppState,
+    viewer: &mut MeshViewer,
+    render_state: Option<&egui_wgpu::RenderState>,
+) {
     let rect = ui.available_rect_before_wrap();
 
     if viewer.has_mesh {
-        let callback = egui_wgpu::Callback::new_paint_callback(rect, MeshRenderCallback);
-        ui.painter().add(callback);
+        // Render mesh to offscreen color+depth texture, then display the
+        // resulting texture as an egui Image so hollow shapes show with
+        // correct depth ordering (the old egui-pass callback had no depth
+        // attachment, causing "just a box" blob-out)
+        let mut rendered_id: Option<egui::TextureId> = None;
+        if let Some(rs) = render_state {
+            // Multiply by pixels_per_point so the offscreen texture has
+            // native display resolution (avoids blurry preview on hi-DPI)
+            let ppp = ui.ctx().pixels_per_point();
+            let px_w = (rect.width() * ppp).max(1.0) as u32;
+            let px_h = (rect.height() * ppp).max(1.0) as u32;
+            if let Some(res) = rs
+                .renderer
+                .write()
+                .callback_resources
+                .get_mut::<crate::sdf::MeshResources>()
+            {
+                rendered_id = res.render_frame(rs, (px_w, px_h));
+            }
+        }
+        if let Some(id) = rendered_id {
+            let img = egui::Image::new(egui::load::SizedTexture::new(id, rect.size()));
+            ui.put(rect, img);
+        }
 
         // Camera interaction — drag orbits, scroll dollies
         let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());

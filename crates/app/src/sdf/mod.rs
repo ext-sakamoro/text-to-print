@@ -1,4 +1,4 @@
 mod pipeline;
 mod renderer;
 
-pub use renderer::{Camera, MeshRenderCallback, MeshResources};
+pub use renderer::{Camera, MeshResources};

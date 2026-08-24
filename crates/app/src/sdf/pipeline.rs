@@ -2,6 +2,15 @@ use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
+/// Depth format for the offscreen preview render pass Must match the
+/// depth attachment created by MeshResources::ensure_textures
+pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
+
+/// Color format for the offscreen preview render target We use
+/// Rgba8UnormSrgb so that egui's default Image widget displays the
+/// texture with correct gamma matching the rest of the UI
+pub const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+
 /// WGSL shader for basic Phong-lit mesh preview
 ///
 /// - Vertex: MVP transform, pass world position + normal to fragment
@@ -105,7 +114,11 @@ pub struct UploadedMesh {
 }
 
 impl MeshPipeline {
-    pub fn new(device: &Device, format: TextureFormat) -> Self {
+    /// `format` is ignored — the pipeline always targets [`COLOR_FORMAT`]
+    /// since we render to an offscreen texture Kept in the signature for
+    /// backward source compat with callers that previously passed
+    /// `render_state.target_format`
+    pub fn new(device: &Device, _format: TextureFormat) -> Self {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("mesh_view shader"),
             source: ShaderSource::Wgsl(MESH_SHADER.into()),
@@ -177,7 +190,7 @@ impl MeshPipeline {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
-                    format,
+                    format: COLOR_FORMAT,
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
@@ -187,20 +200,25 @@ impl MeshPipeline {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
-                // Mesh from marching cubes / dual contouring can flip
-                // winding on internal cavity surfaces; disable culling so
-                // the whole shape is always visible regardless of normal
-                cull_mode: None,
+                // Back-face culling is safe now that we render to an
+                // offscreen texture with proper depth testing (the old
+                // egui pass had no depth attachment, so we had to disable
+                // culling to keep cavity walls visible under blob-out)
+                cull_mode: Some(Face::Back),
                 polygon_mode: PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
-            // egui's paint callback runs inside egui's own render pass
-            // which has no depth attachment, so a depth-stencil target here
-            // would fail validation Preview shows slight front/back sort
-            // artifacts as a result — acceptable trade-off for the ability
-            // to plug straight into egui without an offscreen texture pass
-            depth_stencil: None,
+            // We now render to an offscreen color+depth texture (see
+            // MeshResources::render_frame), so depth testing is available
+            // and hollow shapes render with correct front/back occlusion
+            depth_stencil: Some(DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,
@@ -212,6 +230,99 @@ impl MeshPipeline {
             bind_group,
             mesh: None,
         }
+    }
+
+    /// Encode a full offscreen render pass that draws the uploaded mesh
+    /// with depth testing to the given color + depth attachments Uploads
+    /// current camera uniforms as a side effect
+    ///
+    /// No-op when no mesh has been uploaded yet
+    pub fn render(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        color_view: &TextureView,
+        depth_view: &TextureView,
+        uniforms: MeshUniforms,
+    ) {
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+
+        let Some(mesh) = &self.mesh else {
+            // Even without a mesh, clear the texture so previous frame
+            // doesn't ghost through Callers that need a fresh background
+            // rely on this
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("mesh_view clear only"),
+            });
+            {
+                let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("mesh_view clear pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: color_view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(Color {
+                                r: 0.11,
+                                g: 0.11,
+                                b: 0.13,
+                                a: 1.0,
+                            }),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Clear(1.0),
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            }
+            queue.submit(std::iter::once(encoder.finish()));
+            return;
+        };
+
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("mesh_view offscreen encoder"),
+        });
+        {
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("mesh_view offscreen pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: color_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color {
+                            r: 0.11,
+                            g: 0.11,
+                            b: 0.13,
+                            a: 1.0,
+                        }),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: depth_view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&self.render_pipeline);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint32);
+            pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+        }
+        queue.submit(std::iter::once(encoder.finish()));
     }
 
     /// Upload a mesh's vertex / index data to GPU buffers Replaces any
