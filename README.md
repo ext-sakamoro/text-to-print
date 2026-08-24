@@ -145,7 +145,7 @@ text-to-print/
 
 ## Status
 
-**Standalone desktop app** (v0.1.0 β 準備中) core パイプライン (text prompt →
+**Standalone desktop app** (v0.1.0 β release、2026-08-22) core パイプライン (text prompt →
 embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
 Stripe subscription 統合 backend + app UI 完成 (Test mode)
 
@@ -159,6 +159,15 @@ Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-08-24: **Customizer 61 archetype 到達 (Sprint 12-20 batch)** — organizer 系
+  49→61 (`hairdryer_holder / kcup_holder / hex_key_holder / wrap_holder /
+  sock_divider / soap_tray / razor_holder / chopstick_holder / swatch_holder /
+  tp_holder / sd_card_holder / driver_rack / cotton_dispenser / sink_caddy /
+  clamp_rack / dry_box / outdoor_enclosure / jewelry_stand / phone_dock /
+  cutting_board_rack / tape_dispenser / shower_caddy / caliper_holder /
+  bag_clip_org / can_rack / led_hub_box / makeup_organizer`)
+  kitchen + electronics category 100% 完走 決定論 slider 経路で LLM bypass、
+  複合形状 (3B iGPU 弱点) を preset 経路で cover
 - 2026-08-23: **β release polish — Settings → Network + path leak 削減 + Screenshots section restructure**
   - **Settings → Network section** 新設 (`crates/app/src/ui/settings.rs`) preset library endpoint の custom URL 入力 (self-hosted mirror / proxy 経由)、起動時 sync 有効化 toggle (offline 運用対応)、sidecar port override (8000/8001 が他 app と衝突時) 全 3 field を DB `profiles` table に persist、`TTP_PRESETS_ENDPOINT` / `TTP_PRESETS_SYNC_DISABLE` / `TTP_SIDECAR_PORT` env でも override 可
   - **Path leak 削減** `.cargo/config.toml` に `RUSTFLAGS = ["--remap-path-prefix", ...]` 追加、release binary strings から `/Users/runner/.cargo/registry/...` (GitHub Actions runner path、Rust panic info の副産物) を `/cargo/...` に generic 化 privacy 系の弱い懸念解消 + binary size 数十 KB 削減
