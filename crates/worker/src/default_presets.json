@@ -187,6 +187,17 @@
         { "id": "tape_packing_standard", "label": "テープ dispenser 包装用 (Ø76×W50)", "lol_dsl": "tape_dispenser(76, 50, 3)" },
         { "id": "tape_masking", "label": "テープ dispenser 養生 (Ø90×W48)", "lol_dsl": "tape_dispenser(90, 48, 3)" }
       ]
+    },
+    {
+      "name": "ミックス 8 (Sprint 19、bathroom + tools + kitchen 各 1、multi-component)",
+      "presets": [
+        { "id": "shower_2tier", "label": "シャワー棚 standard 2 tier (L250×D120)", "lol_dsl": "shower_caddy(2, 250, 120)" },
+        { "id": "shower_3tier_large", "label": "シャワー棚 large 3 tier (L300×D150)", "lol_dsl": "shower_caddy(3, 300, 150)" },
+        { "id": "caliper_standard_3", "label": "ノギスホルダー standard 3 (150mm × 3 個)", "lol_dsl": "caliper_holder(150, 40, 3)" },
+        { "id": "caliper_large_6", "label": "ノギスホルダー large 6 (200mm × 6 個)", "lol_dsl": "caliper_holder(200, 50, 6)" },
+        { "id": "bag_clip_8", "label": "袋クリップ整理 standard 8 slot (W8×H100)", "lol_dsl": "bag_clip_org(8, 8, 100)" },
+        { "id": "bag_clip_12_large", "label": "袋クリップ整理 large 12 slot (W10×H120)", "lol_dsl": "bag_clip_org(12, 10, 120)" }
+      ]
     }
   ]
 }

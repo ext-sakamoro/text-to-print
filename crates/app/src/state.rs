@@ -212,6 +212,12 @@ pub struct CustomizerState {
     pub cutting_board_rack: CuttingBoardRackUiState,
     /// Tape dispenser customizer (garage § 8.3、Sprint 18)
     pub tape_dispenser: TapeDispenserUiState,
+    /// Shower caddy customizer (bathroom § 7.5、Sprint 19)
+    pub shower_caddy: ShowerCaddyUiState,
+    /// Caliper holder customizer (tools § 4、Sprint 19)
+    pub caliper_holder: CaliperHolderUiState,
+    /// Bag clip organizer customizer (kitchen § 6.3、Sprint 19)
+    pub bag_clip_org: BagClipOrgUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -1921,6 +1927,101 @@ impl TapeDispenserUiState {
     }
 }
 
+// ── Sprint 19 ミックス 8 archetype UI state (shower_caddy / caliper_holder / bag_clip_org) ──
+
+/// シャワー用棚 UI state (bathroom § 7.5、multi-tier wall-mount tray)
+/// (`shower_caddy(tier_count, tier_length, tier_depth)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ShowerCaddyUiState {
+    /// tier 段数 (default 2、range 1-4)
+    pub tier_count: u32,
+    /// tier 内 長 (mm、default 250、range 150-350)
+    pub tier_length: f32,
+    /// tier 内 奥行 (mm、default 120、range 80-180)
+    pub tier_depth: f32,
+}
+
+impl Default for ShowerCaddyUiState {
+    fn default() -> Self {
+        Self {
+            tier_count: 2,
+            tier_length: 250.0,
+            tier_depth: 120.0,
+        }
+    }
+}
+
+impl ShowerCaddyUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "shower_caddy({}, {}, {})",
+            self.tier_count, self.tier_length, self.tier_depth
+        )
+    }
+}
+
+/// ノギスホルダー UI state (tools § 4、wall-mount + N caliper slot)
+/// (`caliper_holder(jaw_length, throat_depth, count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CaliperHolderUiState {
+    /// ノギス最大長 (mm、150mm 標準、default 150、range 100-300)
+    pub jaw_length: f32,
+    /// ノギス throat 深さ (mm、default 40、range 25-60)
+    pub throat_depth: f32,
+    /// 収納個数 (default 3、range 1-6)
+    pub count: u32,
+}
+
+impl Default for CaliperHolderUiState {
+    fn default() -> Self {
+        Self {
+            jaw_length: 150.0,
+            throat_depth: 40.0,
+            count: 3,
+        }
+    }
+}
+
+impl CaliperHolderUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "caliper_holder({}, {}, {})",
+            self.jaw_length, self.throat_depth, self.count
+        )
+    }
+}
+
+/// 袋クリップ整理 UI state (kitchen § 6.3、縦 slot rack)
+/// (`bag_clip_org(slot_count, slot_width, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct BagClipOrgUiState {
+    /// slot 個数 (default 8、range 4-16)
+    pub slot_count: u32,
+    /// slot 幅 (mm、clip 厚 用、default 8、range 5-15)
+    pub slot_width: f32,
+    /// 全高 (mm、default 100、range 60-150)
+    pub height: f32,
+}
+
+impl Default for BagClipOrgUiState {
+    fn default() -> Self {
+        Self {
+            slot_count: 8,
+            slot_width: 8.0,
+            height: 100.0,
+        }
+    }
+}
+
+impl BagClipOrgUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "bag_clip_org({}, {}, {})",
+            self.slot_count, self.slot_width, self.height
+        )
+    }
+}
+
 pub struct AppState {
     #[allow(dead_code)]
     pub data_dir: PathBuf,
@@ -2922,16 +3023,17 @@ fn spawn_embedded_load(
 #[cfg(test)]
 mod tests {
     use super::{
-        Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState, CableClipUiState,
-        CardTrayUiState, ChopstickHolderUiState, ClampRackUiState, CoasterUiState,
-        CottonDispenserUiState, CustomizerState, CutleryTrayUiState, CuttingBoardRackUiState,
-        DeskShelfUiState, DrillBitHolderUiState, DriverRackUiState, DryBoxUiState, EggTrayUiState,
-        Esp32EnclosureUiState, FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState,
-        HairdryerHolderUiState, HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState,
-        JewelryStandUiState, KcupHolderUiState, LedChannelUiState, MagneticStripUiState,
-        MonitorRiserUiState, NozzleHolderUiState, OutdoorEnclosureUiState, PenCupUiState,
-        PhaseProgress, PhoneDockUiState, PhoneStandUiState, PillOrganizerUiState,
-        PliersRackUiState, RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState,
+        BagClipOrgUiState, Battery18650HolderUiState, BuildPlateRackUiState, BusinessCardUiState,
+        CableClipUiState, CaliperHolderUiState, CardTrayUiState, ChopstickHolderUiState,
+        ClampRackUiState, CoasterUiState, CottonDispenserUiState, CustomizerState,
+        CutleryTrayUiState, CuttingBoardRackUiState, DeskShelfUiState, DrillBitHolderUiState,
+        DriverRackUiState, DryBoxUiState, EggTrayUiState, Esp32EnclosureUiState,
+        FilamentSpoolHolderUiState, GenerationPhase, GridfinityUiState, HairdryerHolderUiState,
+        HeadphoneHolderUiState, HexBitHolderUiState, HexKeyHolderUiState, JewelryStandUiState,
+        KcupHolderUiState, LedChannelUiState, MagneticStripUiState, MonitorRiserUiState,
+        NozzleHolderUiState, OutdoorEnclosureUiState, PenCupUiState, PhaseProgress,
+        PhoneDockUiState, PhoneStandUiState, PillOrganizerUiState, PliersRackUiState,
+        RaspiCaseUiState, RazorHolderUiState, SdCardHolderUiState, ShowerCaddyUiState,
         SinkCaddyUiState, SoapTrayUiState, SockDividerUiState, SocketRailUiState, SpiceRackUiState,
         StickyNoteUiState, StorageBoxUiState, SwatchHolderUiState, TapeDispenserUiState,
         TissueBoxCoverUiState, TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState,
@@ -3835,5 +3937,43 @@ mod tests {
             "cutting_board_rack(3, 12, 220)"
         );
         assert_eq!(c.tape_dispenser.to_lol(), "tape_dispenser(76, 50, 3)");
+    }
+
+    // ── Sprint 19 ミックス 8 archetype UI state tests ──
+
+    #[test]
+    fn shower_caddy_default_is_standard_2_tier() {
+        let s = ShowerCaddyUiState::default();
+        assert_eq!(s.tier_count, 2);
+        assert!((s.tier_length - 250.0).abs() < 1e-6);
+        assert!((s.tier_depth - 120.0).abs() < 1e-6);
+        assert_eq!(s.to_lol(), "shower_caddy(2, 250, 120)");
+    }
+
+    #[test]
+    fn caliper_holder_default_is_standard_3() {
+        let c = CaliperHolderUiState::default();
+        assert!((c.jaw_length - 150.0).abs() < 1e-6);
+        assert!((c.throat_depth - 40.0).abs() < 1e-6);
+        assert_eq!(c.count, 3);
+        assert_eq!(c.to_lol(), "caliper_holder(150, 40, 3)");
+    }
+
+    #[test]
+    fn bag_clip_org_default_is_standard_8() {
+        let b = BagClipOrgUiState::default();
+        assert_eq!(b.slot_count, 8);
+        assert!((b.slot_width - 8.0).abs() < 1e-6);
+        assert!((b.height - 100.0).abs() < 1e-6);
+        assert_eq!(b.to_lol(), "bag_clip_org(8, 8, 100)");
+    }
+
+    #[test]
+    fn customizer_state_default_includes_all_58_archetypes() {
+        let c = CustomizerState::default();
+        // Sprint 19 追加後は 58 archetype (+3: shower_caddy / caliper_holder / bag_clip_org)
+        assert_eq!(c.shower_caddy.to_lol(), "shower_caddy(2, 250, 120)");
+        assert_eq!(c.caliper_holder.to_lol(), "caliper_holder(150, 40, 3)");
+        assert_eq!(c.bag_clip_org.to_lol(), "bag_clip_org(8, 8, 100)");
     }
 }

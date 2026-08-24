@@ -1247,7 +1247,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 ///
 /// 経路 A (固定 preset button) と経路 B (LLM 自然言語) の中間 slider で
 /// param を指定 → 「作成」ボタンで LOL DSL 動的組立て → 生成
-/// 現行対応 55 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
+/// 現行対応 58 archetype: Gridfinity bin + organizer-gridfinity-desk PART 2 全部
 /// (sticky_note_holder / business_card_holder / pen_cup / phone_stand /
 ///  headphone_holder / under_desk_mount / desk_shelf / monitor_riser) +
 /// household 3 (coaster / tissue_box_cover / storage_box) +
@@ -1264,7 +1264,8 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// mix4 3 (tp_holder / sd_card_holder / driver_rack、Sprint 15) +
 /// mix5 3 (cotton_dispenser / sink_caddy / clamp_rack、Sprint 16) +
 /// mix6 3 (dry_box / outdoor_enclosure / jewelry_stand、Sprint 17) +
-/// mix7 3 (phone_dock / cutting_board_rack / tape_dispenser、Sprint 18、multi-component)
+/// mix7 3 (phone_dock / cutting_board_rack / tape_dispenser、Sprint 18、multi-component) +
+/// mix8 3 (shower_caddy / caliper_holder / bag_clip_org、Sprint 19、multi-component)
 fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool) {
     ui.collapsing(
         "カスタマイザー (サイズ指定して生成、LLM 経由しない)",
@@ -1379,6 +1380,12 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_cutting_board_rack_customizer(ui, state);
                 ui.separator();
                 show_tape_dispenser_customizer(ui, state);
+                ui.separator();
+                show_shower_caddy_customizer(ui, state);
+                ui.separator();
+                show_caliper_holder_customizer(ui, state);
+                ui.separator();
+                show_bag_clip_org_customizer(ui, state);
             });
         },
     );
@@ -3425,6 +3432,120 @@ fn show_tape_dispenser_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         state.prompt_input.clear();
         state.prompt_focused_once = false;
         start_generation_from_lol(state, t_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// シャワー用棚 customizer
+/// (`tier_count × tier_length × tier_depth`、bathroom § 7.5、multi-component)
+///
+/// Multi-tier wall-mount tray (backplate + N tier tray + drain hole + M4 mount)
+fn show_shower_caddy_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(
+        egui::RichText::new("🚿 シャワー用棚 (multi-tier wall-mount tray、multi-component)")
+            .strong(),
+    );
+
+    let s = &mut state.customizer_state.shower_caddy;
+    ui.horizontal(|ui| {
+        ui.label("tier 段数:");
+        ui.add(egui::Slider::new(&mut s.tier_count, 1..=4).text("(1-4)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("tier 長 (mm):");
+        ui.add(egui::Slider::new(&mut s.tier_length, 150.0..=350.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("tier 奥行 (mm):");
+        ui.add(egui::Slider::new(&mut s.tier_depth, 80.0..=180.0).step_by(5.0));
+    });
+
+    let s_copy = *s;
+    let label = format!(
+        "シャワー棚 {} tier × L{} × D{}mm",
+        s_copy.tier_count, s_copy.tier_length, s_copy.tier_depth
+    );
+    ui.label("プリセット目安: standard 2 tier (L250×D120) / large 3 tier (L300×D150)");
+    ui.label("固定: tier 深 40mm、tier 間隔 100mm、drain 6 hole/tier Ø5mm、M4 mount hole 2 個");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, s_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// ノギスホルダー customizer
+/// (`jaw_length × throat_depth × count`、tools § 4、multi-component)
+///
+/// Wall-mount backplate + N caliper slot + 4 corner M4 mount
+fn show_caliper_holder_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📏 ノギスホルダー (wall-mount backplate + N slot)").strong());
+
+    let c = &mut state.customizer_state.caliper_holder;
+    ui.horizontal(|ui| {
+        ui.label("ノギス長 (mm):");
+        ui.add(egui::Slider::new(&mut c.jaw_length, 100.0..=300.0).step_by(10.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("throat 深さ (mm):");
+        ui.add(egui::Slider::new(&mut c.throat_depth, 25.0..=60.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("収納個数:");
+        ui.add(egui::Slider::new(&mut c.count, 1..=6).text("(1-6)"));
+    });
+
+    let c_copy = *c;
+    let label = format!(
+        "ノギスホルダー L{} × throat {}mm × {} 個",
+        c_copy.jaw_length, c_copy.throat_depth, c_copy.count
+    );
+    ui.label("プリセット目安: standard 3 (Mitutoyo 150mm digital) / large 6 (200mm digital)");
+    ui.label("固定: slot 幅 15mm、backplate 5mm 厚、4 隅 M4 mount hole");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, c_copy.to_lol(), &label);
+    }
+
+    ui.add_space(2.0);
+}
+
+/// 袋クリップ整理 customizer
+/// (`slot_count × slot_width × height`、kitchen § 6.3)
+///
+/// 縦 slot rack (magnetic_strip の vertical 変種、chip bag clip 収納)
+fn show_bag_clip_org_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📎 袋クリップ整理 (縦 slot rack)").strong());
+
+    let b = &mut state.customizer_state.bag_clip_org;
+    ui.horizontal(|ui| {
+        ui.label("slot 個数:");
+        ui.add(egui::Slider::new(&mut b.slot_count, 4..=16).text("(4-16)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("slot 幅 (mm):");
+        ui.add(egui::Slider::new(&mut b.slot_width, 5.0..=15.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("全高 (mm):");
+        ui.add(egui::Slider::new(&mut b.height, 60.0..=150.0).step_by(5.0));
+    });
+
+    let b_copy = *b;
+    let label = format!(
+        "袋クリップ {} slot × W{} × H{}mm",
+        b_copy.slot_count, b_copy.slot_width, b_copy.height
+    );
+    ui.label("プリセット目安: standard (8 × W8 × H100) / large (12 × W10 × H120)");
+    ui.label("固定: slot 奥行 30mm、wall 2.5mm、floor 3mm");
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, b_copy.to_lol(), &label);
     }
 
     ui.add_space(2.0);

@@ -217,6 +217,10 @@ name_3f ::= "box3d"
           | "phone_dock"
           | "cutting_board_rack"
           | "tape_dispenser"
+          # Sprint 19 ミックス 8 (bathroom + tools + kitchen 各 1、multi-component、2026-08-24 追加)
+          | "shower_caddy"
+          | "caliper_holder"
+          | "bag_clip_org"
 
 name_4f ::= "rounded_box"
           | "plane"

@@ -115,6 +115,9 @@ mod tests {
             "phone_dock",
             "cutting_board_rack",
             "tape_dispenser",
+            "shower_caddy",
+            "caliper_holder",
+            "bag_clip_org",
         ] {
             assert!(
                 SYSTEM_PROMPT.contains(name),

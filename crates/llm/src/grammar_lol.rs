@@ -128,6 +128,9 @@ mod tests {
             "phone_dock",
             "cutting_board_rack",
             "tape_dispenser",
+            "shower_caddy",
+            "caliper_holder",
+            "bag_clip_org",
             // 7f primitives
             "gridfinity_bin_ex",
             // no-arg primitives
