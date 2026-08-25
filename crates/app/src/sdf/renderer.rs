@@ -117,14 +117,22 @@ impl MeshResources {
     /// Ensure offscreen color+depth textures exist at the requested size
     /// Recreates them (and re-registers the color view with egui) whenever
     /// the size changes, and unregisters the previous egui texture id
-    fn ensure_targets(&mut self, render_state: &egui_wgpu::RenderState, size: (u32, u32)) {
+    ///
+    /// Caller must hold the write guard on the egui renderer (this is why
+    /// `renderer` is passed by `&mut` rather than acquiring internally —
+    /// std RwLock is not re-entrant, so nested `.write()` would deadlock)
+    pub fn ensure_targets(
+        &mut self,
+        device: &wgpu::Device,
+        renderer: &mut egui_wgpu::Renderer,
+        size: (u32, u32),
+    ) {
         if let Some(t) = &self.targets
             && t.size == size
         {
             return;
         }
 
-        let device = &render_state.device;
         let color_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("mesh_view offscreen color"),
             size: wgpu::Extent3d {
@@ -159,16 +167,11 @@ impl MeshResources {
 
         // Free the previous egui texture id (if any) before registering
         // the new one, so egui's texture atlas doesn't leak
-        let mut renderer = render_state.renderer.write();
         if let Some(prev) = self.targets.take() {
             renderer.free_texture(&prev.egui_id);
         }
-        let egui_id = renderer.register_native_texture(
-            device,
-            &color_view,
-            wgpu::FilterMode::Linear,
-        );
-        drop(renderer);
+        let egui_id =
+            renderer.register_native_texture(device, &color_view, wgpu::FilterMode::Linear);
 
         self.targets = Some(OffscreenTargets {
             size,
@@ -182,15 +185,13 @@ impl MeshResources {
     /// texture, returning the egui TextureId that displays the result
     /// via egui::Image
     ///
-    /// Returns `None` when no mesh has been uploaded yet
-    pub fn render_frame(
-        &mut self,
-        render_state: &egui_wgpu::RenderState,
-        size: (u32, u32),
-    ) -> Option<TextureId> {
+    /// Returns `None` when no mesh has been uploaded yet or when no
+    /// targets have been created Caller must have called
+    /// [`Self::ensure_targets`] at the current viewport size before
+    /// invoking this (typically in the same write-lock scope on
+    /// `render_state.renderer`)
+    pub fn render_frame(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Option<TextureId> {
         self.pipeline.mesh.as_ref()?;
-
-        self.ensure_targets(render_state, size);
         let targets = self.targets.as_ref()?;
 
         let camera = self
@@ -198,20 +199,14 @@ impl MeshResources {
             .lock()
             .map(|c| c.clone())
             .unwrap_or_default();
-        let aspect = (size.0 as f32 / size.1.max(1) as f32).max(0.1);
+        let aspect = (targets.size.0 as f32 / targets.size.1.max(1) as f32).max(0.1);
         let view = Mat4::look_at_rh(camera.position, camera.target, camera.up);
         let proj = Mat4::perspective_rh(camera.fov, aspect, camera.near, camera.far);
         let uniforms = MeshUniforms::from_camera(camera.position, proj * view);
 
-        self.pipeline.render(
-            &render_state.device,
-            &render_state.queue,
-            &targets.color_view,
-            &targets.depth_view,
-            uniforms,
-        );
+        self.pipeline
+            .render(device, queue, &targets.color_view, &targets.depth_view, uniforms);
 
         Some(targets.egui_id)
     }
-
 }

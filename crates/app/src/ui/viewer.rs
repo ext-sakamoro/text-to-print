@@ -111,6 +111,13 @@ pub fn show(
         // resulting texture as an egui Image so hollow shapes show with
         // correct depth ordering (the old egui-pass callback had no depth
         // attachment, causing "just a box" blob-out)
+        //
+        // Single write-lock scope: we take MeshResources out of
+        // callback_resources so we can call `ensure_targets` (which needs
+        // `&mut Renderer` for `register_native_texture`) AND methods on
+        // MeshResources without split-borrow issues Then insert back
+        // std RwLock is not re-entrant, so nested `renderer.write()`
+        // would deadlock (mouse spinner, UI hang)
         let mut rendered_id: Option<egui::TextureId> = None;
         if let Some(rs) = render_state {
             // Multiply by pixels_per_point so the offscreen texture has
@@ -118,13 +125,14 @@ pub fn show(
             let ppp = ui.ctx().pixels_per_point();
             let px_w = (rect.width() * ppp).max(1.0) as u32;
             let px_h = (rect.height() * ppp).max(1.0) as u32;
-            if let Some(res) = rs
-                .renderer
-                .write()
+            let mut renderer = rs.renderer.write();
+            if let Some(mut res) = renderer
                 .callback_resources
-                .get_mut::<crate::sdf::MeshResources>()
+                .remove::<crate::sdf::MeshResources>()
             {
-                rendered_id = res.render_frame(rs, (px_w, px_h));
+                res.ensure_targets(&rs.device, &mut renderer, (px_w, px_h));
+                rendered_id = res.render_frame(&rs.device, &rs.queue);
+                renderer.callback_resources.insert(res);
             }
         }
         if let Some(id) = rendered_id {
