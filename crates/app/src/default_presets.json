@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-23T00:00:00Z",
+  "version": "2026-08-25T00:00:00Z",
   "categories": [
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
@@ -108,7 +108,9 @@
         { "id": "pill_weekly_14", "label": "薬箱 weekly AM/PM (7×2 = 14 cell)", "lol_dsl": "pill_organizer(7, 2, 20)" },
         { "id": "pill_daily_3", "label": "薬箱 daily (3×1 = 3 cell)", "lol_dsl": "pill_organizer(3, 1, 15)" },
         { "id": "magnet_knife_rail_8", "label": "マグネットバー 8 magnet (kitchen knife rail)", "lol_dsl": "magnetic_strip(8, 6, 30)" },
-        { "id": "magnet_tool_large_12", "label": "マグネットバー 12 magnet × Ø10 (large tool rail)", "lol_dsl": "magnetic_strip(12, 10, 40)" }
+        { "id": "magnet_tool_large_12", "label": "マグネットバー 12 magnet × Ø10 (large tool rail)", "lol_dsl": "magnetic_strip(12, 10, 40)" },
+        { "id": "drawer_organizer_default", "label": "引き出し仕切り (固定 252×202×40)", "lol_dsl": "drawer_organizer()" },
+        { "id": "wall_hook_default", "label": "壁掛けフック (固定 L 字 26×80×50)", "lol_dsl": "wall_hook()" }
       ]
     },
     {
