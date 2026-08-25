@@ -227,7 +227,12 @@ impl eframe::App for App {
                     });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::viewer::show(ui, &self.state, &mut self.viewer, self.render_state.as_ref());
+                    ui::viewer::show(
+                        ui,
+                        &self.state,
+                        &mut self.viewer,
+                        self.render_state.as_ref(),
+                    );
                 });
             }
             Tab::Gallery => {

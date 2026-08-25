@@ -2,7 +2,7 @@ use egui::TextureId;
 use glam::{Mat4, Vec3};
 use std::sync::{Arc, Mutex};
 
-use super::pipeline::{MeshPipeline, MeshUniforms, COLOR_FORMAT, DEPTH_FORMAT};
+use super::pipeline::{COLOR_FORMAT, DEPTH_FORMAT, MeshPipeline, MeshUniforms};
 
 /// Camera state shared between the UI (for orbit / dolly / reset) and the
 /// offscreen render pass
@@ -194,18 +194,19 @@ impl MeshResources {
         self.pipeline.mesh.as_ref()?;
         let targets = self.targets.as_ref()?;
 
-        let camera = self
-            .camera
-            .lock()
-            .map(|c| c.clone())
-            .unwrap_or_default();
+        let camera = self.camera.lock().map(|c| c.clone()).unwrap_or_default();
         let aspect = (targets.size.0 as f32 / targets.size.1.max(1) as f32).max(0.1);
         let view = Mat4::look_at_rh(camera.position, camera.target, camera.up);
         let proj = Mat4::perspective_rh(camera.fov, aspect, camera.near, camera.far);
         let uniforms = MeshUniforms::from_camera(camera.position, proj * view);
 
-        self.pipeline
-            .render(device, queue, &targets.color_view, &targets.depth_view, uniforms);
+        self.pipeline.render(
+            device,
+            queue,
+            &targets.color_view,
+            &targets.depth_view,
+            uniforms,
+        );
 
         Some(targets.egui_id)
     }
