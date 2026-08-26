@@ -92,17 +92,21 @@ gh release view v0.1.0
 
 ### 2.3 Cloudflare Worker 稼働
 
+`scripts/smoke_worker.sh` で 4 endpoint 一括確認 (`WORKER_BASE_URL` で override 可、`-v` で body snippet 表示):
+
 ```bash
-curl -s -w "\nHTTP:%{http_code}\n" https://text-to-print.alicelaw.net/api/presets | head -5
-curl -s -o /dev/null -w "HTTP:%{http_code}\n" -X POST https://text-to-print.alicelaw.net/api/share -H "Content-Type: application/json" -d '{}'
-curl -s -w "\nHTTP:%{http_code}\n" 'https://text-to-print.alicelaw.net/api/gallery/list?limit=5' | head -5
-curl -s -o /dev/null -w "HTTP:%{http_code}\n" -X POST https://text-to-print.alicelaw.net/api/gallery/publish -H "Content-Type: application/json" -d '{}'
+scripts/smoke_worker.sh          # default: https://text-to-print.alicelaw.net
+scripts/smoke_worker.sh -v       # verbose (body 先頭 200 char 表示)
+WORKER_BASE_URL=https://staging.example.com scripts/smoke_worker.sh
 ```
 
 - [ ] `/api/presets` → 200 + JSON 返却
 - [ ] `/api/share` → 400 validation reject (endpoint 稼働 + schema validation 動作)
 - [ ] `/api/gallery/list` → 200 + `{items: [], next_offset: null}` (DB 空でも成功、Phase 3 稼働確認)
 - [ ] `/api/gallery/publish` → 400 validation reject (invalid_json、endpoint 稼働確認)
+- [ ] script 実測 `4 / 4 checks passed` (fail 時は script が GALLERY_DB 未 provision hint 出力)
+
+script は shellcheck clean、CI / cron からも exit code で pass/fail 判定可能
 
 ### 2.3.1 Gallery D1 provision (Phase 3 追加、初回のみ)
 
