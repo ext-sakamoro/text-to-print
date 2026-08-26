@@ -1,0 +1,89 @@
+name: 機能要望 / Feature request
+description: 新機能 / 改善提案 / 新 archetype 追加希望など / Suggest a new feature, improvement, or archetype
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提案ありがとうございます 以下を埋めていただくと採否判断が速くなります
+        Thanks for the suggestion Filling out the fields below helps us decide faster
+
+        英語 / 日本語どちらでも OK / English or Japanese is fine
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: category
+      description: 主にどこに関する要望か / Which area is this mainly about
+      options:
+        - Templates (固定 preset の追加 / 新 archetype)
+        - Customizer (slider parameter の追加 / 拡張)
+        - LLM (自然言語生成 / BYO LLM provider / prompt)
+        - Gallery (公開 / fork / preview)
+        - UI / UX (画面構成 / 操作性 / i18n)
+        - Export (Bambu 3MF / STL / Snapmaker / 他 slicer 対応)
+        - Print pipeline (SDF / mesh / thin wall / overhang / support)
+        - CI / Release / Distribution
+        - Documentation
+        - その他 / Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい課題 / Problem to solve
+      description: どんな状況で困っているか / What problem does this solve
+      placeholder: |
+        例 / Example:
+        - Templates に○○がないので手作業で作っている
+        - LLM が特定形状を出せない
+        - 特定 slicer との互換性がない
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 提案する解決策 / Proposed solution
+      description: どう実装されると嬉しいか / How should it work
+      placeholder: |
+        例 / Example:
+        - ○○ template を追加し、幅 / 高さ / 穴径を slider で調整可能に
+        - BYO LLM に○○ provider を追加
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 検討した代替案 / Alternatives considered
+      description: 現状の回避策や他の実装案があれば / Existing workarounds or alternative designs
+      placeholder: "現状は○○で回避しているが△△が難しい"
+    validations:
+      required: false
+
+  - type: textarea
+    id: archetype_context
+    attributes:
+      label: archetype 追加要望の場合の追加情報 / Additional info for archetype requests
+      description: |
+        用途 / 想定寸法 / 参考画像 / 既存 archetype で近いもの
+        Use case, expected dimensions, reference images, or nearest existing archetype
+      placeholder: |
+        用途: ...
+        寸法: 幅 x 奥行 x 高さ
+        近い既存 archetype: ...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 確認事項 / Checklist
+      options:
+        - label: 既存 issue で同じ要望が報告されていないか検索した / I searched existing issues for the same request
+          required: true
+        - label: 既存 61 archetype (Templates タブ) で代替できないか確認した / I checked whether existing 61 archetypes can cover this use case
+          required: false

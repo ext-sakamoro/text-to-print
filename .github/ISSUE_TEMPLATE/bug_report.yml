@@ -1,0 +1,129 @@
+name: バグ報告 / Bug report
+description: 動作しない / 期待と異なる挙動を報告する / Report a bug or unexpected behavior
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます 以下を埋めていただくと再現と修正が速くなります
+        Thanks for reporting Filling out the fields below helps us reproduce and fix the issue faster
+
+        英語 / 日本語どちらでも OK / English or Japanese is fine
+
+  - type: input
+    id: version
+    attributes:
+      label: text-to-print version
+      description: Help メニュー > About から確認 / Check via Help > About
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows 11
+        - Windows 10
+        - Linux (Ubuntu / Debian)
+        - Linux (Fedora / RHEL)
+        - Linux (Arch)
+        - Linux (その他 / other)
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: "macOS 15.2 / Windows 11 23H2 / Ubuntu 24.04"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: llm_backend
+    attributes:
+      label: LLM backend 経路 / LLM backend
+      description: Settings > LLM で確認 / Check via Settings > LLM
+      options:
+        - Sidecar (alice-llm-server 同梱 binary)
+        - Embedded (in-process、Qwen 3.5-4B / Gemma2-27B / Bonsai27B)
+        - BYO LLM - Claude
+        - BYO LLM - OpenAI
+        - BYO LLM - Google (Gemini)
+        - BYO LLM - Ollama (local)
+        - BYO LLM - Custom GGUF (local)
+        - LLM 未使用 / Not using LLM (templates / customizer only)
+        - 不明 / Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: 使用 model / Model
+      description: BYO LLM の場合は model name も記載 / For BYO LLM include the model name
+      placeholder: "Qwen 3.5-4B / gemini-2.5-flash / claude-sonnet-4-6 / etc."
+    validations:
+      required: false
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 再現手順 / Steps to reproduce
+      description: 何を入力 / 操作したかを順に記載 / List the input and actions in order
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する動作 / Expected behavior
+      placeholder: "何が起きるはずだったか / What should have happened"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作 / Actual behavior
+      placeholder: "何が起きたか / What actually happened"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: log / エラーメッセージ / Logs / error messages
+      description: |
+        app 起動時の terminal 出力、または `~/Library/Logs/text-to-print/` (macOS) / `%APPDATA%\text-to-print\logs\` (Windows) / `~/.local/share/text-to-print/logs/` (Linux) を貼る
+        Paste terminal output or log files from the paths above
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: screenshot (任意 / optional)
+      description: 画像は drag & drop で貼れる / Drag and drop images here
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 確認事項 / Checklist
+      options:
+        - label: 既存 issue で同じ問題が報告されていないか検索した / I searched existing issues for the same problem
+          required: true
+        - label: 最新 release (https://github.com/ext-sakamoro/text-to-print/releases) で再現するか確認した / I checked that the issue reproduces on the latest release
+          required: false

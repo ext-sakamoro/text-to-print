@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 最新 release DL / Download latest release
+    url: https://github.com/ext-sakamoro/text-to-print/releases
+    about: バグ報告の前に最新 release で再現するか確認してください / Please verify on the latest release before reporting bugs
+  - name: 応援 / Support the project (Ko-fi)
+    url: https://ko-fi.com/sakamoro
+    about: 開発の応援はこちらから / Support development here
