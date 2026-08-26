@@ -28,6 +28,7 @@ use worker::{
 
 mod checkout;
 mod email;
+mod gallery_handler;
 mod license_issue;
 mod presets_handler;
 mod rate_limit;
@@ -102,6 +103,9 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> WorkerResult<Respons
         .get("/health", |_, _| Response::ok("ok"))
         .post_async("/api/share", handle_share)
         .get_async("/api/presets", handle_presets)
+        .get_async("/api/gallery/list", handle_gallery_list)
+        .post_async("/api/gallery/publish", handle_gallery_publish)
+        .delete_async("/api/gallery/:id", handle_gallery_delete)
         .post_async("/stripe/webhook", handle_stripe_webhook)
         .post_async("/stripe/checkout-session", handle_checkout_session)
         .run(req, env)
@@ -114,6 +118,24 @@ async fn handle_share(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<R
 
 async fn handle_presets(req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
     presets_handler::handle(&req, &ctx).await
+}
+
+async fn handle_gallery_list(req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {
+    gallery_handler::handle_list(&req, &ctx).await
+}
+
+async fn handle_gallery_publish(
+    mut req: Request,
+    ctx: RouteContext<()>,
+) -> WorkerResult<Response> {
+    gallery_handler::handle_publish(&mut req, &ctx).await
+}
+
+async fn handle_gallery_delete(
+    mut req: Request,
+    ctx: RouteContext<()>,
+) -> WorkerResult<Response> {
+    gallery_handler::handle_delete(&mut req, &ctx).await
 }
 
 async fn handle_stripe_webhook(mut req: Request, ctx: RouteContext<()>) -> WorkerResult<Response> {

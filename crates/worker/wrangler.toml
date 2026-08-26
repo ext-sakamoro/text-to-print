@@ -21,6 +21,20 @@ binding = "SHARES_DB"
 database_name = "text-to-print-shares"
 database_id = "06b65563-a027-47a8-bdf9-4f4556206b11"
 
+# Gallery Phase 3 (2026-08-26): Cloudflare-relayed Gallery (list / publish /
+# delete) Endpoints `/api/gallery/{list,publish,:id}` in `gallery_handler.rs`
+# Deploy prerequisites (user, one-time):
+#   wrangler d1 create text-to-print-gallery
+#   # copy the `database_id` from the CLI output into the field below
+#   wrangler d1 execute text-to-print-gallery --file=migrations/0003_gallery.sql
+# Left as an empty string on purpose — publish endpoint will 500 until the
+# operator provisions the DB and fills in the id (`env.d1("GALLERY_DB")` binds
+# by name, so unknown id surfaces at `handle_publish` rather than at deploy)
+[[d1_databases]]
+binding = "GALLERY_DB"
+database_name = "text-to-print-gallery"
+database_id = ""
+
 # KV binding for archetype preset library (Sprint X.1、Layer 1 sync)
 # Created 2026-08-21 via `wrangler kv namespace create PRESETS_KV`.
 # Seed / update:
