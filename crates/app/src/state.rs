@@ -2212,7 +2212,6 @@ pub struct AppState {
     /// a share-confirm dialog after every Free-tier generation When
     /// `true` the generation auto-publishes without dialog Only relevant
     /// while `share_lol_dsl` is on and the tier is Free
-    #[allow(dead_code, reason = "Wired in Phase 2 (share confirm dialog)")]
     pub gallery_auto_share: bool,
     /// Stage 3-C.14: when `true` (default), every generation forwards
     /// [`text_to_print_llm::grammar_lol::LOL_GBNF`] to the backend so
@@ -2225,6 +2224,12 @@ pub struct AppState {
     /// upload (Epic-Infra #35) will consume the same payload; the dry-run
     /// path keeps the opt-in gate honest even when the backend is offline
     pub pending_share_dry_run: Option<std::path::PathBuf>,
+    /// Gallery Phase 2 (2026-08-26): dry-run payload path awaiting user
+    /// confirm before real enqueue Populated only when `share_lol_dsl` is
+    /// on AND `gallery_auto_share` is off — in that case the async task
+    /// dumps the dry-run for audit but defers `enqueue()` until the
+    /// dialog approves it On dialog resolution the field is cleared
+    pub pending_share_confirm: Option<std::path::PathBuf>,
     /// Template customizer UI state (Gridfinity bin 等の param 入力保持)
     pub customizer_state: CustomizerState,
     /// Sprint X.1: archetype preset library snapshot (Layer 1 sync)
@@ -2313,6 +2318,12 @@ pub enum GenerationMessage {
         /// `share_lol_dsl` is on and the generation produced a 3MF export;
         /// otherwise `None`
         share_dry_run: Option<std::path::PathBuf>,
+        /// Gallery Phase 2 (2026-08-26): dry-run payload path awaiting
+        /// dialog confirm before real enqueue Some only when
+        /// `share_lol_dsl` && !`gallery_auto_share` — the async task
+        /// dumps the dry-run for audit but defers `enqueue()` until the
+        /// user resolves the share-confirm dialog
+        share_confirm_pending: Option<std::path::PathBuf>,
     },
     Failure {
         id: String,
@@ -2621,6 +2632,7 @@ impl AppState {
             gallery_auto_share,
             enforce_lol_grammar,
             pending_share_dry_run: None,
+            pending_share_confirm: None,
             customizer_state: CustomizerState::default(),
             presets,
         }

@@ -865,6 +865,7 @@ fn start_generation_from_lol(state: &mut AppState, lol_source: String, template_
                 mesh_stats: mesh_stats.map(Box::new),
                 retry_count: 0,
                 share_dry_run: None,
+                share_confirm_pending: None,
             });
         }
     });
@@ -918,6 +919,12 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
     // (b) enqueue a real upload for the Cloudflare Worker sweep Paid tiers
     // suppress both regardless of the raw checkbox state
     let share_enabled = state.share_effective_enabled();
+    // Gallery Phase 2 (2026-08-26): auto vs confirm-dialog gate `false`
+    // (default) means the async task dry-runs for audit but defers the
+    // real `enqueue()` until the UI dialog resolves it `true` restores
+    // the pre-Phase-2 auto-publish flow (backward compatible for users
+    // who opt in)
+    let gallery_auto_share = state.gallery_auto_share;
     let share_dry_run_dir = state.share_dry_run_dir();
     let share_queue_dir = state.share_queue_dir();
     let tier_slug = tier_slug(state.tier);
@@ -1046,11 +1053,13 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     None
                 };
 
-                // GAP-12 / Stage 5: gate the share payload on the
-                // tier-effective opt-in flag Free-tier + opt-in → dry-run
-                // dump (local audit) + enqueue for the Cloudflare Worker
-                // sweep Paid tiers short-circuit the branch entirely
-                let share_dry_run = if share_enabled
+                // GAP-12 / Stage 5 / Gallery Phase 2: gate the share
+                // payload on the tier-effective opt-in flag Free-tier +
+                // opt-in → dry-run dump (local audit) is always done;
+                // real `enqueue()` is auto when `gallery_auto_share` is
+                // on and deferred to a dialog otherwise Paid tiers
+                // short-circuit the branch entirely
+                let (share_dry_run, share_confirm_pending) = if share_enabled
                     && let Some(stats) = mesh_stats.as_ref()
                     && let Ok(mesh_bytes) = std::fs::read(&stats.path)
                 {
@@ -1078,24 +1087,33 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                             user_edited: false,
                         },
                     );
-                    // Enqueue for the real upload sweep The dry-run dump
-                    // path is kept for local inspection but the queued file
-                    // is what actually gets delivered on the next
-                    // `retry_queued_uploads` cycle
-                    if let Err(e) =
-                        text_to_print_network::share::enqueue(&payload, &share_queue_dir)
-                    {
-                        tracing::warn!(error = %e, "share enqueue failed");
-                    }
-                    match text_to_print_network::share::dump_dry_run(&payload, &share_dry_run_dir) {
+                    let dry_path = match text_to_print_network::share::dump_dry_run(
+                        &payload,
+                        &share_dry_run_dir,
+                    ) {
                         Ok(p) => Some(p),
                         Err(e) => {
                             tracing::warn!(error = %e, "share dry-run dump failed");
                             None
                         }
+                    };
+                    if gallery_auto_share {
+                        // Auto path: enqueue immediately for the next
+                        // `retry_queued_uploads` sweep, no dialog
+                        if let Err(e) =
+                            text_to_print_network::share::enqueue(&payload, &share_queue_dir)
+                        {
+                            tracing::warn!(error = %e, "share enqueue failed");
+                        }
+                        (dry_path, None)
+                    } else {
+                        // Dialog path: dry-run kept for audit but the
+                        // real enqueue is deferred until the user
+                        // resolves `pending_share_confirm`
+                        (dry_path.clone(), dry_path)
                     }
                 } else {
-                    None
+                    (None, None)
                 };
 
                 if let Some(err) = pipeline_error {
@@ -1107,6 +1125,7 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                         mesh_stats: mesh_stats.map(Box::new),
                         retry_count,
                         share_dry_run,
+                        share_confirm_pending,
                     });
                 }
             }
@@ -1140,6 +1159,7 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 mesh_stats,
                 retry_count,
                 share_dry_run,
+                share_confirm_pending,
             } => {
                 let _ = state
                     .db
@@ -1147,6 +1167,7 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 state.current_lol = Some(lol_source.clone());
                 state.phase_progress.retry_count = retry_count;
                 state.pending_share_dry_run = share_dry_run;
+                state.pending_share_confirm = share_confirm_pending;
 
                 if state.tier.limits().force_public {
                     state.pending_publish =

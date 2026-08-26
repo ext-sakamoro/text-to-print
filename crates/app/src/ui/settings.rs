@@ -496,6 +496,25 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             "アップロード待ち: 実キュー {queue_pending} 件 / dry-run {dry_queued} 件"
         ));
         ui.add_space(4.0);
+        // Gallery Phase 2 (2026-08-26): confirm-dialog opt-in Only
+        // meaningful when the parent LoRA share is on; Paid tiers
+        // never reach the dialog either way
+        let mut auto = state.gallery_auto_share;
+        let auto_response = ui
+            .add_enabled(
+                state.share_effective_enabled(),
+                egui::Checkbox::new(&mut auto, "毎回自動公開 (公開確認 dialog を表示しない)"),
+            )
+            .on_hover_text(
+                "オフ (default) だと生成完了ごとに Gallery 公開確認 dialog が出ます オンにすると dialog なしで自動公開されます (Free tier で share on の時のみ、Paid tier は常時 upload しない)",
+            );
+        if auto_response.changed() {
+            state.gallery_auto_share = auto;
+            if let Err(e) = state.db.set_gallery_auto_share(&state.profile_id, auto) {
+                tracing::warn!(error = %e, "failed to persist gallery_auto_share toggle");
+            }
+        }
+        ui.add_space(4.0);
         ui.hyperlink_to(
             "詳細な送信内容と opt-out 手順 (docs/SHARE.md)",
             "https://github.com/ext-sakamoro/text-to-print/blob/main/docs/SHARE.md",

@@ -260,5 +260,11 @@ impl eframe::App for App {
                 });
             }
         }
+
+        // Gallery Phase 2: modal share-confirm dialog Overlays the
+        // current tab after all panels are drawn so it stays on top and
+        // can be triggered from any tab (currently only Generate but
+        // future flows may enqueue from History or Gallery too)
+        ui::share_confirm::show(ctx, &mut self.state);
     }
 }
