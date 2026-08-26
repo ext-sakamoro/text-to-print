@@ -2,7 +2,7 @@
 
 `ext-sakamoro/text-to-print` を private → public に切替える当日の手順集約 実行日の前日〜前週にこの file を通読し、当日は上から順に check していく
 
-**現状 (2026-08-26)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし)、Gallery 機能 Phase 1-3 有効化済 (nickname + share confirm dialog + Cloudflare relay endpoint + fork/delete UI) 残 pending は **Cloudflare 側 GALLERY_DB provision** と **screenshot 6 個撮影** の 2 点
+**現状 (2026-08-26)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし)、Gallery 機能 Phase 1-3 有効化済 (nickname + share confirm dialog + Cloudflare relay endpoint + fork/delete UI)、Issue template 3 file 追加済 (bug_report / feature_request / config、`3b4b1b5`) 残 pending は **Cloudflare 側 GALLERY_DB provision** と **screenshot 6 個撮影** と **GitHub Actions billing 復旧** の 3 点
 
 ---
 
@@ -182,8 +182,11 @@ gh repo edit ext-sakamoro/text-to-print --visibility public --accept-visibility-
 ### 5.2 GitHub Issue / Discussions
 
 - [ ] 通知 ON (Watch → All Activity)
-- [ ] Issue template 準備 (Bug report / Feature request)
-- [ ] 対応言語 (日本語 primary、英語 secondary 明記)
+- [x] Issue template 準備 (`3b4b1b5`、`.github/ISSUE_TEMPLATE/{bug_report,feature_request,config}.yml`)
+  - bug_report: version / OS / LLM backend (Sidecar / Embedded / BYO 5 種) / model / 再現手順 / log 収集 path (OS 別) を dropdown + validation で収集
+  - feature_request: category 10 択 + archetype 要望時の用途/寸法 追加項目
+  - config: blank issue 無効化 + Ko-fi sakamoro (実名、STC 匿名と混同禁止) contact link
+- [x] 対応言語 (日本語 primary + 英語 secondary、template 内で両言語併記済)
 
 ### 5.3 build 失敗 report への対応
 
