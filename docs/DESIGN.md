@@ -121,7 +121,9 @@ text-to-print/
 │   │       │   ├── mod.rs
 │   │       │   ├── prompt.rs      # テキスト入力 + 生成ボタン
 │   │       │   ├── viewer.rs      # 3D SDF プレビュー (ALICE-View 統合)
-│   │       │   ├── gallery.rs     # ローカル + ネットワーク作品一覧
+│   │       │   ├── gallery.rs     # Cloudflare relay 経路 (list / fork publish
+│   │       │   │                  # / 自 post 削除) + preview → viewer_mesh
+│   │       │   ├── share_confirm.rs # Phase 2 公開確認 modal (3 択)
 │   │       │   ├── history.rs     # 生成履歴
 │   │       │   └── settings.rs    # ライセンス / LLM / プリンタ設定
 │   │       └── state.rs       # アプリ状態管理
@@ -143,15 +145,22 @@ text-to-print/
 │   │       ├── backend.rs     # llama.cpp FFI or candle バックエンド
 │   │       └── prompt.rs      # システムプロンプト + LOL 抽出
 │   │
-│   └── network/               # P2P 分散レイヤー（静かに内包）
+│   └── network/               # Cloudflare relay + legacy P2P レイヤー
 │       ├── Cargo.toml
 │       └── src/
-│           ├── lib.rs         # ネットワークノード起動・停止
-│           ├── sync.rs        # ALICE-Sync: gossipsub P2P イベント同期
-│           ├── cache.rs       # ALICE-Cache: 分散 KVS (SDF キャッシュ)
-│           ├── cdn.rs         # ALICE-CDN: Vivaldi 座標ルーティング
-│           ├── identity.rs    # ALICE-Identity: DID (Ed25519 鍵ペア)
-│           └── vcs.rs         # ALICE-VCS: Merkle DAG 差分管理
+│           ├── lib.rs           # ネットワークノード起動・停止
+│           ├── identity.rs      # DID (Ed25519 鍵ペア、identity.key 自動生成)
+│           ├── gallery_client.rs # Cloudflare relay Gallery client (list /
+│           │                    # publish / delete、ed25519 sig 署名)
+│           ├── presets_client.rs # Cloudflare `/api/presets` client (ETag
+│           │                    # 304 cache 経由)
+│           ├── share.rs         # SharePayload dry-run + upload queue
+│           │                    # (retry_queued_uploads で drain)
+│           ├── sync.rs          # legacy libp2p gossipsub (β 未使用)
+│           ├── cache.rs         # legacy 分散 KVS (SDF キャッシュ、β 未使用)
+│           ├── cdn.rs           # legacy Vivaldi 座標ルーティング (β 未使用)
+│           ├── node.rs          # legacy libp2p node (β 未使用)
+│           └── vcs.rs           # legacy Merkle DAG 差分管理 (β 未使用)
 │
 ├── docs/                      # 設計ドキュメント
 ├── assets/                    # アイコン / フォント / シェーダー

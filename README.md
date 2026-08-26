@@ -100,10 +100,11 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 | LLM inference | ALICE-LLM embedded (wgpu compute shaders + GGUF K-quant + LOL_GBNF grammar constrained decoding) |
 | DSL parse / SDF / mesh | alice-lol / alice-sdf / alice-physics / alice-bamboo (path deps) |
 | 3D preview | in-process wgpu **mesh** viewer (same `alice_sdf::mesh::Mesh` the exporter writes to 3MF — viewer / Bambu 見た目は一致) |
-| Optional P2P share | libp2p (mdns / gossipsub / kad) for free-tier upload to ALICE-LOL |
-| Local DB | rusqlite (project history / license state / tier / model choice) |
+| Gallery / share | Cloudflare Worker relay canonical (list / publish / delete、ed25519 sig verify、100KB LOL max、rate limit)、legacy libp2p (mdns / gossipsub / kad) は path deps に残るが β では未使用 |
+| Identity | ed25519 DID (`did:key:<64hex>`、起動時に `identity.key` 自動生成、user 登録経路なし) |
+| Local DB | rusqlite (project history / license state / tier / model choice / nickname / gallery_auto_share) |
 | Payment | Stripe subscription (Test mode scaffold complete、Phase S3 で Live 切替) |
-| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license issuance + preset library `/api/presets` KV-backed) |
+| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license issuance + preset library `/api/presets` KV-backed + gallery `/api/gallery/{list,publish,:id}` D1-backed) |
 | License | Ed25519 (`ed25519-dalek`、`text_to_print_core::license` client-side offline verify) |
 | Email | Resend API (license delivery、backend 未設定時は log-only fallback) |
 | Auto-update | GitHub Releases + `self-update` (crates/app/src/updater.rs) |
@@ -125,16 +126,24 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 text-to-print/
 ├── crates/
 │   ├── app/       - Rust desktop GUI (egui + wgpu、main entry、Settings に
-│   │                Upgrade / License 入力 UI 実装済)
+│   │                Upgrade / License 入力 / プロフィール (nickname) UI、
+│   │                ui/gallery.rs (Cloudflare relay 経路 + fork/delete)、
+│   │                ui/share_confirm.rs (Phase 2 modal 3 択))
 │   ├── core/      - LOL → mesh export pipeline、Ed25519 license
-│   │                verify、tier 管理、rusqlite persist
+│   │                verify、tier 管理、rusqlite persist、
+│   │                pipeline::preview_lol_to_mesh (gallery プレビュー用)
 │   ├── llm/       - Sidecar + Embedded backend (Qwen3.5-4B / Gemma2-27B /
 │   │                Bonsai27B) + LOL_GBNF grammar constrained decoding
-│   ├── network/   - libp2p P2P share (free-tier upload の client 側)
+│   ├── network/   - identity (DID + ed25519 key auto provision)、
+│   │                gallery_client (Cloudflare relay list/publish/delete、
+│   │                canonical msg + sig)、share (LoRA dry-run + upload
+│   │                queue)、legacy libp2p (未使用、Phase X で削除検討)
 │   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint +
 │                    Stripe webhook + license issuance + Resend email +
-│                    preset library `/api/presets` (KV-backed、Sprint X.1)、
-│                    workspace 除外、`wrangler deploy` で運用)
+│                    preset library `/api/presets` (KV-backed、Sprint X.1) +
+│                    gallery `/api/gallery/{list,publish,:id}` (D1-backed、
+│                    ed25519 sig verify、Phase 3)、workspace 除外、
+│                    `wrangler deploy` で運用)
 ├── datasets/      - LoRA training data (523+ samples, growing)
 ├── scripts/       - LoRA training / dataset generation
 ├── assets/        - static resources (NotoSansJP.ttf 等)
@@ -149,16 +158,18 @@ text-to-print/
 embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
 Stripe subscription 統合 backend + app UI 完成 (Test mode)
 
-- `cargo test --workspace`: **232 pass / 0 fail / 2 ignored** (2026-08-09 pipeline aspect_ratio 4 tests 追加)
-- `cargo test --lib on crates/worker`: **32 pass / 0 fail**
+- `cargo test --workspace`: **471 pass / 0 fail / 6 ignored** (2026-08-26 gallery Phase 1-3 で core +6 / network +4)
+- `cargo test --lib on crates/worker`: **47 pass / 0 fail** (2026-08-26 gallery validate +12、pre-existing preset seed count test 1 個は無関係)
 - `cargo clippy --workspace --all-targets -- -D warnings`: **0 own warnings**
 - `cargo check --target wasm32-unknown-unknown -p text-to-print-worker`: **green**
+- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --lib --no-deps`: **green** (2026-08-23 hotfix intra-doc link 修正済)
 - **CI**: ALICE-LOL / text-to-print 両 repo GitHub Actions **success** (2026-08-10 doc/fmt fix 完了)
 
 Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-08-26: **Gallery Phase 1-3 追加** — nickname (Settings > プロフィール で表示名入力、gallery display で DID hex fallback) + share confirm modal (Free tier で生成完了時に「今回だけ公開 / 公開しない / 毎回自動公開」3 択、gallery_auto_share DB flag で永続化) + Cloudflare relay endpoint (`/api/gallery/{list,publish,:id}`、新 D1 `text-to-print-gallery`、ed25519 sig verify、LOL 100 KB max、nickname 32 char max、rate limit UUID+IP hourly、canonical msg prefix で publish sig replay-as-delete 防止) + app 側 `gallery_client.rs` + gallery.rs 全書き換え (Cloudflare canonical、fork publish、自 post 🗑 削除 button、preview stub 解除で `pipeline::preview_lol_to_mesh` 経路に接続) DID + ed25519 auto provision (`Identity::load_or_create` の `identity.key` local file 生成) で user 登録 UX 追加なし、DB `profiles` に `nickname` + `gallery_auto_share` 2 column 追加、worker crate は edition 2021 のまま (workspace 除外) commit `c97a09b` / `36e9e0f` / `e9aa721` / `beaed29` / `886969e`、public 化前の残 pending は user 側 `wrangler d1 create text-to-print-gallery` + screenshot 6 個
 - 2026-08-24: **Customizer 61 archetype 到達 (Sprint 12-20 batch)** — organizer 系
   49→61 (`hairdryer_holder / kcup_holder / hex_key_holder / wrap_holder /
   sock_divider / soap_tray / razor_holder / chopstick_holder / swatch_holder /
