@@ -1209,6 +1209,21 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
                 state.presets = *new_snapshot;
                 ui.ctx().request_repaint();
             }
+            GenerationMessage::GalleryLoaded(load_state) => {
+                // Gallery Phase 3: background fetch 完了、UI 反映 成功 /
+                // 失敗どちらも同 slot に反映 (Error variant で fetch fail
+                // を UI に露呈、silent skip はしない)
+                match &load_state {
+                    crate::state::GalleryLoadState::Loaded(items) => {
+                        tracing::info!(count = items.len(), "gallery snapshot loaded");
+                    }
+                    crate::state::GalleryLoadState::Error(msg) => {
+                        tracing::warn!(error = %msg, "gallery snapshot fetch failed");
+                    }
+                }
+                state.gallery = Some(load_state);
+                ui.ctx().request_repaint();
+            }
         }
     }
 }

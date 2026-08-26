@@ -1,5 +1,6 @@
 pub mod cache;
 pub mod cdn;
+pub mod gallery_client;
 pub mod identity;
 pub mod node;
 pub mod presets_client;

@@ -191,6 +191,49 @@ pub fn export_mesh(
     }
 }
 
+/// Preview-only LOL → Mesh path (Gallery Phase 3 preview stub 解除)
+///
+/// Skips safety validation, overhang analysis, and 3MF export — returns
+/// just the mesh for in-app viewer display Uses the same DC/MC aspect
+/// ratio branching as `export_3mf_via_bamboo` so preview matches export
+///
+/// # Errors
+/// - LOL parse error (invalid DSL from the shared post)
+pub fn preview_lol_to_mesh(
+    lol_source: &str,
+    quality: Quality,
+) -> Result<std::sync::Arc<alice_sdf::mesh::Mesh>> {
+    let sdf = alice_bamboo::lol_to_sdf(lol_source)
+        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+    let aabb_config = TightAabbConfig::preset_large();
+    let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
+    let padding = Vec3::splat(1.0);
+    let min_bounds = aabb.min - padding;
+    let max_bounds = aabb.max + padding;
+    let dims = (
+        aabb.max.x - aabb.min.x,
+        aabb.max.y - aabb.min.y,
+        aabb.max.z - aabb.min.z,
+    );
+    let use_dc = should_use_dual_contouring(dims);
+    let mesh = if use_dc {
+        let cfg = DualContouringConfig {
+            resolution: quality.mesh_resolution(),
+            compute_normals: true,
+            ..DualContouringConfig::default()
+        };
+        dual_contouring(&sdf, min_bounds, max_bounds, &cfg)
+    } else {
+        let cfg = MarchingCubesConfig {
+            resolution: quality.mesh_resolution(),
+            ..Default::default()
+        };
+        sdf_to_mesh(&sdf, min_bounds, max_bounds, &cfg)
+    };
+    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    Ok(std::sync::Arc::new(mesh))
+}
+
 /// mesh 生成経路 (Dual Contouring vs Marching Cubes) を bbox 寸法から判定
 ///
 /// 判定基準 (OR 論理):

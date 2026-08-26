@@ -24,20 +24,6 @@ pub struct MeshViewer {
 pub type SdfViewer = MeshViewer;
 
 impl MeshViewer {
-    /// Legacy no-op kept for source compatibility with `gallery.rs`
-    ///
-    /// The old WGSL-raymarching viewer would rebuild its shader from a LOL
-    /// string on every gallery click The mesh-preview replacement needs a
-    /// full MC / DC pipeline pass which is too expensive for the UI thread,
-    /// so gallery preview is disabled until the flow is routed through the
-    /// same `AppState::viewer_mesh` slot that the generate tab uses
-    pub fn set_lol(&mut self, lol_source: &str) {
-        tracing::debug!(
-            lol_preview = %lol_source.chars().take(80).collect::<String>(),
-            "MeshViewer::set_lol called but gallery preview is currently stubbed"
-        );
-    }
-
     /// Notice a new mesh from `state.viewer_mesh` and upload it to GPU
     ///
     /// - No-op when the state's mesh version matches what we already

@@ -2240,6 +2240,22 @@ pub struct AppState {
     /// dynamic に読み出して TEMPLATE_CATEGORIES const の代替とする
     /// 詳細: memory/project_text_to_print_archetype_library_architecture.md
     pub presets: PresetsSnapshot,
+    /// Gallery Phase 3 (2026-08-26): last-fetched Gallery listing from
+    /// the Cloudflare relay `None` = never fetched (or fetch in-flight)
+    /// `Some(Ok(list))` = latest snapshot `Some(Err(msg))` = last fetch
+    /// failed with the given error string
+    ///
+    /// Fetched on startup via [`spawn_gallery_fetch`] and refreshable
+    /// on demand from the Gallery tab Kept as a full `Vec` since the
+    /// list is capped at ~100 items and the UI wants to filter / sort
+    pub gallery: Option<GalleryLoadState>,
+}
+
+/// Gallery snapshot state — either the latest items or the last error
+#[derive(Debug, Clone)]
+pub enum GalleryLoadState {
+    Loaded(Vec<text_to_print_network::gallery_client::GalleryItem>),
+    Error(String),
 }
 
 /// Preset library の in-memory snapshot、by-startup / by-cloud-sync で更新
@@ -2335,6 +2351,12 @@ pub enum GenerationMessage {
     /// `poll_results` で受け取って `AppState::presets` を上書き 304 (未変更) or
     /// error は特に message emit しない (silent、次回 startup で cache 経由復元)
     PresetsUpdated(Box<PresetsSnapshot>),
+    /// Gallery Phase 3 (2026-08-26): background gallery fetch 完了通知
+    ///
+    /// Cloudflare Worker `GET /api/gallery/list` fetch 完了時 (成功 or 失敗)
+    /// に emit `GalleryLoadState::Loaded` で最新 list、`GalleryLoadState::Error`
+    /// で fetch 失敗を UI に露呈 (silent skip はせず「取得失敗」を明示)
+    GalleryLoaded(GalleryLoadState),
 }
 
 impl AppState {
@@ -2595,6 +2617,14 @@ impl AppState {
             spawn_presets_sync(&runtime, db_path.clone(), endpoint, result_tx.clone());
         }
 
+        // Gallery Phase 3 (2026-08-26): background gallery list fetch
+        // Same fire-and-forget pattern as preset sync — UI thread never
+        // blocks Result lands via `GenerationMessage::GalleryLoaded`
+        {
+            let endpoint = text_to_print_network::gallery_client::GalleryClient::resolve_endpoint();
+            spawn_gallery_fetch(&runtime, endpoint, result_tx.clone());
+        }
+
         Self {
             data_dir,
             tier,
@@ -2635,6 +2665,7 @@ impl AppState {
             pending_share_confirm: None,
             customizer_state: CustomizerState::default(),
             presets,
+            gallery: None,
         }
     }
 
@@ -2999,6 +3030,51 @@ fn spawn_presets_sync(
                     elapsed_ms = %start.elapsed().as_millis(),
                     "presets sync failed (silent fallback to cache/bundled)"
                 );
+            }
+        }
+    });
+}
+
+/// Gallery Phase 3 (2026-08-26): startup / refresh gallery list fetch
+///
+/// 動作:
+/// 1. `GalleryClient::list(100, 0)` を呼ぶ
+/// 2. 成功なら `GenerationMessage::GalleryLoaded(Loaded(items))` を UI に emit
+/// 3. 失敗なら `GenerationMessage::GalleryLoaded(Error(msg))` を emit
+///    ([`presets_sync`] と違い silent skip はしない — ユーザーに fetch 失敗を露呈)
+///
+/// UI thread は blocking しない
+pub fn spawn_gallery_fetch(
+    runtime: &tokio::runtime::Runtime,
+    endpoint: String,
+    tx: mpsc::Sender<GenerationMessage>,
+) {
+    runtime.spawn(async move {
+        tracing::info!(endpoint = %endpoint, "gallery fetch starting");
+        let start = std::time::Instant::now();
+        let client = text_to_print_network::gallery_client::GalleryClient::new(endpoint.clone());
+        match client.list(100, 0).await {
+            Ok(resp) => {
+                tracing::info!(
+                    count = resp.items.len(),
+                    elapsed_ms = %start.elapsed().as_millis(),
+                    "gallery fetch completed"
+                );
+                let _ = tx.send(GenerationMessage::GalleryLoaded(GalleryLoadState::Loaded(
+                    resp.items,
+                )));
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                tracing::warn!(
+                    error = ?e,
+                    endpoint,
+                    elapsed_ms = %start.elapsed().as_millis(),
+                    "gallery fetch failed"
+                );
+                let _ = tx.send(GenerationMessage::GalleryLoaded(GalleryLoadState::Error(
+                    msg,
+                )));
             }
         }
     });

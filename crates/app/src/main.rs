@@ -237,7 +237,13 @@ impl eframe::App for App {
             }
             Tab::Gallery => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::gallery::show(ui, &mut self.node, &mut self.viewer, &mut self.gallery);
+                    ui::gallery::show(
+                        ui,
+                        &mut self.state,
+                        &self.node,
+                        &mut self.viewer,
+                        &mut self.gallery,
+                    );
                 });
                 if self.gallery.switch_to_viewer {
                     self.gallery.switch_to_viewer = false;

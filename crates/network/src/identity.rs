@@ -47,6 +47,15 @@ impl Identity {
     pub fn verifying_key(&self) -> VerifyingKey {
         self.signing_key.verifying_key()
     }
+
+    /// Ref to the underlying ed25519 signing key Introduced for
+    /// Gallery Phase 3 (2026-08-26) so [`crate::gallery_client`] can
+    /// sign publish / delete canonical messages without duplicating
+    /// the signing surface Callers must not persist or leak this ref
+    #[must_use]
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
+    }
 }
 
 #[cfg(test)]
