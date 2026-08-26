@@ -2,7 +2,7 @@
 
 `ext-sakamoro/text-to-print` を private → public に切替える当日の手順集約 実行日の前日〜前週にこの file を通読し、当日は上から順に check していく
 
-**現状 (2026-08-24)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし、要対処 = `CONTRIBUTING.md` の `SBR` 語彙 1 箇所)
+**現状 (2026-08-26)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし)、Gallery 機能 Phase 1-3 有効化済 (nickname + share confirm dialog + Cloudflare relay endpoint + fork/delete UI) 残 pending は **Cloudflare 側 GALLERY_DB provision** と **screenshot 6 個撮影** の 2 点
 
 ---
 
@@ -95,10 +95,30 @@ gh release view v0.1.0
 ```bash
 curl -s -w "\nHTTP:%{http_code}\n" https://text-to-print.alicelaw.net/api/presets | head -5
 curl -s -o /dev/null -w "HTTP:%{http_code}\n" -X POST https://text-to-print.alicelaw.net/api/share -H "Content-Type: application/json" -d '{}'
+curl -s -w "\nHTTP:%{http_code}\n" 'https://text-to-print.alicelaw.net/api/gallery/list?limit=5' | head -5
+curl -s -o /dev/null -w "HTTP:%{http_code}\n" -X POST https://text-to-print.alicelaw.net/api/gallery/publish -H "Content-Type: application/json" -d '{}'
 ```
 
 - [ ] `/api/presets` → 200 + JSON 返却
 - [ ] `/api/share` → 400 validation reject (endpoint 稼働 + schema validation 動作)
+- [ ] `/api/gallery/list` → 200 + `{items: [], next_offset: null}` (DB 空でも成功、Phase 3 稼働確認)
+- [ ] `/api/gallery/publish` → 400 validation reject (invalid_json、endpoint 稼働確認)
+
+### 2.3.1 Gallery D1 provision (Phase 3 追加、初回のみ)
+
+Public 化前に一度だけ実施 GALLERY_DB provision 済なら skip
+
+```bash
+cd crates/worker
+wrangler d1 create text-to-print-gallery
+# CLI 出力の `database_id` を wrangler.toml の GALLERY_DB binding にペースト
+wrangler d1 execute text-to-print-gallery --file=migrations/0003_gallery.sql
+wrangler deploy
+```
+
+- [ ] `wrangler d1 list` に `text-to-print-gallery` 表示
+- [ ] `wrangler.toml` の `[[d1_databases]]` GALLERY_DB `database_id` が空文字でない
+- [ ] `/api/gallery/list` が上記 curl で 200 (未 provision なら 500 `gallery_db_unbound`)
 
 ### 2.4 GitHub Actions billing 状態
 
@@ -196,6 +216,28 @@ gh repo edit ext-sakamoro/text-to-print --visibility private --accept-visibility
 - [ ] GitHub Support にも連絡 (cache / clone 削除依頼)
 
 ---
+
+## Gallery 機能 (Phase 1-3、2026-08-26 追加)
+
+Phase 1-3 で Gallery を Cloudflare Relay 経路で有効化した (P2P 経路は legacy 化)
+
+### 実装済 (public 化前の必須作業なし)
+
+- **Phase 1**: nickname 追加 (`profiles.nickname` DB column + Settings > プロフィール collapsing + Gallery display で DID hex 代わりに表示)
+- **Phase 2**: share confirm dialog (Free tier + share_lol_dsl on + gallery_auto_share off で生成完了時に 3 択 modal 「今回だけ公開 / 公開しない / 毎回自動公開」)
+- **Phase 3-Worker**: `/api/gallery/{list,publish,:id}` endpoint (ed25519 sig verify + LOL 100KB max + nickname 32 char max + rate limit + own-post soft delete)
+- **Phase 3-App**: `gallery_client.rs` + gallery.rs 書き換え (Cloudflare relay canonical + fork publish + 自 post 削除 button + preview stub 解除)
+
+### public 化前に user が実施する 2 作業
+
+- **GALLERY_DB provision** (§2.3.1 参照、一度だけ、`wrangler d1 create text-to-print-gallery` → id paste → migration → deploy)
+- **screenshot 6 個撮影** (§1.5 参照、`docs/images/CAPTURE_GUIDE.md` 指示通り)
+
+### Post-β 拡張候補
+
+- gallery preview mesh gen を runtime spawn 化 (現状 UI thread 同期 1-5s、click 時に UI 短時間 stall)
+- Report / abuse 通報 endpoint (β 期間は Issue 対応で足りる想定)
+- Pagination 拡張 (現状 100 items flat、100+ item 化したら infinite scroll)
 
 ## 参考 memory / skill
 
