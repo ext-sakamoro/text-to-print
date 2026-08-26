@@ -3041,7 +3041,7 @@ fn spawn_presets_sync(
 /// 1. `GalleryClient::list(100, 0)` を呼ぶ
 /// 2. 成功なら `GenerationMessage::GalleryLoaded(Loaded(items))` を UI に emit
 /// 3. 失敗なら `GenerationMessage::GalleryLoaded(Error(msg))` を emit
-///    ([`presets_sync`] と違い silent skip はしない — ユーザーに fetch 失敗を露呈)
+///    ([`spawn_presets_sync`] と違い silent skip はしない — ユーザーに fetch 失敗を露呈)
 ///
 /// UI thread は blocking しない
 pub fn spawn_gallery_fetch(
