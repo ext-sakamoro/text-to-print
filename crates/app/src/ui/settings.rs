@@ -428,6 +428,36 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 
     ui.add_space(8.0);
 
+    // Gallery Phase 1 (2026-08-26): profile display name shown in the
+    // Gallery in place of the raw DID hex Empty = fallback to DID
+    // short-form 32 char cap enforced client-side
+    ui.collapsing("プロフィール (Gallery 表示名)", |ui| {
+        let mut nickname = state.nickname.clone();
+        let response = ui
+            .add(
+                egui::TextEdit::singleline(&mut nickname)
+                    .hint_text("Gallery で表示される名前 (空欄なら DID)")
+                    .char_limit(32)
+                    .desired_width(240.0),
+            )
+            .on_hover_text(
+                "Gallery タブで他人が見る表示名 空欄のままなら DID (did:key:...) の先頭 12 char + 末尾 6 char が表示されます 変更しても過去に公開した post には反映されません (最新の nickname は次回公開時から反映)",
+            );
+        if response.lost_focus() && nickname != state.nickname {
+            state.nickname = nickname.clone();
+            if let Err(e) = state.db.set_nickname(&state.profile_id, &nickname) {
+                tracing::warn!(error = %e, "failed to persist nickname");
+            }
+        }
+        ui.add_space(4.0);
+        ui.label(format!(
+            "DID: {}",
+            &state.profile_id[..16.min(state.profile_id.len())]
+        ));
+    });
+
+    ui.add_space(8.0);
+
     // LoRA share opt-out (Stage 5 T5.2)
     ui.collapsing("LoRA share", |ui| {
         let mut share = state.share_lol_dsl;

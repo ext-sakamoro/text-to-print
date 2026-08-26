@@ -9,6 +9,12 @@ pub struct CachedSdf {
     pub lol_source: String,
     pub author_did: String,
     pub created_at: String,
+    /// Gallery Phase 1 (2026-08-26): user-visible display name captured
+    /// at publish time None means the author had no nickname set, and
+    /// the Gallery UI falls back to a DID short-form label Not part of
+    /// signature payload — nickname is display-only metadata
+    #[serde(default)]
+    pub author_nickname: Option<String>,
 }
 
 pub struct SdfCache {
@@ -74,6 +80,7 @@ mod tests {
             lol_source: lol.to_string(),
             author_did: "did:key:test".to_string(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
+            author_nickname: None,
         }
     }
 

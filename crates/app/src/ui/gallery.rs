@@ -74,11 +74,22 @@ pub fn show(ui: &mut Ui, node: &mut AliceNode, viewer: &mut SdfViewer, gallery: 
                     ui.heading("詳細");
 
                     ui.label(format!("ID: {}", &sdf.id[..16.min(sdf.id.len())]));
-                    ui.label(format!(
-                        "Author: {}...{}",
-                        &sdf.author_did[..12.min(sdf.author_did.len())],
-                        &sdf.author_did[sdf.author_did.len().saturating_sub(6)..]
-                    ));
+                    // Gallery Phase 1 (2026-08-26): prefer author-supplied
+                    // nickname over the raw DID hex Fall back to
+                    // did:key:aaaa...bbbb short form when unset
+                    let author_label = sdf
+                        .author_nickname
+                        .as_deref()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_else(|| {
+                            format!(
+                                "{}...{}",
+                                &sdf.author_did[..12.min(sdf.author_did.len())],
+                                &sdf.author_did[sdf.author_did.len().saturating_sub(6)..]
+                            )
+                        });
+                    ui.label(format!("Author: {author_label}"));
                     ui.label(format!("Created: {}", sdf.created_at));
 
                     ui.add_space(8.0);

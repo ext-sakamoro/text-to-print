@@ -243,6 +243,7 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
                 lol_source,
                 author_did,
                 created_at: chrono::Utc::now().to_rfc3339(),
+                author_nickname: None,
             };
 
             if let Ok(mut c) = cache.lock() {
@@ -263,6 +264,7 @@ fn handle_sync_event(event: SyncEvent, cache: &Arc<Mutex<SdfCache>>) {
                 lol_source: diff.forked_lol.clone(),
                 author_did: diff.author_did.clone(),
                 created_at: diff.timestamp.clone(),
+                author_nickname: None,
             };
 
             if let Ok(mut c) = cache.lock() {

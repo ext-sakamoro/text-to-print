@@ -237,6 +237,22 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN custom_gguf_path TEXT NOT NULL DEFAULT ''",
             [],
         );
+        // Gallery Phase 1 (2026-08-26): user-visible nickname shown in
+        // Gallery in place of the raw DID hex Empty string = not set,
+        // Gallery falls back to DID short-form display Max 32 char
+        // enforced UI-side (Settings TextEdit)
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN nickname TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+        // Gallery Phase 2 (2026-08-26): per-generation share auto vs
+        // confirm-dialog preference `0` = confirm dialog every generation
+        // (default for β), `1` = auto share without dialog Only meaningful
+        // when the tier is Free and `share_lol_dsl` is on
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN gallery_auto_share INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
         Ok(())
     }
 
@@ -360,6 +376,66 @@ impl Database {
     pub fn set_share_lol_dsl(&self, profile_id: &str, value: bool) -> Result<()> {
         self.conn.execute(
             "UPDATE profiles SET share_lol_dsl = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, i64::from(value)],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch the user-visible nickname for the given profile Empty string
+    /// means unset — callers should fall back to a DID short-form display
+    ///
+    /// # Errors
+    /// - SQLite error from `SELECT`
+    pub fn get_nickname(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT nickname FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_default();
+        Ok(value)
+    }
+
+    /// Persist the user-visible nickname Caller is responsible for
+    /// trimming and length capping (Settings UI enforces 32 char max)
+    ///
+    /// # Errors
+    /// - SQLite error from `UPDATE`
+    pub fn set_nickname(&self, profile_id: &str, nickname: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET nickname = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, nickname],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch the Gallery auto-share preference `false` (default) means
+    /// the app pops a confirm dialog after every Free-tier generation;
+    /// `true` means auto-publish without dialog
+    ///
+    /// # Errors
+    /// - SQLite error from `SELECT`
+    pub fn get_gallery_auto_share(&self, profile_id: &str) -> Result<bool> {
+        let value: i64 = self
+            .conn
+            .query_row(
+                "SELECT gallery_auto_share FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(value != 0)
+    }
+
+    /// Persist the Gallery auto-share preference
+    ///
+    /// # Errors
+    /// - SQLite error from `UPDATE`
+    pub fn set_gallery_auto_share(&self, profile_id: &str, value: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET gallery_auto_share = ?2, updated_at = datetime('now') WHERE id = ?1",
             rusqlite::params![profile_id, i64::from(value)],
         )?;
         Ok(())
@@ -838,6 +914,46 @@ mod tests {
     fn share_lol_dsl_unknown_profile_returns_true() {
         let db = test_db();
         assert!(db.get_share_lol_dsl("nonexistent").unwrap());
+    }
+
+    #[test]
+    fn nickname_defaults_to_empty() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(db.get_nickname("user1").unwrap(), "");
+    }
+
+    #[test]
+    fn nickname_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_nickname("user1", "alice").unwrap();
+        assert_eq!(db.get_nickname("user1").unwrap(), "alice");
+        db.set_nickname("user1", "アリス").unwrap();
+        assert_eq!(db.get_nickname("user1").unwrap(), "アリス");
+    }
+
+    #[test]
+    fn nickname_unknown_profile_returns_empty() {
+        let db = test_db();
+        assert_eq!(db.get_nickname("nonexistent").unwrap(), "");
+    }
+
+    #[test]
+    fn gallery_auto_share_defaults_to_false() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert!(!db.get_gallery_auto_share("user1").unwrap());
+    }
+
+    #[test]
+    fn gallery_auto_share_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_gallery_auto_share("user1", true).unwrap();
+        assert!(db.get_gallery_auto_share("user1").unwrap());
+        db.set_gallery_auto_share("user1", false).unwrap();
+        assert!(!db.get_gallery_auto_share("user1").unwrap());
     }
 
     #[test]

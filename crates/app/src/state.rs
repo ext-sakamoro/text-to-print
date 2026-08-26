@@ -2203,6 +2203,17 @@ pub struct AppState {
     /// LOL DSL + quality signals are queued for upload to the shared LoRA
     /// training set; when `false` the user has opted out
     pub share_lol_dsl: bool,
+    /// Gallery Phase 1 (2026-08-26): user-visible display name shown in
+    /// the Gallery in place of the raw DID hex Empty string means unset
+    /// and the Gallery falls back to a DID short-form label Max 32 char
+    /// enforced by the Settings UI TextEdit
+    pub nickname: String,
+    /// Gallery Phase 2 (2026-08-26): when `false` (default) the app pops
+    /// a share-confirm dialog after every Free-tier generation When
+    /// `true` the generation auto-publishes without dialog Only relevant
+    /// while `share_lol_dsl` is on and the tier is Free
+    #[allow(dead_code, reason = "Wired in Phase 2 (share confirm dialog)")]
+    pub gallery_auto_share: bool,
     /// Stage 3-C.14: when `true` (default), every generation forwards
     /// [`text_to_print_llm::grammar_lol::LOL_GBNF`] to the backend so
     /// output is guaranteed to be parseable by
@@ -2323,6 +2334,8 @@ impl AppState {
         let profile_id = load_or_create_profile_id(&data_dir);
         let tier = db.get_or_create_profile(&profile_id).unwrap_or(Tier::Free);
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
+        let nickname = db.get_nickname(&profile_id).unwrap_or_default();
+        let gallery_auto_share = db.get_gallery_auto_share(&profile_id).unwrap_or(false);
         // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
         // sidecar は alice-llm-server binary の別途 install を必要とする
         // (release.yml は bundle 済だが local `cargo run` では欠落) →
@@ -2604,6 +2617,8 @@ impl AppState {
             openai_compat: std::sync::Arc::new(std::sync::Mutex::new(None)),
             custom_gguf_path,
             share_lol_dsl,
+            nickname,
+            gallery_auto_share,
             enforce_lol_grammar,
             pending_share_dry_run: None,
             customizer_state: CustomizerState::default(),
