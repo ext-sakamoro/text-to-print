@@ -220,6 +220,27 @@
         { "id": "l_bracket_m5_3holes", "label": "L型ブラケット M5×3穴 (80×80×5mm)", "lol_dsl": "l_bracket(80, 80, 5, 5, 3)" },
         { "id": "l_bracket_m3_2holes_small", "label": "L型ブラケット M3×2穴 小型 (40×40×3mm)", "lol_dsl": "l_bracket(40, 40, 3, 3, 2)" }
       ]
+    },
+    {
+      "name": "機械要素 追加 (Sprint 21 Phase X.1 追加 8、押し出し + ブラケット + 締結)",
+      "presets": [
+        { "id": "t_slot_bracket_20", "label": "2020 T-slot ブラケット 標準 (20×20×20mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(20, 20)" },
+        { "id": "t_slot_bracket_40", "label": "2020 T-slot ブラケット 大型 (40×40×40mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(40, 40)" },
+        { "id": "raspi_pi4b_vesa", "label": "Raspberry Pi 4B/5 マウント板 (58×49 M2.5 + VESA)", "lol_dsl": "raspi_mount_plate(4, 4)" },
+        { "id": "raspi_pi5_bare", "label": "Raspberry Pi 5 マウント板 (58×49 M2.5 のみ)", "lol_dsl": "raspi_mount_plate(5, 0)" },
+        { "id": "raspi_zero_bare", "label": "Raspberry Pi Zero マウント板 (58×23 M2.5)", "lol_dsl": "raspi_mount_plate(0, 0)" },
+        { "id": "heat_set_m3_2x2", "label": "Heat-set insert grid M3×4 (2×2 pitch20 板厚 6mm)", "lol_dsl": "heat_set_array(2, 2, 3, 20, 6)" },
+        { "id": "heat_set_m4_3x3", "label": "Heat-set insert grid M4×9 (3×3 pitch25 板厚 8mm)", "lol_dsl": "heat_set_array(3, 3, 4, 25, 8)" },
+        { "id": "flange_od80_m5_4", "label": "フランジ Φ80 M5×4 (板厚 6mm、PCD 56)", "lol_dsl": "flange_mount(80, 5, 4)" },
+        { "id": "flange_od100_m6_6", "label": "フランジ Φ100 M6×6 (板厚 6mm、PCD 70)", "lol_dsl": "flange_mount(100, 6, 6)" },
+        { "id": "dovetail_male_20", "label": "アリ継ぎ オス (底辺 20×高 15×深 10mm、10°)", "lol_dsl": "dovetail_pair(20, 15, 10, 0)" },
+        { "id": "dovetail_female_20", "label": "アリ継ぎ メス (受け側 +0.3 clearance)", "lol_dsl": "dovetail_pair(20, 15, 10, 1)" },
+        { "id": "profile_2020_100", "label": "アルミプロファイル 2020 × 100mm", "lol_dsl": "profile_extrusion(20, 100)" },
+        { "id": "profile_3030_100", "label": "アルミプロファイル 3030 × 100mm", "lol_dsl": "profile_extrusion(30, 100)" },
+        { "id": "snap_fit_standard", "label": "スナップフィット cantilever PLA 標準 (20×5×2、hook 1)", "lol_dsl": "snap_fit_pair(20, 5, 2, 1)" },
+        { "id": "boss_array_m3_2x2", "label": "Boss array M3×4 (2×2 pitch20 高10 板厚 2mm)", "lol_dsl": "boss_array(2, 2, 3, 10, 20, 2)" },
+        { "id": "boss_array_m4_3x3", "label": "Boss array M4×9 (3×3 pitch25 高15 板厚 3mm)", "lol_dsl": "boss_array(3, 3, 4, 15, 25, 3)" }
+      ]
     }
   ]
 }
