@@ -222,6 +222,16 @@
       ]
     },
     {
+      "name": "機械要素 building block (Sprint 22 Phase X.2、LLM 組合せ用 低レベル primitive demo)",
+      "presets": [
+        { "id": "phaseX2_screw_hole_m4_demo", "label": "demo: M4 貫通穴 φ4.2 深 12mm (cylinder single)", "lol_dsl": "screw_hole(4, 12)" },
+        { "id": "phaseX2_pi_m25_hole_demo", "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm", "lol_dsl": "screw_hole(2.5, 8)" },
+        { "id": "phaseX2_m4_bolted_plate_demo", "label": "demo: M4 貫通穴 1 個板 60×5×60 (subtract 組合せ例)", "lol_dsl": "subtract(rounded_box(30, 2.5, 30, 3), screw_hole(4, 10))" },
+        { "id": "phaseX2_pi_zero_m2_hole_demo", "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm", "lol_dsl": "screw_hole(2, 6)" },
+        { "id": "phaseX2_bolt_m5_demo", "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)", "lol_dsl": "bolt(5, 20)" }
+      ]
+    },
+    {
       "name": "機械要素 追加 (Sprint 21 Phase X.1 追加 8、押し出し + ブラケット + 締結)",
       "presets": [
         { "id": "t_slot_bracket_20", "label": "2020 T-slot ブラケット 標準 (20×20×20mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(20, 20)" },
