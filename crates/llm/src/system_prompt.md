@@ -24,10 +24,16 @@ PRODUCT SHORTCUTS (mm units、common products は必ず使う):
 **CRITICAL: SHORTCUTs are self-centered on bed、bare で使う (NEVER `translate(0,0,15, gridfinity_bin(3,3,6))`、正 `gridfinity_bin(3,3,6)`)**
 
 SHORTCUTs list:
-- 2-param: `pen_cup(dia, h)` `coaster(dia, t)` `shopping_cart_coin(dia, t)` `cable_clip(cable_dia, len)` `led_channel(strip_w, len)`
-- 3-param: `gridfinity_bin(ux, uy, hu)` / `sticky_note_holder(w, d, h)` / `business_card_holder(w, h, t)` / `phone_stand(w, h, c)` / `headphone_holder(a, w, m)` / `under_desk_mount(t, w, s)` / `desk_shelf(w, d, h)` / `monitor_riser(w, d, h)` / `tissue_box_cover(l, w, h)` / `storage_box(l, w, h)` / `skadis_panel(sz, t, r)` / `card_tray(w, h, d)` / `token_well(dia, d, n)` / `wrench_holder(min, max, n)` / `socket_rail(pd, ph, n)` / `hex_bit_holder(r, c, sp)` / `raspi_case(w, d, h)` / `esp32_enclosure(w, d, h)` / `battery_18650_holder(n, w, f)` / `toothbrush_holder(n, dia, h)` / `drill_bit_holder(min, max, n)` / `pliers_rack(n, w, d)` / `spice_rack(n, dia, h)` / `egg_tray(r, c, d)` / `utensil_caddy(n, dia, h)` / `filament_spool_holder(od, w, b)` / `nozzle_holder(n, dia, d)` / `build_plate_rack(n, sp, h)` / `cutlery_tray(n, w, l)` / `pill_organizer(r, c, s)` / `magnetic_strip(n, dia, sp)` / `hairdryer_holder(bd, hd, wt)` / `kcup_holder(r, c, dia)` / `hex_key_holder(n, min, max)` / `wrap_holder(rd, rw, wt)` / `sock_divider(n, w, h)` / `soap_tray(l, w, n)` / `razor_holder(sw, sd, mh)` / `chopstick_holder(n, w, l)` / `swatch_holder(r, c, w)` / `tp_holder(id, rw, wt)` / `sd_card_holder(r, c, cw)` / `driver_rack(sc, sd, h)` / `cotton_dispenser(n, id, h)` / `sink_caddy(l, w, dhc)` / `clamp_rack(hc, hw, h)` / `dry_box(r, c, fd)` / `outdoor_enclosure(w, d, h)` / `jewelry_stand(tc, td, h)` / `phone_dock(w, uh, cd)` / `cutting_board_rack(sc, sw, h)` / `tape_dispenser(id, rw, wt)` / `shower_caddy(tc, tl, td)` / `caliper_holder(jl, thr, n)` / `bag_clip_org(n, sw, h)` / `can_rack(r, cd, ta)` / `led_hub_box(w, d, h)` / `makeup_organizer(r, c, cs)`
-- 7-param: `gridfinity_bin_ex(ux, uy, hu, divx, divy, wall, floor)`
-- 0-arg: wall_hook drawer_organizer shelf_divider skadis_hook_l/j/s skadis_{container,clip,shelf,elastic_cord}
+- 2-param: `pen_cup(dia,h)` `coaster(dia,t)` `shopping_cart_coin(dia,t)` `cable_clip(cd,len)` `led_channel(sw,len)`
+- 3-param (mm dims、name で用途推論可): gridfinity_bin sticky_note_holder business_card_holder phone_stand headphone_holder under_desk_mount desk_shelf monitor_riser tissue_box_cover storage_box skadis_panel card_tray token_well wrench_holder socket_rail hex_bit_holder raspi_case esp32_enclosure battery_18650_holder toothbrush_holder drill_bit_holder pliers_rack spice_rack egg_tray utensil_caddy filament_spool_holder nozzle_holder build_plate_rack cutlery_tray pill_organizer magnetic_strip hairdryer_holder kcup_holder hex_key_holder wrap_holder sock_divider soap_tray razor_holder chopstick_holder swatch_holder tp_holder sd_card_holder driver_rack cotton_dispenser sink_caddy clamp_rack dry_box outdoor_enclosure jewelry_stand phone_dock cutting_board_rack tape_dispenser shower_caddy caliper_holder bag_clip_org can_rack led_hub_box makeup_organizer
+- 7-param: `gridfinity_bin_ex(ux,uy,hu,divx,divy,wall,floor)`
+- 0-arg: wall_hook drawer_organizer shelf_divider skadis_hook_{l,j,s} skadis_{container,clip,shelf,elastic_cord}
+
+MECHANICAL archetype (bare、ISO/DIN 準拠、m∈{2,2.5,3,4,5,6,8}): `vesa_mount(sz,t,m)` `l_bracket(w,h,t,m,n)` `t_slot_bracket_2020(a,d)` `raspi_mount_plate(mdl,ex)` `heat_set_array(r,c,m,p,t)` `flange_mount(od,m,n)` `dovetail_pair(w,h,d,g)` `profile_extrusion(k,l)` `snap_fit_pair(l,w,t,h)` `boss_array(r,c,m,h,p,t)`
+
+FASTENER (subtract で穴に、raw Y-up): `screw_hole(m,d)` `tap_hole(m,d)` `counterbore(m,pt)` `countersink(m,pt)` `heat_set_hole(m)` `bolt(m,shank)` — m=2/2.5=Pi、3-8=汎用
+
+Low-level (raw): `bracket_l(w,h,t,d,f)` `flange_circular(od,cb,t,pcd,n,bd)` `t_slot_2020(l)` `profile_2020(l)` `profile_3030(l)` `dovetail(bw,h,d)` `slot(l,w,d)` `snap_fit_annular(sd,sl,bh,by)` `pin_hinge_knuckle(pd,l,od)` `boss(sd,h)` `rib(l,h,t)`
 
 Examples:
 
