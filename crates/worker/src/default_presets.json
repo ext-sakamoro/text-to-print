@@ -209,6 +209,17 @@
         { "id": "makeup_standard_3x4", "label": "メイク整理 standard (3×4 × □45)", "lol_dsl": "makeup_organizer(3, 4, 45)" },
         { "id": "makeup_brush_4x6", "label": "メイク整理 brush rack (4×6 × □30)", "lol_dsl": "makeup_organizer(4, 6, 30)" }
       ]
+    },
+    {
+      "name": "機械要素 (Sprint 21 Phase X.1、ISO/DIN/JIS 規格準拠 VESA + Lブラケット)",
+      "presets": [
+        { "id": "vesa_75_m4_cb", "label": "VESA マウント 75×75 M4 座ぐり (板厚 5mm)", "lol_dsl": "vesa_mount(75, 5, 4)" },
+        { "id": "vesa_100_m5_cb", "label": "VESA マウント 100×100 M5 座ぐり (板厚 6mm)", "lol_dsl": "vesa_mount(100, 6, 5)" },
+        { "id": "vesa_75_m4_thick", "label": "VESA マウント 75×75 M4 座ぐり (板厚 8mm 頑丈型)", "lol_dsl": "vesa_mount(75, 8, 4)" },
+        { "id": "l_bracket_m4_2holes", "label": "L型ブラケット M4×2穴 (60×60×4mm)", "lol_dsl": "l_bracket(60, 60, 4, 4, 2)" },
+        { "id": "l_bracket_m5_3holes", "label": "L型ブラケット M5×3穴 (80×80×5mm)", "lol_dsl": "l_bracket(80, 80, 5, 5, 3)" },
+        { "id": "l_bracket_m3_2holes_small", "label": "L型ブラケット M3×2穴 小型 (40×40×3mm)", "lol_dsl": "l_bracket(40, 40, 3, 3, 2)" }
+      ]
     }
   ]
 }
