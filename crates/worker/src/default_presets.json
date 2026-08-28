@@ -4,7 +4,7 @@
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
       "presets": [
-        { "id": "coin_100yen", "label": "コイン (100円)", "lol_dsl": "shopping_cart_coin(22.8, 1.7)" },
+        { "id": "coin_100yen", "label": "ショッピングカート コインキー Ø22.8×1.7mm (ALICE-Bamboo canonical)", "lol_dsl": "shopping_cart_coin(22.8, 1.7)" },
         { "id": "skadis_panel_300", "label": "SKADIS パネル 300×300", "lol_dsl": "skadis_panel(300, 5, 6)" },
         { "id": "skadis_hook_s", "label": "SKADIS フック S", "lol_dsl": "skadis_hook_s()" },
         { "id": "skadis_clip", "label": "SKADIS クリップ", "lol_dsl": "skadis_clip()" },
