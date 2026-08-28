@@ -230,7 +230,9 @@
         { "id": "phaseX2_pi_zero_m2_hole_demo", "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm", "lol_dsl": "screw_hole(2, 6)" },
         { "id": "phaseX2_bolt_m5_demo", "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)", "lol_dsl": "bolt(5, 20)" },
         { "id": "phaseX2_rack_shelf_200_5notch", "label": "demo: 棚受けレール 200×5×30 Ø6 notch × 5 (mount raw)", "lol_dsl": "rack_shelf(200, 5, 30, 25, 6, 2)" },
-        { "id": "phaseX2_rack_shelf_400_7notch", "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)", "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)" }
+        { "id": "phaseX2_rack_shelf_400_7notch", "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)", "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)" },
+        { "id": "phaseX2_dowel_hole_8_15_demo", "label": "demo: 家具 Ø8 dowel 穴 深 15mm (家具 flat-pack)", "lol_dsl": "dowel_hole(8, 15)" },
+        { "id": "phaseX2_wood_pilot_4_softwood_demo", "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)", "lol_dsl": "wood_screw_pilot(4, 0)" }
       ]
     },
     {
@@ -255,6 +257,20 @@
         { "id": "bearing_608_press", "label": "軸受マウント 608ZZ 圧入 (Ø22×W7、板厚 5mm、スケボー/スピナー)", "lol_dsl": "bearing_seat(22, 5, 0)" },
         { "id": "bearing_608_slip", "label": "軸受マウント 608ZZ はめ込み (Ø22×W7、簡易組立)", "lol_dsl": "bearing_seat(22, 5, 1)" },
         { "id": "bearing_688_press", "label": "軸受マウント 688ZZ 圧入 (Ø16×W5、小型モーター)", "lol_dsl": "bearing_seat(16, 4, 0)" }
+      ]
+    },
+    {
+      "name": "家具 (Flat-pack Furniture、2-tier structure 移植 domain 1)",
+      "presets": [
+        { "id": "cable_grommet_60", "label": "配線通しグロメット 標準 (Ø60×15mm、デスク Φ60 穴対応)", "lol_dsl": "cable_grommet(60, 15)" },
+        { "id": "cable_grommet_80", "label": "配線通しグロメット 大型 (Ø80×20mm、heavy cable)", "lol_dsl": "cable_grommet(80, 20)" }
+      ]
+    },
+    {
+      "name": "建築 (Interior Mount、2-tier structure 移植 domain 2)",
+      "presets": [
+        { "id": "curtain_bracket_25", "label": "カーテンレール壁掛けブラケット 標準 (Ø25、突出 120mm、M4)", "lol_dsl": "curtain_rod_bracket(25, 120)" },
+        { "id": "curtain_bracket_30", "label": "カーテンレール壁掛けブラケット 大型 (Ø30、突出 150mm、M5)", "lol_dsl": "curtain_rod_bracket(30, 150)" }
       ]
     }
   ]

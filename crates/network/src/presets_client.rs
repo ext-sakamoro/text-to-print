@@ -172,17 +172,19 @@ mod tests {
         // 2026-08-27 Sprint 21 Phase X.1: 19→21 categories (機械要素 + 追加、+22 preset = 136)
         // 2026-08-27 Sprint 22 Phase X.2: 21→22 categories (building block +5 preset = 141)
         // 2026-08-28 Sprint 22 続行: bearing_seat 3 + rack_shelf 2 preset 追加 (+5 = 146)
+        // 2026-08-28 Multi-domain 展開: 22→24 categories (家具 + 建築、+4 archetype)、
+        //   building block +2 primitive demo (+6 preset = 152)
         let bundled = include_str!("../../worker/src/default_presets.json");
         let parsed = parse_presets_json(bundled).expect("bundled default parses");
         assert_eq!(
             parsed.categories.len(),
-            22,
-            "seed data: 22 categories (17 生活雑貨〜ミックス 9 + 機械要素 + 機械要素追加 + Phase X.2 building block)"
+            24,
+            "seed data: 24 categories (機械要素系 4 + 家具 + 建築 + 生活雑貨系 17 + building block)"
         );
         let total_presets: usize = parsed.categories.iter().map(|c| c.presets.len()).sum();
         assert_eq!(
-            total_presets, 146,
-            "seed data: 146 preset total (Sprint 22 続行 bearing_seat 3 + rack_shelf 2 追加)"
+            total_presets, 152,
+            "seed data: 152 preset total (Multi-domain 展開 家具 2 + 建築 2 + building block dowel/wood_pilot 2)"
         );
     }
 
