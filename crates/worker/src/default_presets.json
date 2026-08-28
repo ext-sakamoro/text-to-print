@@ -232,7 +232,8 @@
         { "id": "phaseX2_rack_shelf_200_5notch", "label": "demo: 棚受けレール 200×5×30 Ø6 notch × 5 (mount raw)", "lol_dsl": "rack_shelf(200, 5, 30, 25, 6, 2)" },
         { "id": "phaseX2_rack_shelf_400_7notch", "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)", "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)" },
         { "id": "phaseX2_dowel_hole_8_15_demo", "label": "demo: 家具 Ø8 dowel 穴 深 15mm (家具 flat-pack)", "lol_dsl": "dowel_hole(8, 15)" },
-        { "id": "phaseX2_wood_pilot_4_softwood_demo", "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)", "lol_dsl": "wood_screw_pilot(4, 0)" }
+        { "id": "phaseX2_wood_pilot_4_softwood_demo", "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)", "lol_dsl": "wood_screw_pilot(4, 0)" },
+        { "id": "phaseX2_jst_ph_4pin_demo", "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm)", "lol_dsl": "jst_ph_slot(4)" }
       ]
     },
     {
@@ -271,6 +272,19 @@
       "presets": [
         { "id": "curtain_bracket_25", "label": "カーテンレール壁掛けブラケット 標準 (Ø25、突出 120mm、M4)", "lol_dsl": "curtain_rod_bracket(25, 120)" },
         { "id": "curtain_bracket_30", "label": "カーテンレール壁掛けブラケット 大型 (Ø30、突出 150mm、M5)", "lol_dsl": "curtain_rod_bracket(30, 150)" }
+      ]
+    },
+    {
+      "name": "電子工作 (Electronics Hobbyist、2-tier structure 移植 domain 3、Arduino/Drone/Robotics)",
+      "presets": [
+        { "id": "arduino_uno_bare", "label": "Arduino Uno マウント板 bare (68.6×53.4mm 4 M3)", "lol_dsl": "arduino_mount_plate(1, 0)" },
+        { "id": "arduino_uno_vesa", "label": "Arduino Uno マウント板 + VESA 75 (M4 4 隅追加)", "lol_dsl": "arduino_mount_plate(1, 4)" },
+        { "id": "arduino_nano_bare", "label": "Arduino Nano マウント板 bare (43.2×17.8mm 4 M3)", "lol_dsl": "arduino_mount_plate(3, 0)" },
+        { "id": "pixhawk_45_solid", "label": "Pixhawk 4/6C マウント 45×45mm solid (drone autopilot、M3)", "lol_dsl": "pixhawk_mount(45, 0)" },
+        { "id": "pixhawk_45_damper", "label": "Pixhawk 45×45mm damper 付 (Ø10 vibration isolation)", "lol_dsl": "pixhawk_mount(45, 1)" },
+        { "id": "pixhawk_30_mini", "label": "Pixhawk mini 30×30mm solid (コンパクト機体)", "lol_dsl": "pixhawk_mount(30, 0)" },
+        { "id": "servo_sg90", "label": "サーボマウント SG90 mini (23×12.5mm、M2 x 2)", "lol_dsl": "servo_mount(1)" },
+        { "id": "servo_mg996r", "label": "サーボマウント MG996R standard (40.7×19.7mm、M3 x 2)", "lol_dsl": "servo_mount(2)" }
       ]
     }
   ]
