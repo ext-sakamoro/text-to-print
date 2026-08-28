@@ -171,6 +171,7 @@ mod tests {
         // 2026-08-24 Sprint 20: 18→19 categories (ミックス 9 追加)、108→114 preset
         // 2026-08-27 Sprint 21 Phase X.1: 19→21 categories (機械要素 + 追加、+22 preset = 136)
         // 2026-08-27 Sprint 22 Phase X.2: 21→22 categories (building block +5 preset = 141)
+        // 2026-08-28 Sprint 22 続行: bearing_seat 3 + rack_shelf 2 preset 追加 (+5 = 146)
         let bundled = include_str!("../../worker/src/default_presets.json");
         let parsed = parse_presets_json(bundled).expect("bundled default parses");
         assert_eq!(
@@ -180,8 +181,8 @@ mod tests {
         );
         let total_presets: usize = parsed.categories.iter().map(|c| c.presets.len()).sum();
         assert_eq!(
-            total_presets, 141,
-            "seed data: 141 preset total (Phase X.1 + X.2 完了時)"
+            total_presets, 146,
+            "seed data: 146 preset total (Sprint 22 続行 bearing_seat 3 + rack_shelf 2 追加)"
         );
     }
 

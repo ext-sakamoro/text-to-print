@@ -228,11 +228,13 @@
         { "id": "phaseX2_pi_m25_hole_demo", "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm", "lol_dsl": "screw_hole(2.5, 8)" },
         { "id": "phaseX2_m4_bolted_plate_demo", "label": "demo: M4 貫通穴 1 個板 60×5×60 (subtract 組合せ例)", "lol_dsl": "subtract(rounded_box(30, 2.5, 30, 3), screw_hole(4, 10))" },
         { "id": "phaseX2_pi_zero_m2_hole_demo", "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm", "lol_dsl": "screw_hole(2, 6)" },
-        { "id": "phaseX2_bolt_m5_demo", "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)", "lol_dsl": "bolt(5, 20)" }
+        { "id": "phaseX2_bolt_m5_demo", "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)", "lol_dsl": "bolt(5, 20)" },
+        { "id": "phaseX2_rack_shelf_200_5notch", "label": "demo: 棚受けレール 200×5×30 Ø6 notch × 5 (mount raw)", "lol_dsl": "rack_shelf(200, 5, 30, 25, 6, 2)" },
+        { "id": "phaseX2_rack_shelf_400_7notch", "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)", "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)" }
       ]
     },
     {
-      "name": "機械要素 追加 (Sprint 21 Phase X.1 追加 8、押し出し + ブラケット + 締結)",
+      "name": "機械要素 追加 (Sprint 21 Phase X.1 追加 8 + Sprint 22 bearing、押し出し + ブラケット + 締結 + 軸受)",
       "presets": [
         { "id": "t_slot_bracket_20", "label": "2020 T-slot ブラケット 標準 (20×20×20mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(20, 20)" },
         { "id": "t_slot_bracket_40", "label": "2020 T-slot ブラケット 大型 (40×40×40mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(40, 40)" },
@@ -249,7 +251,10 @@
         { "id": "profile_3030_100", "label": "アルミプロファイル 3030 × 100mm", "lol_dsl": "profile_extrusion(30, 100)" },
         { "id": "snap_fit_standard", "label": "スナップフィット cantilever PLA 標準 (20×5×2、hook 1)", "lol_dsl": "snap_fit_pair(20, 5, 2, 1)" },
         { "id": "boss_array_m3_2x2", "label": "Boss array M3×4 (2×2 pitch20 高10 板厚 2mm)", "lol_dsl": "boss_array(2, 2, 3, 10, 20, 2)" },
-        { "id": "boss_array_m4_3x3", "label": "Boss array M4×9 (3×3 pitch25 高15 板厚 3mm)", "lol_dsl": "boss_array(3, 3, 4, 15, 25, 3)" }
+        { "id": "boss_array_m4_3x3", "label": "Boss array M4×9 (3×3 pitch25 高15 板厚 3mm)", "lol_dsl": "boss_array(3, 3, 4, 15, 25, 3)" },
+        { "id": "bearing_608_press", "label": "軸受マウント 608ZZ 圧入 (Ø22×W7、板厚 5mm、スケボー/スピナー)", "lol_dsl": "bearing_seat(22, 5, 0)" },
+        { "id": "bearing_608_slip", "label": "軸受マウント 608ZZ はめ込み (Ø22×W7、簡易組立)", "lol_dsl": "bearing_seat(22, 5, 1)" },
+        { "id": "bearing_688_press", "label": "軸受マウント 688ZZ 圧入 (Ø16×W5、小型モーター)", "lol_dsl": "bearing_seat(16, 4, 0)" }
       ]
     }
   ]
