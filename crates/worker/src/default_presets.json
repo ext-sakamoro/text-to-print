@@ -1,290 +1,934 @@
 {
-  "version": "2026-08-30T18:45:00Z",
+  "version": "2026-08-31T03:54:48Z",
   "categories": [
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
       "presets": [
-        { "id": "coin_100yen", "label": "ショッピングカート コインキー Ø22.8×1.7mm (ALICE-Bamboo canonical)", "lol_dsl": "shopping_cart_coin(22.8, 1.7)" },
-        { "id": "skadis_panel_300", "label": "SKADIS パネル 300×300", "lol_dsl": "skadis_panel(300, 5, 6)" },
-        { "id": "skadis_hook_s", "label": "SKADIS フック S", "lol_dsl": "skadis_hook_s()" },
-        { "id": "skadis_clip", "label": "SKADIS クリップ", "lol_dsl": "skadis_clip()" },
-        { "id": "skadis_elastic_cord", "label": "SKADIS ゴムバンド", "lol_dsl": "skadis_elastic_cord()" }
+        {
+          "id": "coin_100yen",
+          "label": "ショッピングカート コインキー Ø22.8×1.7mm (ALICE-Bamboo canonical)",
+          "lol_dsl": "shopping_cart_coin(22.8, 1.7)"
+        },
+        {
+          "id": "skadis_panel_300",
+          "label": "SKADIS パネル 300×300",
+          "lol_dsl": "skadis_panel(300, 5, 6)"
+        },
+        {
+          "id": "skadis_hook_s",
+          "label": "SKADIS フック S",
+          "lol_dsl": "skadis_hook_s()"
+        },
+        {
+          "id": "skadis_clip",
+          "label": "SKADIS クリップ",
+          "lol_dsl": "skadis_clip()"
+        },
+        {
+          "id": "skadis_elastic_cord",
+          "label": "SKADIS ゴムバンド",
+          "lol_dsl": "skadis_elastic_cord()"
+        }
       ]
     },
     {
       "name": "実績品 UserFieldTest 認証 (実荷重テスト合格、ALICE-Bamboo/models 由来)",
       "presets": [
-        { "id": "skadis_hook_j", "label": "SKADIS フック J", "lol_dsl": "skadis_hook_j()" },
-        { "id": "skadis_hook_l", "label": "SKADIS フック L", "lol_dsl": "skadis_hook_l()" },
-        { "id": "skadis_container", "label": "SKADIS コンテナ", "lol_dsl": "skadis_container()" },
-        { "id": "skadis_shelf", "label": "SKADIS シェルフ", "lol_dsl": "skadis_shelf()" },
-        { "id": "shelf_divider_560", "label": "棚仕切り 560×250×120", "lol_dsl": "shelf_divider()" }
+        {
+          "id": "skadis_hook_j",
+          "label": "SKADIS フック J",
+          "lol_dsl": "skadis_hook_j()"
+        },
+        {
+          "id": "skadis_hook_l",
+          "label": "SKADIS フック L",
+          "lol_dsl": "skadis_hook_l()"
+        },
+        {
+          "id": "skadis_container",
+          "label": "SKADIS コンテナ",
+          "lol_dsl": "skadis_container()"
+        },
+        {
+          "id": "skadis_shelf",
+          "label": "SKADIS シェルフ",
+          "lol_dsl": "skadis_shelf()"
+        },
+        {
+          "id": "shelf_divider_560",
+          "label": "棚仕切り 560×250×120",
+          "lol_dsl": "shelf_divider()"
+        }
       ]
     },
     {
       "name": "生活雑貨 (Phase P.1、products primitive、LLM 経路 fallback 対応)",
       "presets": [
-        { "id": "mug_50x100", "label": "マグカップ φ50 × H100", "lol_dsl": "mug(50, 100)" },
-        { "id": "mug_80x120", "label": "マグカップ φ80 × H120 (大)", "lol_dsl": "mug(80, 120)" }
+        {
+          "id": "mug_50x100",
+          "label": "マグカップ φ50 × H100",
+          "lol_dsl": "mug(50, 100)"
+        },
+        {
+          "id": "mug_80x120",
+          "label": "マグカップ φ80 × H120 (大)",
+          "lol_dsl": "mug(80, 120)"
+        }
       ]
     },
     {
       "name": "趣味 DIY (Sprint 5、hobby-diy.md 由来 4 archetype)",
       "presets": [
-        { "id": "cable_clip_hdmi", "label": "ケーブルクリップ HDMI (Ø7)", "lol_dsl": "cable_clip(7, 28)" },
-        { "id": "cable_clip_power", "label": "ケーブルクリップ 電源 (Ø9)", "lol_dsl": "cable_clip(9, 36)" },
-        { "id": "led_channel_ws2812b", "label": "LED channel WS2812B 300mm", "lol_dsl": "led_channel(10, 300)" },
-        { "id": "led_channel_smd3528", "label": "LED channel SMD3528 500mm", "lol_dsl": "led_channel(8, 500)" },
-        { "id": "card_tray_poker", "label": "カードトレー Poker 63×88", "lol_dsl": "card_tray(63, 88, 30)" },
-        { "id": "card_tray_mini_euro", "label": "カードトレー Mini Euro 44×68", "lol_dsl": "card_tray(44, 68, 25)" },
-        { "id": "token_well_dice_4", "label": "トークン井戸 dice 4連 Ø20", "lol_dsl": "token_well(20, 20, 4)" },
-        { "id": "token_well_mini_6", "label": "トークン井戸 mini 6連 Ø25×深35", "lol_dsl": "token_well(25, 35, 6)" }
+        {
+          "id": "cable_clip_hdmi",
+          "label": "ケーブルクリップ HDMI (Ø7)",
+          "lol_dsl": "cable_clip(7, 28)"
+        },
+        {
+          "id": "cable_clip_power",
+          "label": "ケーブルクリップ 電源 (Ø9)",
+          "lol_dsl": "cable_clip(9, 36)"
+        },
+        {
+          "id": "led_channel_ws2812b",
+          "label": "LED channel WS2812B 300mm",
+          "lol_dsl": "led_channel(10, 300)"
+        },
+        {
+          "id": "led_channel_smd3528",
+          "label": "LED channel SMD3528 500mm",
+          "lol_dsl": "led_channel(8, 500)"
+        },
+        {
+          "id": "card_tray_poker",
+          "label": "カードトレー Poker 63×88",
+          "lol_dsl": "card_tray(63, 88, 30)"
+        },
+        {
+          "id": "card_tray_mini_euro",
+          "label": "カードトレー Mini Euro 44×68",
+          "lol_dsl": "card_tray(44, 68, 25)"
+        },
+        {
+          "id": "token_well_dice_4",
+          "label": "トークン井戸 dice 4連 Ø20",
+          "lol_dsl": "token_well(20, 20, 4)"
+        },
+        {
+          "id": "token_well_mini_6",
+          "label": "トークン井戸 mini 6連 Ø25×深35",
+          "lol_dsl": "token_well(25, 35, 6)"
+        }
       ]
     },
     {
       "name": "工具ホルダー (Sprint 6、tools.md 由来 3 archetype)",
       "presets": [
-        { "id": "wrench_metric_8_19_6", "label": "レンチ Metric 8-19mm × 6 slot", "lol_dsl": "wrench_holder(8, 19, 6)" },
-        { "id": "wrench_metric_8_24_8", "label": "レンチ Metric 8-24mm × 8 slot", "lol_dsl": "wrench_holder(8, 24, 8)" },
-        { "id": "wrench_sae_6_25_8", "label": "レンチ SAE 6-25mm × 8 slot", "lol_dsl": "wrench_holder(6.35, 25.4, 8)" },
-        { "id": "socket_quarter_6", "label": "ソケットレール 1/4\" × 6 post", "lol_dsl": "socket_rail(6.0, 15, 6)" },
-        { "id": "socket_half_6", "label": "ソケットレール 1/2\" × 6 post", "lol_dsl": "socket_rail(12.4, 22, 6)" },
-        { "id": "socket_three_eighth_8", "label": "ソケットレール 3/8\" × 8 post", "lol_dsl": "socket_rail(9.2, 18, 8)" },
-        { "id": "hex_bit_4x5_12", "label": "ヘックスビット 4×5 (20 hole) 12mm", "lol_dsl": "hex_bit_holder(5, 4, 12)" },
-        { "id": "hex_bit_6x6_10", "label": "ヘックスビット 6×6 (36 hole) 10mm", "lol_dsl": "hex_bit_holder(6, 6, 10)" }
-      ]
-    },
-    {
-      "name": "電子機器ケース (Sprint 7、electronics-enclosure.md 由来 3 archetype)",
-      "presets": [
-        { "id": "raspi_5_cooler", "label": "RPi 5 ケース (Active Cooler 25mm)", "lol_dsl": "raspi_case(85, 56, 25)" },
-        { "id": "raspi_5_bare", "label": "RPi 5 ケース (bare 15mm)", "lol_dsl": "raspi_case(85, 56, 15)" },
-        { "id": "raspi_zero_2w", "label": "RPi Zero 2W ケース", "lol_dsl": "raspi_case(65, 30, 15)" },
-        { "id": "esp32_devkit", "label": "ESP32 DevKit V1 ケース", "lol_dsl": "esp32_enclosure(51.6, 28.4, 15)" },
-        { "id": "arduino_uno", "label": "Arduino Uno R3 ケース", "lol_dsl": "esp32_enclosure(68.6, 53.4, 20)" },
-        { "id": "arduino_nano", "label": "Arduino Nano ケース", "lol_dsl": "esp32_enclosure(45, 18, 12)" },
-        { "id": "battery_18650_4", "label": "18650 バッテリー 4 cell (through)", "lol_dsl": "battery_18650_holder(4, 2.5, 0)" },
-        { "id": "battery_18650_2", "label": "18650 バッテリー 2 cell (through)", "lol_dsl": "battery_18650_holder(2, 2.5, 0)" }
-      ]
-    },
-    {
-      "name": "バスルーム/ガレージ (Sprint 8、organizer-bathroom-garage.md 由来 3 archetype)",
-      "presets": [
-        { "id": "toothbrush_manual_4", "label": "歯ブラシホルダー manual 4本 (Ø15)", "lol_dsl": "toothbrush_holder(4, 15, 70)" },
-        { "id": "toothbrush_electric_2", "label": "歯ブラシホルダー electric 2本 (Ø40)", "lol_dsl": "toothbrush_holder(2, 40, 80)" },
-        { "id": "drill_bit_metric_11", "label": "ドリルビット Metric 3-13mm × 11", "lol_dsl": "drill_bit_holder(3, 13, 11)" },
-        { "id": "drill_bit_small_19", "label": "ドリルビット 1-10mm × 19 (小径セット)", "lol_dsl": "drill_bit_holder(1, 10, 19)" },
-        { "id": "pliers_standard_6", "label": "プライヤーラック 6 slot (W15)", "lol_dsl": "pliers_rack(6, 15, 60)" },
-        { "id": "pliers_large_4", "label": "プライヤーラック 4 slot (W25、tongue-groove)", "lol_dsl": "pliers_rack(4, 25, 80)" }
-      ]
-    },
-    {
-      "name": "キッチン (Sprint 9、organizer-cable-kitchen.md 由来 3 archetype)",
-      "presets": [
-        { "id": "spice_rack_std_6", "label": "スパイスラック std 6 jars (Ø48×H100)", "lol_dsl": "spice_rack(6, 48, 100)" },
-        { "id": "spice_rack_large_8", "label": "スパイスラック large 8 jars (Ø52×H120)", "lol_dsl": "spice_rack(8, 52, 120)" },
-        { "id": "egg_tray_12", "label": "卵トレー 4×3 (12-egg standard)", "lol_dsl": "egg_tray(3, 4, 18)" },
-        { "id": "egg_tray_6", "label": "卵トレー 3×2 (6-egg compact)", "lol_dsl": "egg_tray(2, 3, 18)" },
-        { "id": "utensil_caddy_4", "label": "ツールキャディ 4 compartment (Ø65×H130)", "lol_dsl": "utensil_caddy(4, 65, 130)" },
-        { "id": "utensil_caddy_small_3", "label": "ツールキャディ 3 compartment (Ø50×H120)", "lol_dsl": "utensil_caddy(3, 50, 120)" }
-      ]
-    },
-    {
-      "name": "3D プリンタ周辺 (Sprint 10、organizer-printer-modular.md 由来 3 archetype)",
-      "presets": [
-        { "id": "spool_holder_1kg", "label": "スプールホルダー 1kg (Ø200×W68×bore52)", "lol_dsl": "filament_spool_holder(200, 68, 52)" },
-        { "id": "spool_holder_250g", "label": "スプールホルダー 250g (Ø125×W45×bore30)", "lol_dsl": "filament_spool_holder(125, 45, 30)" },
-        { "id": "nozzle_m6_8", "label": "ノズルホルダー M6 × 8 (E3D/Bambu)", "lol_dsl": "nozzle_holder(8, 8, 6)" },
-        { "id": "nozzle_m6_12", "label": "ノズルホルダー M6 × 12 (large set)", "lol_dsl": "nozzle_holder(12, 8, 6)" },
-        { "id": "plate_rack_5", "label": "ビルドプレートラック 5 slot × H200 (Ender/Bambu 235)", "lol_dsl": "build_plate_rack(5, 15, 200)" },
-        { "id": "plate_rack_8", "label": "ビルドプレートラック 8 slot × H250 (Bambu 256)", "lol_dsl": "build_plate_rack(8, 15, 250)" }
-      ]
-    },
-    {
-      "name": "引き出し/壁 (Sprint 11、organizer-drawer-wall.md 由来 3 archetype)",
-      "presets": [
-        { "id": "cutlery_tray_std_3", "label": "カトラリートレー 3 slot × L220 (fork/knife/spoon)", "lol_dsl": "cutlery_tray(3, 35, 220)" },
-        { "id": "cutlery_tray_wide_4", "label": "カトラリートレー 4 slot × W50×L250 (wide、spoon 込)", "lol_dsl": "cutlery_tray(4, 50, 250)" },
-        { "id": "pill_weekly_14", "label": "薬箱 weekly AM/PM (7×2 = 14 cell)", "lol_dsl": "pill_organizer(7, 2, 20)" },
-        { "id": "pill_daily_3", "label": "薬箱 daily (3×1 = 3 cell)", "lol_dsl": "pill_organizer(3, 1, 15)" },
-        { "id": "magnet_knife_rail_8", "label": "マグネットバー 8 magnet (kitchen knife rail)", "lol_dsl": "magnetic_strip(8, 6, 30)" },
-        { "id": "magnet_tool_large_12", "label": "マグネットバー 12 magnet × Ø10 (large tool rail)", "lol_dsl": "magnetic_strip(12, 10, 40)" }
-      ]
-    },
-    {
-      "name": "ミックス (Sprint 12、bathroom/kitchen/garage 混合 3 archetype)",
-      "presets": [
-        { "id": "hairdryer_dyson", "label": "ドライヤーホルダー Dyson Ø85×D110", "lol_dsl": "hairdryer_holder(85, 110, 3)" },
-        { "id": "hairdryer_std_60", "label": "ドライヤーホルダー 汎用 Ø60×D100", "lol_dsl": "hairdryer_holder(60, 100, 3)" },
-        { "id": "kcup_4x3", "label": "K-Cup ホルダー 4×3 = 12 (K-Cup Ø53)", "lol_dsl": "kcup_holder(3, 4, 53)" },
-        { "id": "nespresso_5x2", "label": "Nespresso ホルダー 5×2 = 10 (Ø39)", "lol_dsl": "kcup_holder(2, 5, 39)" },
-        { "id": "hex_key_metric_9", "label": "Allen key Metric 9-piece (1.5-10mm)", "lol_dsl": "hex_key_holder(9, 1.5, 10)" },
-        { "id": "hex_key_sae_12", "label": "Allen key SAE 12-piece (1.6-9.5mm)", "lol_dsl": "hex_key_holder(12, 1.6, 9.5)" }
-      ]
-    },
-    {
-      "name": "ミックス 2 (Sprint 13、kitchen/drawer/bathroom 新 pattern)",
-      "presets": [
-        { "id": "wrap_holder_12inch", "label": "Wrap ホルダー 12\" foil (Ø55×W305)", "lol_dsl": "wrap_holder(55, 305, 3)" },
-        { "id": "wrap_holder_restaurant", "label": "Wrap ホルダー 18\" restaurant (Ø55×W457)", "lol_dsl": "wrap_holder(55, 457, 3)" },
-        { "id": "sock_divider_4", "label": "靴下 divider 4 cell (W80×H89)", "lol_dsl": "sock_divider(4, 80, 89)" },
-        { "id": "underwear_divider_4", "label": "下着 divider 4 cell (W100×H89)", "lol_dsl": "sock_divider(4, 100, 89)" },
-        { "id": "soap_tray_dual", "label": "石鹸トレー dual bottle (L200×W90×6 drain)", "lol_dsl": "soap_tray(200, 90, 6)" },
-        { "id": "soap_tray_bar", "label": "石鹸トレー bar soap (L100×W70×4 drain)", "lol_dsl": "soap_tray(100, 70, 4)" }
-      ]
-    },
-    {
-      "name": "ミックス 3 (Sprint 14、slot pattern 変種 3 archetype)",
-      "presets": [
-        { "id": "razor_cartridge", "label": "カミソリ Mach3/Fusion cartridge (W12×D22×M4)", "lol_dsl": "razor_holder(12, 22, 4.5)" },
-        { "id": "razor_safety", "label": "カミソリ safety razor (W10×D25×M4)", "lol_dsl": "razor_holder(10, 25, 4.5)" },
-        { "id": "chopstick_adult_4", "label": "箸 adult 4 pair (W13×L260)", "lol_dsl": "chopstick_holder(4, 13, 260)" },
-        { "id": "chopstick_cooking_2", "label": "箸 cooking 2 pair (W15×L310)", "lol_dsl": "chopstick_holder(2, 15, 310)" },
-        { "id": "swatch_standard_32", "label": "スウォッチ standard card 8×4 (W32×H70)", "lol_dsl": "swatch_holder(8, 4, 32)" },
-        { "id": "swatch_mini_24", "label": "スウォッチ small square 8×5 (W24×H24)", "lol_dsl": "swatch_holder(8, 5, 24)" }
-      ]
-    },
-    {
-      "name": "ミックス 4 (Sprint 15、bathroom + printer + garage 各 1)",
-      "presets": [
-        { "id": "tp_standard", "label": "TP ホルダー standard (Ø40×W110×板5mm)", "lol_dsl": "tp_holder(40, 110, 5)" },
-        { "id": "tp_thick", "label": "TP ホルダー thick backplate (Ø40×W110×板8mm)", "lol_dsl": "tp_holder(40, 110, 8)" },
-        { "id": "sd_full_4x4", "label": "SD カード full 4×4 (W24×H32)", "lol_dsl": "sd_card_holder(4, 4, 24)" },
-        { "id": "sd_micro_5x5", "label": "SD カード microSD 5×5 (W15×H11)", "lol_dsl": "sd_card_holder(5, 5, 15)" },
-        { "id": "driver_standard_8", "label": "ドライバーラック standard 8 slot (Ø25×H100)", "lol_dsl": "driver_rack(8, 25, 100)" },
-        { "id": "driver_precision_12", "label": "ドライバーラック precision 12 slot (Ø15×H80)", "lol_dsl": "driver_rack(12, 15, 80)" }
-      ]
-    },
-    {
-      "name": "ミックス 5 (Sprint 16、bathroom + kitchen + garage 各 1)",
-      "presets": [
-        { "id": "cotton_standard", "label": "コットン ディスペンサー standard (80個 × Ø90 × H100)", "lol_dsl": "cotton_dispenser(80, 90, 100)" },
-        { "id": "cotton_large", "label": "コットン ディスペンサー large (150個 × Ø110 × H130)", "lol_dsl": "cotton_dispenser(150, 110, 130)" },
-        { "id": "sink_caddy_standard", "label": "スポンジホルダー standard (L200×W100×8 drain)", "lol_dsl": "sink_caddy(200, 100, 8)" },
-        { "id": "sink_caddy_large", "label": "スポンジホルダー large sink (L280×W130×12 drain)", "lol_dsl": "sink_caddy(280, 130, 12)" },
-        { "id": "clamp_standard_5", "label": "クランプラック standard (5 hook × W30 × H150)", "lol_dsl": "clamp_rack(5, 30, 150)" },
-        { "id": "clamp_workshop_8", "label": "クランプラック workshop (8 hook × W50 × H250)", "lol_dsl": "clamp_rack(8, 50, 250)" }
-      ]
-    },
-    {
-      "name": "ミックス 6 (Sprint 17、printer + electronics + drawer 各 1)",
-      "presets": [
-        { "id": "dry_box_2x2", "label": "dry box 4 spool 2×2 (1kg PLA × Ø68)", "lol_dsl": "dry_box(2, 2, 68)" },
-        { "id": "dry_box_2x1", "label": "dry box 2 spool 2×1 (Ø68)", "lol_dsl": "dry_box(2, 1, 68)" },
-        { "id": "outdoor_arduino", "label": "IP54 筐体 Arduino UNO (120×80×45)", "lol_dsl": "outdoor_enclosure(120, 80, 45)" },
-        { "id": "outdoor_raspi5", "label": "IP54 筐体 Raspi 5 (100×70×35)", "lol_dsl": "outdoor_enclosure(100, 70, 35)" },
-        { "id": "jewelry_3_tier", "label": "ジュエリー スタンド 3 tier (Ø100×H100)", "lol_dsl": "jewelry_stand(3, 100, 100)" },
-        { "id": "jewelry_4_tier_large", "label": "ジュエリー スタンド 4 tier large (Ø130×H150)", "lol_dsl": "jewelry_stand(4, 130, 150)" }
-      ]
-    },
-    {
-      "name": "ミックス 7 (Sprint 18、electronics + kitchen + garage 各 1、multi-component)",
-      "presets": [
-        { "id": "phone_dock_standard", "label": "充電ドック standard (80×100×Ø8 貫通)", "lol_dsl": "phone_dock(80, 100, 8)" },
-        { "id": "phone_dock_tablet", "label": "充電ドック tablet (120×150×Ø10 貫通)", "lol_dsl": "phone_dock(120, 150, 10)" },
-        { "id": "cutting_board_3", "label": "まな板ラック standard (3 slot × W12 × H220)", "lol_dsl": "cutting_board_rack(3, 12, 220)" },
-        { "id": "cutting_board_4_large", "label": "まな板ラック large (4 slot × W20 × H280)", "lol_dsl": "cutting_board_rack(4, 20, 280)" },
-        { "id": "tape_packing_standard", "label": "テープ dispenser 包装用 (Ø76×W50)", "lol_dsl": "tape_dispenser(76, 50, 3)" },
-        { "id": "tape_masking", "label": "テープ dispenser 養生 (Ø90×W48)", "lol_dsl": "tape_dispenser(90, 48, 3)" }
-      ]
-    },
-    {
-      "name": "ミックス 8 (Sprint 19、bathroom + tools + kitchen 各 1、multi-component)",
-      "presets": [
-        { "id": "shower_2tier", "label": "シャワー棚 standard 2 tier (L250×D120)", "lol_dsl": "shower_caddy(2, 250, 120)" },
-        { "id": "shower_3tier_large", "label": "シャワー棚 large 3 tier (L300×D150)", "lol_dsl": "shower_caddy(3, 300, 150)" },
-        { "id": "caliper_standard_3", "label": "ノギスホルダー standard 3 (150mm × 3 個)", "lol_dsl": "caliper_holder(150, 40, 3)" },
-        { "id": "caliper_large_6", "label": "ノギスホルダー large 6 (200mm × 6 個)", "lol_dsl": "caliper_holder(200, 50, 6)" },
-        { "id": "bag_clip_8", "label": "袋クリップ整理 standard 8 slot (W8×H100)", "lol_dsl": "bag_clip_org(8, 8, 100)" },
-        { "id": "bag_clip_12_large", "label": "袋クリップ整理 large 12 slot (W10×H120)", "lol_dsl": "bag_clip_org(12, 10, 120)" }
-      ]
-    },
-    {
-      "name": "ミックス 9 (Sprint 20、kitchen+electronics 100%完走 + drawer)",
-      "presets": [
-        { "id": "can_rack_coke_2tier", "label": "缶ラック Coke 2 tier (Ø66×10deg)", "lol_dsl": "can_rack(2, 66, 10)" },
-        { "id": "can_rack_short_3tier", "label": "缶ラック short 3 tier (Ø55×12deg)", "lol_dsl": "can_rack(3, 55, 12)" },
-        { "id": "led_hub_smart", "label": "LED hub 筐体 smart (80×60×30)", "lol_dsl": "led_hub_box(80, 60, 30)" },
-        { "id": "led_hub_gateway", "label": "LED hub 筐体 IoT gateway (120×80×50)", "lol_dsl": "led_hub_box(120, 80, 50)" },
-        { "id": "makeup_standard_3x4", "label": "メイク整理 standard (3×4 × □45)", "lol_dsl": "makeup_organizer(3, 4, 45)" },
-        { "id": "makeup_brush_4x6", "label": "メイク整理 brush rack (4×6 × □30)", "lol_dsl": "makeup_organizer(4, 6, 30)" }
+        {
+          "id": "wrench_metric_8_19_6",
+          "label": "レンチ Metric 8-19mm × 6 slot",
+          "lol_dsl": "wrench_holder(8, 19, 6)"
+        },
+        {
+          "id": "wrench_metric_8_24_8",
+          "label": "レンチ Metric 8-24mm × 8 slot",
+          "lol_dsl": "wrench_holder(8, 24, 8)"
+        },
+        {
+          "id": "wrench_sae_6_25_8",
+          "label": "レンチ SAE 6-25mm × 8 slot",
+          "lol_dsl": "wrench_holder(6.35, 25.4, 8)"
+        },
+        {
+          "id": "socket_quarter_6",
+          "label": "ソケットレール 1/4\" × 6 post",
+          "lol_dsl": "socket_rail(6.0, 15, 6)"
+        },
+        {
+          "id": "socket_half_6",
+          "label": "ソケットレール 1/2\" × 6 post",
+          "lol_dsl": "socket_rail(12.4, 22, 6)"
+        },
+        {
+          "id": "socket_three_eighth_8",
+          "label": "ソケットレール 3/8\" × 8 post",
+          "lol_dsl": "socket_rail(9.2, 18, 8)"
+        },
+        {
+          "id": "hex_bit_4x5_12",
+          "label": "ヘックスビット 4×5 (20 hole) 12mm",
+          "lol_dsl": "hex_bit_holder(5, 4, 12)"
+        },
+        {
+          "id": "hex_bit_6x6_10",
+          "label": "ヘックスビット 6×6 (36 hole) 10mm",
+          "lol_dsl": "hex_bit_holder(6, 6, 10)"
+        }
       ]
     },
     {
       "name": "機械要素 (Sprint 21 Phase X.1、ISO/DIN/JIS 規格準拠 VESA + Lブラケット)",
       "presets": [
-        { "id": "vesa_75_m4_cb", "label": "VESA マウント 75×75 M4 座ぐり (板厚 5mm)", "lol_dsl": "vesa_mount(75, 5, 4)" },
-        { "id": "vesa_100_m5_cb", "label": "VESA マウント 100×100 M5 座ぐり (板厚 6mm)", "lol_dsl": "vesa_mount(100, 6, 5)" },
-        { "id": "vesa_75_m4_thick", "label": "VESA マウント 75×75 M4 座ぐり (板厚 8mm 頑丈型)", "lol_dsl": "vesa_mount(75, 8, 4)" },
-        { "id": "l_bracket_m4_2holes", "label": "L型ブラケット M4×2穴 (60×60×4mm)", "lol_dsl": "l_bracket(60, 60, 4, 4, 2)" },
-        { "id": "l_bracket_m5_3holes", "label": "L型ブラケット M5×3穴 (80×80×5mm)", "lol_dsl": "l_bracket(80, 80, 5, 5, 3)" },
-        { "id": "l_bracket_m3_2holes_small", "label": "L型ブラケット M3×2穴 小型 (40×40×3mm)", "lol_dsl": "l_bracket(40, 40, 3, 3, 2)" }
-      ]
-    },
-    {
-      "name": "機械要素 building block (Sprint 22 Phase X.2、LLM 組合せ用 低レベル primitive demo)",
-      "presets": [
-        { "id": "phaseX2_screw_hole_m4_demo", "label": "demo: M4 貫通穴 φ4.2 深 12mm (cylinder single)", "lol_dsl": "screw_hole(4, 12)" },
-        { "id": "phaseX2_pi_m25_hole_demo", "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm", "lol_dsl": "screw_hole(2.5, 8)" },
-        { "id": "phaseX2_m4_bolted_plate_demo", "label": "demo: M4 貫通穴 1 個板 60×5×60 (subtract 組合せ例、Z-up 床置き)", "lol_dsl": "rotate(90, 0, 0, subtract(rounded_box(30, 2.5, 30, 3), screw_hole(4, 15)))" },
-        { "id": "phaseX2_pi_zero_m2_hole_demo", "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm", "lol_dsl": "screw_hole(2, 6)" },
-        { "id": "phaseX2_bolt_m5_demo", "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)", "lol_dsl": "bolt(5, 20)" },
-        { "id": "phaseX2_rack_shelf_200_5notch", "label": "demo: 棚受けレール 200×5×30 Ø6 notch × 5 (mount raw)", "lol_dsl": "rack_shelf(200, 5, 30, 25, 6, 2)" },
-        { "id": "phaseX2_rack_shelf_400_7notch", "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)", "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)" },
-        { "id": "phaseX2_dowel_hole_8_15_demo", "label": "demo: 家具 Ø8 dowel 穴 深 15mm (家具 flat-pack)", "lol_dsl": "dowel_hole(8, 15)" },
-        { "id": "phaseX2_wood_pilot_4_softwood_demo", "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)", "lol_dsl": "wood_screw_pilot(4, 0)" },
-        { "id": "phaseX2_jst_ph_4pin_demo", "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm)", "lol_dsl": "jst_ph_slot(4)" }
+        {
+          "id": "vesa_75_m4_cb",
+          "label": "VESA マウント 75×75 M4 座ぐり (板厚 5mm)",
+          "lol_dsl": "vesa_mount(75, 5, 4)"
+        },
+        {
+          "id": "vesa_100_m5_cb",
+          "label": "VESA マウント 100×100 M5 座ぐり (板厚 6mm)",
+          "lol_dsl": "vesa_mount(100, 6, 5)"
+        },
+        {
+          "id": "vesa_75_m4_thick",
+          "label": "VESA マウント 75×75 M4 座ぐり (板厚 8mm 頑丈型)",
+          "lol_dsl": "vesa_mount(75, 8, 4)"
+        },
+        {
+          "id": "l_bracket_m4_2holes",
+          "label": "L型ブラケット M4×2穴 (60×60×4mm)",
+          "lol_dsl": "l_bracket(60, 60, 4, 4, 2)"
+        },
+        {
+          "id": "l_bracket_m5_3holes",
+          "label": "L型ブラケット M5×3穴 (80×80×5mm)",
+          "lol_dsl": "l_bracket(80, 80, 5, 5, 3)"
+        },
+        {
+          "id": "l_bracket_m3_2holes_small",
+          "label": "L型ブラケット M3×2穴 小型 (40×40×3mm)",
+          "lol_dsl": "l_bracket(40, 40, 3, 3, 2)"
+        }
       ]
     },
     {
       "name": "機械要素 追加 (Sprint 21 Phase X.1 追加 8 + Sprint 22 bearing、押し出し + ブラケット + 締結 + 軸受)",
       "presets": [
-        { "id": "t_slot_bracket_20", "label": "2020 T-slot ブラケット 標準 (20×20×20mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(20, 20)" },
-        { "id": "t_slot_bracket_40", "label": "2020 T-slot ブラケット 大型 (40×40×40mm、M5 CB)", "lol_dsl": "t_slot_bracket_2020(40, 40)" },
-        { "id": "raspi_pi4b_vesa", "label": "Raspberry Pi 4B/5 マウント板 (58×49 M2.5 + VESA)", "lol_dsl": "raspi_mount_plate(4, 4)" },
-        { "id": "raspi_pi5_bare", "label": "Raspberry Pi 5 マウント板 (58×49 M2.5 のみ)", "lol_dsl": "raspi_mount_plate(5, 0)" },
-        { "id": "raspi_zero_bare", "label": "Raspberry Pi Zero マウント板 (58×23 M2.5)", "lol_dsl": "raspi_mount_plate(0, 0)" },
-        { "id": "heat_set_m3_2x2", "label": "Heat-set insert grid M3×4 (2×2 pitch20 板厚 6mm)", "lol_dsl": "heat_set_array(2, 2, 3, 20, 6)" },
-        { "id": "heat_set_m4_3x3", "label": "Heat-set insert grid M4×9 (3×3 pitch25 板厚 8mm)", "lol_dsl": "heat_set_array(3, 3, 4, 25, 8)" },
-        { "id": "flange_od80_m5_4", "label": "フランジ Φ80 M5×4 (板厚 6mm、PCD 56)", "lol_dsl": "flange_mount(80, 5, 4)" },
-        { "id": "flange_od100_m6_6", "label": "フランジ Φ100 M6×6 (板厚 6mm、PCD 70)", "lol_dsl": "flange_mount(100, 6, 6)" },
-        { "id": "dovetail_male_20", "label": "アリ継ぎ オス (底辺 20×高 15×深 10mm、10°)", "lol_dsl": "dovetail_pair(20, 15, 10, 0)" },
-        { "id": "dovetail_female_20", "label": "アリ継ぎ メス (受け側 +0.3 clearance)", "lol_dsl": "dovetail_pair(20, 15, 10, 1)" },
-        { "id": "profile_2020_100", "label": "アルミプロファイル 2020 × 100mm", "lol_dsl": "profile_extrusion(20, 100)" },
-        { "id": "profile_3030_100", "label": "アルミプロファイル 3030 × 100mm", "lol_dsl": "profile_extrusion(30, 100)" },
-        { "id": "snap_fit_standard", "label": "スナップフィット cantilever PLA 標準 (20×5×2、hook 1)", "lol_dsl": "snap_fit_pair(20, 5, 2, 1)" },
-        { "id": "boss_array_m3_2x2", "label": "Boss array M3×4 (2×2 pitch20 高10 板厚 2mm)", "lol_dsl": "boss_array(2, 2, 3, 10, 20, 2)" },
-        { "id": "boss_array_m4_3x3", "label": "Boss array M4×9 (3×3 pitch25 高15 板厚 3mm)", "lol_dsl": "boss_array(3, 3, 4, 15, 25, 3)" },
-        { "id": "bearing_608_press", "label": "軸受マウント 608ZZ 圧入 (Ø22×W7、板厚 5mm、スケボー/スピナー)", "lol_dsl": "bearing_seat(22, 5, 0)" },
-        { "id": "bearing_608_slip", "label": "軸受マウント 608ZZ はめ込み (Ø22×W7、簡易組立)", "lol_dsl": "bearing_seat(22, 5, 1)" },
-        { "id": "bearing_688_press", "label": "軸受マウント 688ZZ 圧入 (Ø16×W5、小型モーター)", "lol_dsl": "bearing_seat(16, 4, 0)" }
+        {
+          "id": "t_slot_bracket_20",
+          "label": "2020 T-slot ブラケット 標準 (20×20×20mm、M5 CB)",
+          "lol_dsl": "t_slot_bracket_2020(20, 20)"
+        },
+        {
+          "id": "t_slot_bracket_40",
+          "label": "2020 T-slot ブラケット 大型 (40×40×40mm、M5 CB)",
+          "lol_dsl": "t_slot_bracket_2020(40, 40)"
+        },
+        {
+          "id": "raspi_pi4b_vesa",
+          "label": "Raspberry Pi 4B/5 マウント板 (58×49 M2.5 + VESA)",
+          "lol_dsl": "raspi_mount_plate(4, 4)"
+        },
+        {
+          "id": "raspi_pi5_bare",
+          "label": "Raspberry Pi 5 マウント板 (58×49 M2.5 のみ)",
+          "lol_dsl": "raspi_mount_plate(5, 0)"
+        },
+        {
+          "id": "raspi_zero_bare",
+          "label": "Raspberry Pi Zero マウント板 (58×23 M2.5)",
+          "lol_dsl": "raspi_mount_plate(0, 0)"
+        },
+        {
+          "id": "heat_set_m3_2x2",
+          "label": "Heat-set insert grid M3×4 (2×2 pitch20 板厚 6mm)",
+          "lol_dsl": "heat_set_array(2, 2, 3, 20, 6)"
+        },
+        {
+          "id": "heat_set_m4_3x3",
+          "label": "Heat-set insert grid M4×9 (3×3 pitch25 板厚 8mm)",
+          "lol_dsl": "heat_set_array(3, 3, 4, 25, 8)"
+        },
+        {
+          "id": "flange_od80_m5_4",
+          "label": "フランジ Φ80 M5×4 (板厚 6mm、PCD 56)",
+          "lol_dsl": "flange_mount(80, 5, 4)"
+        },
+        {
+          "id": "flange_od100_m6_6",
+          "label": "フランジ Φ100 M6×6 (板厚 6mm、PCD 70)",
+          "lol_dsl": "flange_mount(100, 6, 6)"
+        },
+        {
+          "id": "dovetail_male_20",
+          "label": "アリ継ぎ オス (底辺 20×高 15×深 10mm、10°)",
+          "lol_dsl": "dovetail_pair(20, 15, 10, 0)"
+        },
+        {
+          "id": "dovetail_female_20",
+          "label": "アリ継ぎ メス (受け側 +0.3 clearance)",
+          "lol_dsl": "dovetail_pair(20, 15, 10, 1)"
+        },
+        {
+          "id": "profile_2020_100",
+          "label": "アルミプロファイル 2020 × 100mm",
+          "lol_dsl": "profile_extrusion(20, 100)"
+        },
+        {
+          "id": "profile_3030_100",
+          "label": "アルミプロファイル 3030 × 100mm",
+          "lol_dsl": "profile_extrusion(30, 100)"
+        },
+        {
+          "id": "snap_fit_standard",
+          "label": "スナップフィット cantilever PLA 標準 (20×5×2、hook 1)",
+          "lol_dsl": "snap_fit_pair(20, 5, 2, 1)"
+        },
+        {
+          "id": "boss_array_m3_2x2",
+          "label": "Boss array M3×4 (2×2 pitch20 高10 板厚 2mm)",
+          "lol_dsl": "boss_array(2, 2, 3, 10, 20, 2)"
+        },
+        {
+          "id": "boss_array_m4_3x3",
+          "label": "Boss array M4×9 (3×3 pitch25 高15 板厚 3mm)",
+          "lol_dsl": "boss_array(3, 3, 4, 15, 25, 3)"
+        },
+        {
+          "id": "bearing_608_press",
+          "label": "軸受マウント 608ZZ 圧入 (Ø22×W7、板厚 5mm、スケボー/スピナー)",
+          "lol_dsl": "bearing_seat(22, 5, 0)"
+        },
+        {
+          "id": "bearing_608_slip",
+          "label": "軸受マウント 608ZZ はめ込み (Ø22×W7、簡易組立)",
+          "lol_dsl": "bearing_seat(22, 5, 1)"
+        },
+        {
+          "id": "bearing_688_press",
+          "label": "軸受マウント 688ZZ 圧入 (Ø16×W5、小型モーター)",
+          "lol_dsl": "bearing_seat(16, 4, 0)"
+        }
       ]
     },
     {
-      "name": "家具 (Flat-pack Furniture、2-tier structure 移植 domain 1)",
+      "name": "機械要素 building block (Sprint 22 Phase X.2、LLM 組合せ用 低レベル primitive demo)",
       "presets": [
-        { "id": "cable_grommet_60", "label": "配線通しグロメット 標準 (Ø60×15mm、デスク Φ60 穴対応)", "lol_dsl": "cable_grommet(60, 15)" },
-        { "id": "cable_grommet_80", "label": "配線通しグロメット 大型 (Ø80×20mm、heavy cable)", "lol_dsl": "cable_grommet(80, 20)" }
+        {
+          "id": "phaseX2_screw_hole_m4_demo",
+          "label": "demo: M4 貫通穴 φ4.2 深 12mm (cylinder single)",
+          "lol_dsl": "screw_hole(4, 12)"
+        },
+        {
+          "id": "phaseX2_pi_m25_hole_demo",
+          "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm",
+          "lol_dsl": "screw_hole(2.5, 8)"
+        },
+        {
+          "id": "phaseX2_m4_bolted_plate_demo",
+          "label": "demo: M4 貫通穴 1 個板 60×5×60 (subtract 組合せ例、Z-up 床置き)",
+          "lol_dsl": "rotate(90, 0, 0, subtract(rounded_box(30, 2.5, 30, 3), screw_hole(4, 15)))"
+        },
+        {
+          "id": "phaseX2_pi_zero_m2_hole_demo",
+          "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm",
+          "lol_dsl": "screw_hole(2, 6)"
+        },
+        {
+          "id": "phaseX2_bolt_m5_demo",
+          "label": "demo: M5 ボルト実体 20mm 可視化 (bolt primitive)",
+          "lol_dsl": "bolt(5, 20)"
+        },
+        {
+          "id": "phaseX2_rack_shelf_200_5notch",
+          "label": "demo: 棚受けレール 200×5×30 Ø6 notch × 5 (mount raw)",
+          "lol_dsl": "rack_shelf(200, 5, 30, 25, 6, 2)"
+        },
+        {
+          "id": "phaseX2_rack_shelf_400_7notch",
+          "label": "demo: 棚受けレール 400×6×40 Ø8 notch × 7 (大型)",
+          "lol_dsl": "rack_shelf(400, 6, 40, 35, 8, 3)"
+        },
+        {
+          "id": "phaseX2_dowel_hole_8_15_demo",
+          "label": "demo: 家具 Ø8 dowel 穴 深 15mm (家具 flat-pack)",
+          "lol_dsl": "dowel_hole(8, 15)"
+        },
+        {
+          "id": "phaseX2_wood_pilot_4_softwood_demo",
+          "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)",
+          "lol_dsl": "wood_screw_pilot(4, 0)"
+        },
+        {
+          "id": "phaseX2_jst_ph_4pin_demo",
+          "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm)",
+          "lol_dsl": "jst_ph_slot(4)"
+        }
       ]
     },
     {
-      "name": "建築 (Interior Mount、2-tier structure 移植 domain 2)",
+      "name": "電子機器ケース (Sprint 7、electronics-enclosure.md 由来 3 archetype)",
       "presets": [
-        { "id": "curtain_bracket_25", "label": "カーテンレール壁掛けブラケット 標準 (Ø25、突出 120mm、M4)", "lol_dsl": "curtain_rod_bracket(25, 120)" },
-        { "id": "curtain_bracket_30", "label": "カーテンレール壁掛けブラケット 大型 (Ø30、突出 150mm、M5)", "lol_dsl": "curtain_rod_bracket(30, 150)" }
+        {
+          "id": "raspi_5_cooler",
+          "label": "RPi 5 ケース (Active Cooler 25mm)",
+          "lol_dsl": "raspi_case(85, 56, 25)"
+        },
+        {
+          "id": "raspi_5_bare",
+          "label": "RPi 5 ケース (bare 15mm)",
+          "lol_dsl": "raspi_case(85, 56, 15)"
+        },
+        {
+          "id": "raspi_zero_2w",
+          "label": "RPi Zero 2W ケース",
+          "lol_dsl": "raspi_case(65, 30, 15)"
+        },
+        {
+          "id": "esp32_devkit",
+          "label": "ESP32 DevKit V1 ケース",
+          "lol_dsl": "esp32_enclosure(51.6, 28.4, 15)"
+        },
+        {
+          "id": "arduino_uno",
+          "label": "Arduino Uno R3 ケース",
+          "lol_dsl": "esp32_enclosure(68.6, 53.4, 20)"
+        },
+        {
+          "id": "arduino_nano",
+          "label": "Arduino Nano ケース",
+          "lol_dsl": "esp32_enclosure(45, 18, 12)"
+        },
+        {
+          "id": "battery_18650_4",
+          "label": "18650 バッテリー 4 cell (through)",
+          "lol_dsl": "battery_18650_holder(4, 2.5, 0)"
+        },
+        {
+          "id": "battery_18650_2",
+          "label": "18650 バッテリー 2 cell (through)",
+          "lol_dsl": "battery_18650_holder(2, 2.5, 0)"
+        }
       ]
     },
     {
       "name": "電子工作 (Electronics Hobbyist、2-tier structure 移植 domain 3、Arduino/Drone/Robotics)",
       "presets": [
-        { "id": "arduino_uno_bare", "label": "Arduino Uno マウント板 bare (68.6×53.4mm 4 M3)", "lol_dsl": "arduino_mount_plate(1, 0)" },
-        { "id": "arduino_uno_vesa", "label": "Arduino Uno マウント板 + VESA 75 (M4 4 隅追加)", "lol_dsl": "arduino_mount_plate(1, 4)" },
-        { "id": "arduino_nano_bare", "label": "Arduino Nano マウント板 bare (43.2×17.8mm 4 M3)", "lol_dsl": "arduino_mount_plate(3, 0)" },
-        { "id": "pixhawk_45_solid", "label": "Pixhawk 4/6C マウント 45×45mm solid (drone autopilot、M3)", "lol_dsl": "pixhawk_mount(45, 0)" },
-        { "id": "pixhawk_45_damper", "label": "Pixhawk 45×45mm damper 付 (Ø10 vibration isolation)", "lol_dsl": "pixhawk_mount(45, 1)" },
-        { "id": "pixhawk_30_mini", "label": "Pixhawk mini 30×30mm solid (コンパクト機体)", "lol_dsl": "pixhawk_mount(30, 0)" },
-        { "id": "servo_sg90", "label": "サーボマウント SG90 mini (23×12.5mm、M2 x 2)", "lol_dsl": "servo_mount(1)" },
-        { "id": "servo_mg996r", "label": "サーボマウント MG996R standard (40.7×19.7mm、M3 x 2)", "lol_dsl": "servo_mount(2)" }
+        {
+          "id": "arduino_uno_bare",
+          "label": "Arduino Uno マウント板 bare (68.6×53.4mm 4 M3)",
+          "lol_dsl": "arduino_mount_plate(1, 0)"
+        },
+        {
+          "id": "arduino_uno_vesa",
+          "label": "Arduino Uno マウント板 + VESA 75 (M4 4 隅追加)",
+          "lol_dsl": "arduino_mount_plate(1, 4)"
+        },
+        {
+          "id": "arduino_nano_bare",
+          "label": "Arduino Nano マウント板 bare (43.2×17.8mm 4 M3)",
+          "lol_dsl": "arduino_mount_plate(3, 0)"
+        },
+        {
+          "id": "pixhawk_45_solid",
+          "label": "Pixhawk 4/6C マウント 45×45mm solid (drone autopilot、M3)",
+          "lol_dsl": "pixhawk_mount(45, 0)"
+        },
+        {
+          "id": "pixhawk_45_damper",
+          "label": "Pixhawk 45×45mm damper 付 (Ø10 vibration isolation)",
+          "lol_dsl": "pixhawk_mount(45, 1)"
+        },
+        {
+          "id": "pixhawk_30_mini",
+          "label": "Pixhawk mini 30×30mm solid (コンパクト機体)",
+          "lol_dsl": "pixhawk_mount(30, 0)"
+        },
+        {
+          "id": "servo_sg90",
+          "label": "サーボマウント SG90 mini (23×12.5mm、M2 x 2)",
+          "lol_dsl": "servo_mount(1)"
+        },
+        {
+          "id": "servo_mg996r",
+          "label": "サーボマウント MG996R standard (40.7×19.7mm、M3 x 2)",
+          "lol_dsl": "servo_mount(2)"
+        }
+      ]
+    },
+    {
+      "name": "バスルーム/ガレージ (Sprint 8、organizer-bathroom-garage.md 由来 3 archetype)",
+      "presets": [
+        {
+          "id": "toothbrush_manual_4",
+          "label": "歯ブラシホルダー manual 4本 (Ø15)",
+          "lol_dsl": "toothbrush_holder(4, 15, 70)"
+        },
+        {
+          "id": "toothbrush_electric_2",
+          "label": "歯ブラシホルダー electric 2本 (Ø40)",
+          "lol_dsl": "toothbrush_holder(2, 40, 80)"
+        },
+        {
+          "id": "drill_bit_metric_11",
+          "label": "ドリルビット Metric 3-13mm × 11",
+          "lol_dsl": "drill_bit_holder(3, 13, 11)"
+        },
+        {
+          "id": "drill_bit_small_19",
+          "label": "ドリルビット 1-10mm × 19 (小径セット)",
+          "lol_dsl": "drill_bit_holder(1, 10, 19)"
+        },
+        {
+          "id": "pliers_standard_6",
+          "label": "プライヤーラック 6 slot (W15)",
+          "lol_dsl": "pliers_rack(6, 15, 60)"
+        },
+        {
+          "id": "pliers_large_4",
+          "label": "プライヤーラック 4 slot (W25、tongue-groove)",
+          "lol_dsl": "pliers_rack(4, 25, 80)"
+        }
+      ]
+    },
+    {
+      "name": "キッチン (Sprint 9、organizer-cable-kitchen.md 由来 3 archetype)",
+      "presets": [
+        {
+          "id": "spice_rack_std_6",
+          "label": "スパイスラック std 6 jars (Ø48×H100)",
+          "lol_dsl": "spice_rack(6, 48, 100)"
+        },
+        {
+          "id": "spice_rack_large_8",
+          "label": "スパイスラック large 8 jars (Ø52×H120)",
+          "lol_dsl": "spice_rack(8, 52, 120)"
+        },
+        {
+          "id": "egg_tray_12",
+          "label": "卵トレー 4×3 (12-egg standard)",
+          "lol_dsl": "egg_tray(3, 4, 18)"
+        },
+        {
+          "id": "egg_tray_6",
+          "label": "卵トレー 3×2 (6-egg compact)",
+          "lol_dsl": "egg_tray(2, 3, 18)"
+        },
+        {
+          "id": "utensil_caddy_4",
+          "label": "ツールキャディ 4 compartment (Ø65×H130)",
+          "lol_dsl": "utensil_caddy(4, 65, 130)"
+        },
+        {
+          "id": "utensil_caddy_small_3",
+          "label": "ツールキャディ 3 compartment (Ø50×H120)",
+          "lol_dsl": "utensil_caddy(3, 50, 120)"
+        }
+      ]
+    },
+    {
+      "name": "3D プリンタ周辺 (Sprint 10、organizer-printer-modular.md 由来 3 archetype)",
+      "presets": [
+        {
+          "id": "spool_holder_1kg",
+          "label": "スプールホルダー 1kg (Ø200×W68×bore52)",
+          "lol_dsl": "filament_spool_holder(200, 68, 52)"
+        },
+        {
+          "id": "spool_holder_250g",
+          "label": "スプールホルダー 250g (Ø125×W45×bore30)",
+          "lol_dsl": "filament_spool_holder(125, 45, 30)"
+        },
+        {
+          "id": "nozzle_m6_8",
+          "label": "ノズルホルダー M6 × 8 (E3D/Bambu)",
+          "lol_dsl": "nozzle_holder(8, 8, 6)"
+        },
+        {
+          "id": "nozzle_m6_12",
+          "label": "ノズルホルダー M6 × 12 (large set)",
+          "lol_dsl": "nozzle_holder(12, 8, 6)"
+        },
+        {
+          "id": "plate_rack_5",
+          "label": "ビルドプレートラック 5 slot × H200 (Ender/Bambu 235)",
+          "lol_dsl": "build_plate_rack(5, 15, 200)"
+        },
+        {
+          "id": "plate_rack_8",
+          "label": "ビルドプレートラック 8 slot × H250 (Bambu 256)",
+          "lol_dsl": "build_plate_rack(8, 15, 250)"
+        }
+      ]
+    },
+    {
+      "name": "引き出し/壁 (Sprint 11、organizer-drawer-wall.md 由来 3 archetype)",
+      "presets": [
+        {
+          "id": "cutlery_tray_std_3",
+          "label": "カトラリートレー 3 slot × L220 (fork/knife/spoon)",
+          "lol_dsl": "cutlery_tray(3, 35, 220)"
+        },
+        {
+          "id": "cutlery_tray_wide_4",
+          "label": "カトラリートレー 4 slot × W50×L250 (wide、spoon 込)",
+          "lol_dsl": "cutlery_tray(4, 50, 250)"
+        },
+        {
+          "id": "pill_weekly_14",
+          "label": "薬箱 weekly AM/PM (7×2 = 14 cell)",
+          "lol_dsl": "pill_organizer(7, 2, 20)"
+        },
+        {
+          "id": "pill_daily_3",
+          "label": "薬箱 daily (3×1 = 3 cell)",
+          "lol_dsl": "pill_organizer(3, 1, 15)"
+        },
+        {
+          "id": "magnet_knife_rail_8",
+          "label": "マグネットバー 8 magnet (kitchen knife rail)",
+          "lol_dsl": "magnetic_strip(8, 6, 30)"
+        },
+        {
+          "id": "magnet_tool_large_12",
+          "label": "マグネットバー 12 magnet × Ø10 (large tool rail)",
+          "lol_dsl": "magnetic_strip(12, 10, 40)"
+        }
+      ]
+    },
+    {
+      "name": "家具 (Flat-pack Furniture、2-tier structure 移植 domain 1)",
+      "presets": [
+        {
+          "id": "cable_grommet_60",
+          "label": "配線通しグロメット 標準 (Ø60×15mm、デスク Φ60 穴対応)",
+          "lol_dsl": "cable_grommet(60, 15)"
+        },
+        {
+          "id": "cable_grommet_80",
+          "label": "配線通しグロメット 大型 (Ø80×20mm、heavy cable)",
+          "lol_dsl": "cable_grommet(80, 20)"
+        }
+      ]
+    },
+    {
+      "name": "建築 (Interior Mount、2-tier structure 移植 domain 2)",
+      "presets": [
+        {
+          "id": "curtain_bracket_25",
+          "label": "カーテンレール壁掛けブラケット 標準 (Ø25、突出 120mm、M4)",
+          "lol_dsl": "curtain_rod_bracket(25, 120)"
+        },
+        {
+          "id": "curtain_bracket_30",
+          "label": "カーテンレール壁掛けブラケット 大型 (Ø30、突出 150mm、M5)",
+          "lol_dsl": "curtain_rod_bracket(30, 150)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス (Sprint 12、bathroom/kitchen/garage 混合 3 archetype)",
+      "presets": [
+        {
+          "id": "hairdryer_dyson",
+          "label": "ドライヤーホルダー Dyson Ø85×D110",
+          "lol_dsl": "hairdryer_holder(85, 110, 3)"
+        },
+        {
+          "id": "hairdryer_std_60",
+          "label": "ドライヤーホルダー 汎用 Ø60×D100",
+          "lol_dsl": "hairdryer_holder(60, 100, 3)"
+        },
+        {
+          "id": "kcup_4x3",
+          "label": "K-Cup ホルダー 4×3 = 12 (K-Cup Ø53)",
+          "lol_dsl": "kcup_holder(3, 4, 53)"
+        },
+        {
+          "id": "nespresso_5x2",
+          "label": "Nespresso ホルダー 5×2 = 10 (Ø39)",
+          "lol_dsl": "kcup_holder(2, 5, 39)"
+        },
+        {
+          "id": "hex_key_metric_9",
+          "label": "Allen key Metric 9-piece (1.5-10mm)",
+          "lol_dsl": "hex_key_holder(9, 1.5, 10)"
+        },
+        {
+          "id": "hex_key_sae_12",
+          "label": "Allen key SAE 12-piece (1.6-9.5mm)",
+          "lol_dsl": "hex_key_holder(12, 1.6, 9.5)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 2 (Sprint 13、kitchen/drawer/bathroom 新 pattern)",
+      "presets": [
+        {
+          "id": "wrap_holder_12inch",
+          "label": "Wrap ホルダー 12\" foil (Ø55×W305)",
+          "lol_dsl": "wrap_holder(55, 305, 3)"
+        },
+        {
+          "id": "wrap_holder_restaurant",
+          "label": "Wrap ホルダー 18\" restaurant (Ø55×W457)",
+          "lol_dsl": "wrap_holder(55, 457, 3)"
+        },
+        {
+          "id": "sock_divider_4",
+          "label": "靴下 divider 4 cell (W80×H89)",
+          "lol_dsl": "sock_divider(4, 80, 89)"
+        },
+        {
+          "id": "underwear_divider_4",
+          "label": "下着 divider 4 cell (W100×H89)",
+          "lol_dsl": "sock_divider(4, 100, 89)"
+        },
+        {
+          "id": "soap_tray_dual",
+          "label": "石鹸トレー dual bottle (L200×W90×6 drain)",
+          "lol_dsl": "soap_tray(200, 90, 6)"
+        },
+        {
+          "id": "soap_tray_bar",
+          "label": "石鹸トレー bar soap (L100×W70×4 drain)",
+          "lol_dsl": "soap_tray(100, 70, 4)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 3 (Sprint 14、slot pattern 変種 3 archetype)",
+      "presets": [
+        {
+          "id": "razor_cartridge",
+          "label": "カミソリ Mach3/Fusion cartridge (W12×D22×M4)",
+          "lol_dsl": "razor_holder(12, 22, 4.5)"
+        },
+        {
+          "id": "razor_safety",
+          "label": "カミソリ safety razor (W10×D25×M4)",
+          "lol_dsl": "razor_holder(10, 25, 4.5)"
+        },
+        {
+          "id": "chopstick_adult_4",
+          "label": "箸 adult 4 pair (W13×L260)",
+          "lol_dsl": "chopstick_holder(4, 13, 260)"
+        },
+        {
+          "id": "chopstick_cooking_2",
+          "label": "箸 cooking 2 pair (W15×L310)",
+          "lol_dsl": "chopstick_holder(2, 15, 310)"
+        },
+        {
+          "id": "swatch_standard_32",
+          "label": "スウォッチ standard card 8×4 (W32×H70)",
+          "lol_dsl": "swatch_holder(8, 4, 32)"
+        },
+        {
+          "id": "swatch_mini_24",
+          "label": "スウォッチ small square 8×5 (W24×H24)",
+          "lol_dsl": "swatch_holder(8, 5, 24)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 4 (Sprint 15、bathroom + printer + garage 各 1)",
+      "presets": [
+        {
+          "id": "tp_standard",
+          "label": "TP ホルダー standard (Ø40×W110×板5mm)",
+          "lol_dsl": "tp_holder(40, 110, 5)"
+        },
+        {
+          "id": "tp_thick",
+          "label": "TP ホルダー thick backplate (Ø40×W110×板8mm)",
+          "lol_dsl": "tp_holder(40, 110, 8)"
+        },
+        {
+          "id": "sd_full_4x4",
+          "label": "SD カード full 4×4 (W24×H32)",
+          "lol_dsl": "sd_card_holder(4, 4, 24)"
+        },
+        {
+          "id": "sd_micro_5x5",
+          "label": "SD カード microSD 5×5 (W15×H11)",
+          "lol_dsl": "sd_card_holder(5, 5, 15)"
+        },
+        {
+          "id": "driver_standard_8",
+          "label": "ドライバーラック standard 8 slot (Ø25×H100)",
+          "lol_dsl": "driver_rack(8, 25, 100)"
+        },
+        {
+          "id": "driver_precision_12",
+          "label": "ドライバーラック precision 12 slot (Ø15×H80)",
+          "lol_dsl": "driver_rack(12, 15, 80)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 5 (Sprint 16、bathroom + kitchen + garage 各 1)",
+      "presets": [
+        {
+          "id": "cotton_standard",
+          "label": "コットン ディスペンサー standard (80個 × Ø90 × H100)",
+          "lol_dsl": "cotton_dispenser(80, 90, 100)"
+        },
+        {
+          "id": "cotton_large",
+          "label": "コットン ディスペンサー large (150個 × Ø110 × H130)",
+          "lol_dsl": "cotton_dispenser(150, 110, 130)"
+        },
+        {
+          "id": "sink_caddy_standard",
+          "label": "スポンジホルダー standard (L200×W100×8 drain)",
+          "lol_dsl": "sink_caddy(200, 100, 8)"
+        },
+        {
+          "id": "sink_caddy_large",
+          "label": "スポンジホルダー large sink (L280×W130×12 drain)",
+          "lol_dsl": "sink_caddy(280, 130, 12)"
+        },
+        {
+          "id": "clamp_standard_5",
+          "label": "クランプラック standard (5 hook × W30 × H150)",
+          "lol_dsl": "clamp_rack(5, 30, 150)"
+        },
+        {
+          "id": "clamp_workshop_8",
+          "label": "クランプラック workshop (8 hook × W50 × H250)",
+          "lol_dsl": "clamp_rack(8, 50, 250)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 6 (Sprint 17、printer + electronics + drawer 各 1)",
+      "presets": [
+        {
+          "id": "dry_box_2x2",
+          "label": "dry box 4 spool 2×2 (1kg PLA × Ø68)",
+          "lol_dsl": "dry_box(2, 2, 68)"
+        },
+        {
+          "id": "dry_box_2x1",
+          "label": "dry box 2 spool 2×1 (Ø68)",
+          "lol_dsl": "dry_box(2, 1, 68)"
+        },
+        {
+          "id": "outdoor_arduino",
+          "label": "IP54 筐体 Arduino UNO (120×80×45)",
+          "lol_dsl": "outdoor_enclosure(120, 80, 45)"
+        },
+        {
+          "id": "outdoor_raspi5",
+          "label": "IP54 筐体 Raspi 5 (100×70×35)",
+          "lol_dsl": "outdoor_enclosure(100, 70, 35)"
+        },
+        {
+          "id": "jewelry_3_tier",
+          "label": "ジュエリー スタンド 3 tier (Ø100×H100)",
+          "lol_dsl": "jewelry_stand(3, 100, 100)"
+        },
+        {
+          "id": "jewelry_4_tier_large",
+          "label": "ジュエリー スタンド 4 tier large (Ø130×H150)",
+          "lol_dsl": "jewelry_stand(4, 130, 150)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 7 (Sprint 18、electronics + kitchen + garage 各 1、multi-component)",
+      "presets": [
+        {
+          "id": "phone_dock_standard",
+          "label": "充電ドック standard (80×100×Ø8 貫通)",
+          "lol_dsl": "phone_dock(80, 100, 8)"
+        },
+        {
+          "id": "phone_dock_tablet",
+          "label": "充電ドック tablet (120×150×Ø10 貫通)",
+          "lol_dsl": "phone_dock(120, 150, 10)"
+        },
+        {
+          "id": "cutting_board_3",
+          "label": "まな板ラック standard (3 slot × W12 × H220)",
+          "lol_dsl": "cutting_board_rack(3, 12, 220)"
+        },
+        {
+          "id": "cutting_board_4_large",
+          "label": "まな板ラック large (4 slot × W20 × H280)",
+          "lol_dsl": "cutting_board_rack(4, 20, 280)"
+        },
+        {
+          "id": "tape_packing_standard",
+          "label": "テープ dispenser 包装用 (Ø76×W50)",
+          "lol_dsl": "tape_dispenser(76, 50, 3)"
+        },
+        {
+          "id": "tape_masking",
+          "label": "テープ dispenser 養生 (Ø90×W48)",
+          "lol_dsl": "tape_dispenser(90, 48, 3)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 8 (Sprint 19、bathroom + tools + kitchen 各 1、multi-component)",
+      "presets": [
+        {
+          "id": "shower_2tier",
+          "label": "シャワー棚 standard 2 tier (L250×D120)",
+          "lol_dsl": "shower_caddy(2, 250, 120)"
+        },
+        {
+          "id": "shower_3tier_large",
+          "label": "シャワー棚 large 3 tier (L300×D150)",
+          "lol_dsl": "shower_caddy(3, 300, 150)"
+        },
+        {
+          "id": "caliper_standard_3",
+          "label": "ノギスホルダー standard 3 (150mm × 3 個)",
+          "lol_dsl": "caliper_holder(150, 40, 3)"
+        },
+        {
+          "id": "caliper_large_6",
+          "label": "ノギスホルダー large 6 (200mm × 6 個)",
+          "lol_dsl": "caliper_holder(200, 50, 6)"
+        },
+        {
+          "id": "bag_clip_8",
+          "label": "袋クリップ整理 standard 8 slot (W8×H100)",
+          "lol_dsl": "bag_clip_org(8, 8, 100)"
+        },
+        {
+          "id": "bag_clip_12_large",
+          "label": "袋クリップ整理 large 12 slot (W10×H120)",
+          "lol_dsl": "bag_clip_org(12, 10, 120)"
+        }
+      ]
+    },
+    {
+      "name": "ミックス 9 (Sprint 20、kitchen+electronics 100%完走 + drawer)",
+      "presets": [
+        {
+          "id": "can_rack_coke_2tier",
+          "label": "缶ラック Coke 2 tier (Ø66×10deg)",
+          "lol_dsl": "can_rack(2, 66, 10)"
+        },
+        {
+          "id": "can_rack_short_3tier",
+          "label": "缶ラック short 3 tier (Ø55×12deg)",
+          "lol_dsl": "can_rack(3, 55, 12)"
+        },
+        {
+          "id": "led_hub_smart",
+          "label": "LED hub 筐体 smart (80×60×30)",
+          "lol_dsl": "led_hub_box(80, 60, 30)"
+        },
+        {
+          "id": "led_hub_gateway",
+          "label": "LED hub 筐体 IoT gateway (120×80×50)",
+          "lol_dsl": "led_hub_box(120, 80, 50)"
+        },
+        {
+          "id": "makeup_standard_3x4",
+          "label": "メイク整理 standard (3×4 × □45)",
+          "lol_dsl": "makeup_organizer(3, 4, 45)"
+        },
+        {
+          "id": "makeup_brush_4x6",
+          "label": "メイク整理 brush rack (4×6 × □30)",
+          "lol_dsl": "makeup_organizer(4, 6, 30)"
+        }
       ]
     }
   ]
