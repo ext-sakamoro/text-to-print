@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-31T03:54:48Z",
+  "version": "2026-08-31T10:30:00Z",
   "categories": [
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
@@ -306,12 +306,12 @@
       "presets": [
         {
           "id": "phaseX2_screw_hole_m4_demo",
-          "label": "demo: M4 貫通穴 φ4.2 深 12mm (cylinder single)",
+          "label": "demo: M4 貫通穴 φ4.2 深 12mm (cylinder single、subtract で使う素材)",
           "lol_dsl": "screw_hole(4, 12)"
         },
         {
           "id": "phaseX2_pi_m25_hole_demo",
-          "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm",
+          "label": "demo: Raspberry Pi M2.5 clearance 穴 φ2.7 深 8mm (subtract で使う素材)",
           "lol_dsl": "screw_hole(2.5, 8)"
         },
         {
@@ -321,7 +321,7 @@
         },
         {
           "id": "phaseX2_pi_zero_m2_hole_demo",
-          "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm",
+          "label": "demo: Pi Zero M2 mount 穴 φ2.2 深 6mm (subtract で使う素材)",
           "lol_dsl": "screw_hole(2, 6)"
         },
         {
@@ -341,17 +341,17 @@
         },
         {
           "id": "phaseX2_dowel_hole_8_15_demo",
-          "label": "demo: 家具 Ø8 dowel 穴 深 15mm (家具 flat-pack)",
+          "label": "demo: 家具 Ø8 dowel 穴 (実穴 Ø8.1、+0.1 glue 余裕、深 15mm、家具 flat-pack、subtract で使う素材)",
           "lol_dsl": "dowel_hole(8, 15)"
         },
         {
           "id": "phaseX2_wood_pilot_4_softwood_demo",
-          "label": "demo: 木ネジ下穴 #8 softwood (dia 4mm × 0.7 = 2.8mm)",
+          "label": "demo: 木ネジ下穴 #8 softwood (Ø2.8 × 深 20mm、dia 4×0.7、subtract で使う素材)",
           "lol_dsl": "wood_screw_pilot(4, 0)"
         },
         {
           "id": "phaseX2_jst_ph_4pin_demo",
-          "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm)",
+          "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm、subtract で使う素材)",
           "lol_dsl": "jst_ph_slot(4)"
         }
       ]
