@@ -1429,6 +1429,39 @@ fn show_prompt_customizer(ui: &mut egui::Ui, state: &mut AppState, is_generating
                 show_led_hub_box_customizer(ui, state);
                 ui.separator();
                 show_makeup_organizer_customizer(ui, state);
+                // ── Sprint 21-22 + Multi-domain 16 archetype (2026-08-31、Task A) ──
+                ui.separator();
+                show_vesa_mount_customizer(ui, state);
+                ui.separator();
+                show_l_bracket_customizer(ui, state);
+                ui.separator();
+                show_t_slot_bracket_2020_customizer(ui, state);
+                ui.separator();
+                show_raspi_mount_plate_customizer(ui, state);
+                ui.separator();
+                show_heat_set_array_customizer(ui, state);
+                ui.separator();
+                show_flange_mount_customizer(ui, state);
+                ui.separator();
+                show_dovetail_pair_customizer(ui, state);
+                ui.separator();
+                show_profile_extrusion_customizer(ui, state);
+                ui.separator();
+                show_snap_fit_pair_customizer(ui, state);
+                ui.separator();
+                show_boss_array_customizer(ui, state);
+                ui.separator();
+                show_bearing_seat_customizer(ui, state);
+                ui.separator();
+                show_cable_grommet_customizer(ui, state);
+                ui.separator();
+                show_curtain_rod_bracket_customizer(ui, state);
+                ui.separator();
+                show_arduino_mount_plate_customizer(ui, state);
+                ui.separator();
+                show_pixhawk_mount_customizer(ui, state);
+                ui.separator();
+                show_servo_mount_customizer(ui, state);
             });
         },
     );
@@ -3706,5 +3739,488 @@ fn show_makeup_organizer_customizer(ui: &mut egui::Ui, state: &mut AppState) {
         start_generation_from_lol(state, m_copy.to_lol(), &label);
     }
 
+    ui.add_space(2.0);
+}
+
+// ── Sprint 21-22 + Multi-domain 16 archetype customizer (2026-08-31、Task A) ──
+
+fn show_vesa_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🖥 VESA マウント板 (75/100 規格、4 隅穴)").strong());
+    let g = &mut state.customizer_state.vesa_mount;
+    ui.horizontal(|ui| {
+        ui.label("VESA サイズ (mm):");
+        ui.add(egui::Slider::new(&mut g.vesa_size, 50.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("板厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.plate_thickness, 3.0..=10.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("穴規格 M:");
+        ui.add(egui::Slider::new(&mut g.hole_m_size, 3.0..=8.0).step_by(1.0));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "VESA {}×{} M{} 座ぐり (板厚 {}mm)",
+        g_copy.vesa_size, g_copy.vesa_size, g_copy.hole_m_size, g_copy.plate_thickness
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_l_bracket_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔩 L 型ブラケット (両 arm ネジ穴列)").strong());
+    let g = &mut state.customizer_state.l_bracket;
+    ui.horizontal(|ui| {
+        ui.label("水平 arm 長 (mm):");
+        ui.add(egui::Slider::new(&mut g.arm_width, 30.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("垂直 arm 高 (mm):");
+        ui.add(egui::Slider::new(&mut g.arm_height, 30.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("板厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.plate_thickness, 2.0..=8.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("穴規格 M:");
+        ui.add(egui::Slider::new(&mut g.m_size, 3.0..=8.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("穴数/arm:");
+        ui.add(egui::Slider::new(&mut g.holes_per_arm, 1..=4));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "L型ブラケット M{}×{}穴 ({}×{}×{}mm)",
+        g_copy.m_size,
+        g_copy.holes_per_arm,
+        g_copy.arm_width,
+        g_copy.arm_height,
+        g_copy.plate_thickness
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_t_slot_bracket_2020_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔧 2020 T-slot ブラケット (M5 CB)").strong());
+    let g = &mut state.customizer_state.t_slot_bracket_2020;
+    ui.horizontal(|ui| {
+        ui.label("arm 長 (mm):");
+        ui.add(egui::Slider::new(&mut g.arm_size, 20.0..=80.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("depth (mm):");
+        ui.add(egui::Slider::new(&mut g.depth, 20.0..=80.0).step_by(5.0));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "2020 T-slot ブラケット {}×{}mm",
+        g_copy.arm_size, g_copy.depth
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_raspi_mount_plate_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🥧 Raspberry Pi マウント板 (M2.5 pattern)").strong());
+    let g = &mut state.customizer_state.raspi_mount_plate;
+    ui.horizontal(|ui| {
+        ui.label("Pi model:");
+        ui.add(egui::Slider::new(&mut g.model, 0..=5).text("0=Zero, 3=3B+, 4=4B, 5=Pi5"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("VESA 外周穴数:");
+        ui.add(egui::Slider::new(&mut g.extra_m4_holes, 0..=4).text("0=なし, 4=VESA 対応"));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "Raspberry Pi マウント板 model={} extras={}",
+        g_copy.model, g_copy.extra_m4_holes
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_heat_set_array_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🔥 Heat-set insert grid (McMaster/Voxel8)").strong());
+    let g = &mut state.customizer_state.heat_set_array;
+    ui.horizontal(|ui| {
+        ui.label("rows:");
+        ui.add(egui::Slider::new(&mut g.rows, 1..=6));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cols:");
+        ui.add(egui::Slider::new(&mut g.cols, 1..=6));
+    });
+    ui.horizontal(|ui| {
+        ui.label("insert M:");
+        ui.add(egui::Slider::new(&mut g.insert_m, 3.0..=8.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("pitch (mm):");
+        ui.add(egui::Slider::new(&mut g.pitch, 15.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("板厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.base_thickness, 4.0..=12.0).step_by(0.5));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "Heat-set grid M{}×{} ({}×{})",
+        g_copy.insert_m,
+        g_copy.rows * g_copy.cols,
+        g_copy.rows,
+        g_copy.cols
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_flange_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("⚙ フランジマウント (円形、PCD 上に穴)").strong());
+    let g = &mut state.customizer_state.flange_mount;
+    ui.horizontal(|ui| {
+        ui.label("外径 (mm):");
+        ui.add(egui::Slider::new(&mut g.outer_dia, 40.0..=150.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ボルト M:");
+        ui.add(egui::Slider::new(&mut g.bolt_m, 3.0..=8.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("穴個数:");
+        ui.add(egui::Slider::new(&mut g.hole_count, 3..=8));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "フランジ Φ{} M{}×{}",
+        g_copy.outer_dia, g_copy.bolt_m, g_copy.hole_count
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_dovetail_pair_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪵 アリ継ぎ (10° テーパー、male/female)").strong());
+    let g = &mut state.customizer_state.dovetail_pair;
+    ui.horizontal(|ui| {
+        ui.label("底辺幅 (mm):");
+        ui.add(egui::Slider::new(&mut g.base_width, 10.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("高さ (mm):");
+        ui.add(egui::Slider::new(&mut g.height, 8.0..=30.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("深さ (mm):");
+        ui.add(egui::Slider::new(&mut g.depth, 5.0..=30.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("性別:");
+        ui.add(egui::Slider::new(&mut g.gender, 0..=1).text("0=male, 1=female"));
+    });
+    let g_copy = *g;
+    let gender_str = if g_copy.gender == 0 {
+        "オス"
+    } else {
+        "メス"
+    };
+    let label = format!(
+        "アリ継ぎ {} ({}×{}×{}mm)",
+        gender_str, g_copy.base_width, g_copy.height, g_copy.depth
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_profile_extrusion_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("📏 アルミプロファイル (2020 / 3030)").strong());
+    let g = &mut state.customizer_state.profile_extrusion;
+    ui.horizontal(|ui| {
+        ui.label("kind:");
+        ui.add(egui::Slider::new(&mut g.kind, 20..=30).text("20=2020, 30=3030"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("長さ (mm):");
+        ui.add(egui::Slider::new(&mut g.length, 30.0..=500.0).step_by(10.0));
+    });
+    let g_copy = *g;
+    let label = format!("プロファイル {} × {}mm", g_copy.kind, g_copy.length);
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_snap_fit_pair_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪝 スナップフィット cantilever (PLA)").strong());
+    let g = &mut state.customizer_state.snap_fit_pair;
+    ui.horizontal(|ui| {
+        ui.label("梁長 (mm):");
+        ui.add(egui::Slider::new(&mut g.length, 10.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("梁幅 (mm):");
+        ui.add(egui::Slider::new(&mut g.width, 3.0..=10.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("梁厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.thickness, 1.0..=4.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("hook 高 (mm):");
+        ui.add(egui::Slider::new(&mut g.hook_height, 0.5..=2.0).step_by(0.1));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "スナップフィット {}×{}×{} hook{}",
+        g_copy.length, g_copy.width, g_copy.thickness, g_copy.hook_height
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_boss_array_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🏛 Boss array (ネジ受け柱の格子)").strong());
+    let g = &mut state.customizer_state.boss_array;
+    ui.horizontal(|ui| {
+        ui.label("rows:");
+        ui.add(egui::Slider::new(&mut g.rows, 1..=6));
+    });
+    ui.horizontal(|ui| {
+        ui.label("cols:");
+        ui.add(egui::Slider::new(&mut g.cols, 1..=6));
+    });
+    ui.horizontal(|ui| {
+        ui.label("ネジ M:");
+        ui.add(egui::Slider::new(&mut g.screw_m, 3.0..=8.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("boss 高 (mm):");
+        ui.add(egui::Slider::new(&mut g.boss_height, 5.0..=25.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("pitch (mm):");
+        ui.add(egui::Slider::new(&mut g.pitch, 15.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("板厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.base_thickness, 1.0..=6.0).step_by(0.5));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "Boss array M{}×{} ({}×{}) h{}",
+        g_copy.screw_m,
+        g_copy.rows * g_copy.cols,
+        g_copy.rows,
+        g_copy.cols,
+        g_copy.boss_height
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_bearing_seat_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("⚙ 軸受マウント板 (608ZZ/688ZZ/6001/6202)").strong());
+    let g = &mut state.customizer_state.bearing_seat;
+    ui.horizontal(|ui| {
+        ui.label("bearing OD (mm):");
+        ui.add(
+            egui::Slider::new(&mut g.bearing_size, 16.0..=35.0)
+                .step_by(1.0)
+                .text("16=688, 22=608, 28=6001, 35=6202"),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label("板厚 (mm):");
+        ui.add(egui::Slider::new(&mut g.plate_thickness, 3.0..=15.0).step_by(0.5));
+    });
+    ui.horizontal(|ui| {
+        ui.label("style:");
+        ui.add(
+            egui::Slider::new(&mut g.style, 0..=2)
+                .text("0=press-fit, 1=slip fit, 2=through shoulder"),
+        );
+    });
+    let g_copy = *g;
+    let label = format!(
+        "軸受マウント Ø{} 板厚{}mm style{}",
+        g_copy.bearing_size, g_copy.plate_thickness, g_copy.style
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_cable_grommet_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🕳 配線通しグロメット (デスク板穴、家具 flat-pack)").strong());
+    let g = &mut state.customizer_state.cable_grommet;
+    ui.horizontal(|ui| {
+        ui.label("外径 (mm):");
+        ui.add(egui::Slider::new(&mut g.outer_dia, 30.0..=120.0).step_by(5.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("高さ (mm):");
+        ui.add(egui::Slider::new(&mut g.height, 10.0..=40.0).step_by(1.0));
+    });
+    let g_copy = *g;
+    let label = format!("グロメット Ø{}×{}mm", g_copy.outer_dia, g_copy.height);
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_curtain_rod_bracket_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🪟 カーテンレール壁掛けブラケット").strong());
+    let g = &mut state.customizer_state.curtain_rod_bracket;
+    ui.horizontal(|ui| {
+        ui.label("rod 径 (mm):");
+        ui.add(egui::Slider::new(&mut g.rod_dia, 15.0..=40.0).step_by(1.0));
+    });
+    ui.horizontal(|ui| {
+        ui.label("壁からの突出 (mm):");
+        ui.add(egui::Slider::new(&mut g.projection, 80.0..=200.0).step_by(10.0));
+    });
+    let g_copy = *g;
+    let label = format!(
+        "カーテンブラケット Ø{} 突出{}mm",
+        g_copy.rod_dia, g_copy.projection
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_arduino_mount_plate_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🤖 Arduino マウント板 (Uno/Mega/Nano)").strong());
+    let g = &mut state.customizer_state.arduino_mount_plate;
+    ui.horizontal(|ui| {
+        ui.label("board:");
+        ui.add(egui::Slider::new(&mut g.board_type, 1..=3).text("1=Uno, 2=Mega, 3=Nano"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("VESA 外周穴:");
+        ui.add(egui::Slider::new(&mut g.extra_m4_holes, 0..=4).text("0=なし, 4=VESA 対応"));
+    });
+    let g_copy = *g;
+    let board_str = match g_copy.board_type {
+        2 => "Mega",
+        3 => "Nano",
+        _ => "Uno",
+    };
+    let label = format!(
+        "Arduino {} マウント板 (extras={})",
+        board_str, g_copy.extra_m4_holes
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_pixhawk_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("🚁 Pixhawk マウント (drone/FPV autopilot)").strong());
+    let g = &mut state.customizer_state.pixhawk_mount;
+    ui.horizontal(|ui| {
+        ui.label("hole pattern (mm):");
+        ui.add(
+            egui::Slider::new(&mut g.hole_pattern_size, 30.0..=60.0)
+                .step_by(5.0)
+                .text("45=full, 30=mini"),
+        );
+    });
+    ui.horizontal(|ui| {
+        ui.label("damper style:");
+        ui.add(egui::Slider::new(&mut g.damper_style, 0..=1).text("0=solid, 1=Ø10 damper"));
+    });
+    let g_copy = *g;
+    let damper_str = if g_copy.damper_style == 0 {
+        "solid"
+    } else {
+        "damper"
+    };
+    let label = format!(
+        "Pixhawk {}×{}mm ({})",
+        g_copy.hole_pattern_size, g_copy.hole_pattern_size, damper_str
+    );
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
+    ui.add_space(2.0);
+}
+
+fn show_servo_mount_customizer(ui: &mut egui::Ui, state: &mut AppState) {
+    ui.label(egui::RichText::new("⚙ サーボマウント (SG90 / MG996R)").strong());
+    let g = &mut state.customizer_state.servo_mount;
+    ui.horizontal(|ui| {
+        ui.label("servo type:");
+        ui.add(egui::Slider::new(&mut g.servo_type, 1..=2).text("1=SG90 mini, 2=MG996R standard"));
+    });
+    let g_copy = *g;
+    let servo_str = if g_copy.servo_type == 1 {
+        "SG90 mini (M2×2)"
+    } else {
+        "MG996R standard (M3×2)"
+    };
+    let label = format!("サーボマウント {}", servo_str);
+    if ui.button(format!("作成: {label}")).clicked() {
+        state.prompt_input.clear();
+        state.prompt_focused_once = false;
+        start_generation_from_lol(state, g_copy.to_lol(), &label);
+    }
     ui.add_space(2.0);
 }

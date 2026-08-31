@@ -224,6 +224,39 @@ pub struct CustomizerState {
     pub led_hub_box: LedHubBoxUiState,
     /// Makeup organizer customizer (drawer § 3.5、Sprint 20)
     pub makeup_organizer: MakeupOrganizerUiState,
+    // ── Sprint 21-22 + Multi-domain 16 archetype (2026-08-31) ──
+    /// VESA モニターマウント板
+    pub vesa_mount: VesaMountUiState,
+    /// L 型ブラケット
+    pub l_bracket: LBracketUiState,
+    /// 2020 T-slot ブラケット
+    pub t_slot_bracket_2020: TSlotBracket2020UiState,
+    /// Raspberry Pi マウント板
+    pub raspi_mount_plate: RaspiMountPlateUiState,
+    /// Heat-set insert grid
+    pub heat_set_array: HeatSetArrayUiState,
+    /// フランジマウント
+    pub flange_mount: FlangeMountUiState,
+    /// アリ継ぎ
+    pub dovetail_pair: DovetailPairUiState,
+    /// アルミプロファイル
+    pub profile_extrusion: ProfileExtrusionUiState,
+    /// スナップフィット
+    pub snap_fit_pair: SnapFitPairUiState,
+    /// Boss array (ネジ受け柱)
+    pub boss_array: BossArrayUiState,
+    /// 軸受マウント板
+    pub bearing_seat: BearingSeatUiState,
+    /// 配線通しグロメット (家具 flat-pack)
+    pub cable_grommet: CableGrommetUiState,
+    /// カーテンレール壁掛けブラケット (建築 interior mount)
+    pub curtain_rod_bracket: CurtainRodBracketUiState,
+    /// Arduino マウント板
+    pub arduino_mount_plate: ArduinoMountPlateUiState,
+    /// Pixhawk マウント (drone/FPV)
+    pub pixhawk_mount: PixhawkMountUiState,
+    /// サーボマウント
+    pub servo_mount: ServoMountUiState,
 }
 
 /// Gridfinity bin customizer UI state (basic 3 param + advanced 5 field)
@@ -2120,6 +2153,388 @@ impl MakeupOrganizerUiState {
             "makeup_organizer({}, {}, {})",
             self.rows, self.cols, self.cell_size
         )
+    }
+}
+
+// ── Sprint 21-22 + Multi-domain 16 archetype UI state (2026-08-31、customizer 拡張) ──
+
+/// VESA モニターマウント板 customizer (`vesa_mount(size, plate_t, m_size)`)
+#[derive(Debug, Clone, Copy)]
+pub struct VesaMountUiState {
+    pub vesa_size: f32,
+    pub plate_thickness: f32,
+    pub hole_m_size: f32,
+}
+impl Default for VesaMountUiState {
+    fn default() -> Self {
+        Self {
+            vesa_size: 75.0,
+            plate_thickness: 5.0,
+            hole_m_size: 4.0,
+        }
+    }
+}
+impl VesaMountUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "vesa_mount({}, {}, {})",
+            self.vesa_size, self.plate_thickness, self.hole_m_size
+        )
+    }
+}
+
+/// L 型ブラケット customizer (`l_bracket(w, h, plate_t, m_size, holes_per_arm)`)
+#[derive(Debug, Clone, Copy)]
+pub struct LBracketUiState {
+    pub arm_width: f32,
+    pub arm_height: f32,
+    pub plate_thickness: f32,
+    pub m_size: f32,
+    pub holes_per_arm: u32,
+}
+impl Default for LBracketUiState {
+    fn default() -> Self {
+        Self {
+            arm_width: 60.0,
+            arm_height: 60.0,
+            plate_thickness: 4.0,
+            m_size: 4.0,
+            holes_per_arm: 2,
+        }
+    }
+}
+impl LBracketUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "l_bracket({}, {}, {}, {}, {})",
+            self.arm_width, self.arm_height, self.plate_thickness, self.m_size, self.holes_per_arm
+        )
+    }
+}
+
+/// 2020 T-slot ブラケット customizer (`t_slot_bracket_2020(arm_size, depth)`)
+#[derive(Debug, Clone, Copy)]
+pub struct TSlotBracket2020UiState {
+    pub arm_size: f32,
+    pub depth: f32,
+}
+impl Default for TSlotBracket2020UiState {
+    fn default() -> Self {
+        Self {
+            arm_size: 20.0,
+            depth: 20.0,
+        }
+    }
+}
+impl TSlotBracket2020UiState {
+    pub fn to_lol(self) -> String {
+        format!("t_slot_bracket_2020({}, {})", self.arm_size, self.depth)
+    }
+}
+
+/// Raspberry Pi マウント板 customizer (`raspi_mount_plate(model, extra_m4_holes)`)
+#[derive(Debug, Clone, Copy)]
+pub struct RaspiMountPlateUiState {
+    pub model: u32,
+    pub extra_m4_holes: u32,
+}
+impl Default for RaspiMountPlateUiState {
+    fn default() -> Self {
+        Self {
+            model: 4,
+            extra_m4_holes: 4,
+        }
+    }
+}
+impl RaspiMountPlateUiState {
+    pub fn to_lol(self) -> String {
+        format!("raspi_mount_plate({}, {})", self.model, self.extra_m4_holes)
+    }
+}
+
+/// Heat-set insert grid customizer (`heat_set_array(rows, cols, m_size, pitch, base_t)`)
+#[derive(Debug, Clone, Copy)]
+pub struct HeatSetArrayUiState {
+    pub rows: u32,
+    pub cols: u32,
+    pub insert_m: f32,
+    pub pitch: f32,
+    pub base_thickness: f32,
+}
+impl Default for HeatSetArrayUiState {
+    fn default() -> Self {
+        Self {
+            rows: 2,
+            cols: 2,
+            insert_m: 3.0,
+            pitch: 20.0,
+            base_thickness: 6.0,
+        }
+    }
+}
+impl HeatSetArrayUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "heat_set_array({}, {}, {}, {}, {})",
+            self.rows, self.cols, self.insert_m, self.pitch, self.base_thickness
+        )
+    }
+}
+
+/// フランジマウント customizer (`flange_mount(od, m_size, hole_count)`)
+#[derive(Debug, Clone, Copy)]
+pub struct FlangeMountUiState {
+    pub outer_dia: f32,
+    pub bolt_m: f32,
+    pub hole_count: u32,
+}
+impl Default for FlangeMountUiState {
+    fn default() -> Self {
+        Self {
+            outer_dia: 80.0,
+            bolt_m: 5.0,
+            hole_count: 4,
+        }
+    }
+}
+impl FlangeMountUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "flange_mount({}, {}, {})",
+            self.outer_dia, self.bolt_m, self.hole_count
+        )
+    }
+}
+
+/// アリ継ぎ customizer (`dovetail_pair(w, h, d, gender)`)
+#[derive(Debug, Clone, Copy)]
+pub struct DovetailPairUiState {
+    pub base_width: f32,
+    pub height: f32,
+    pub depth: f32,
+    pub gender: u32,
+}
+impl Default for DovetailPairUiState {
+    fn default() -> Self {
+        Self {
+            base_width: 20.0,
+            height: 15.0,
+            depth: 10.0,
+            gender: 0,
+        }
+    }
+}
+impl DovetailPairUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "dovetail_pair({}, {}, {}, {})",
+            self.base_width, self.height, self.depth, self.gender
+        )
+    }
+}
+
+/// アルミプロファイル customizer (`profile_extrusion(kind, length)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ProfileExtrusionUiState {
+    pub kind: u32,
+    pub length: f32,
+}
+impl Default for ProfileExtrusionUiState {
+    fn default() -> Self {
+        Self {
+            kind: 20,
+            length: 100.0,
+        }
+    }
+}
+impl ProfileExtrusionUiState {
+    pub fn to_lol(self) -> String {
+        format!("profile_extrusion({}, {})", self.kind, self.length)
+    }
+}
+
+/// スナップフィット customizer (`snap_fit_pair(l, w, t, hook_h)`)
+#[derive(Debug, Clone, Copy)]
+pub struct SnapFitPairUiState {
+    pub length: f32,
+    pub width: f32,
+    pub thickness: f32,
+    pub hook_height: f32,
+}
+impl Default for SnapFitPairUiState {
+    fn default() -> Self {
+        Self {
+            length: 20.0,
+            width: 5.0,
+            thickness: 2.0,
+            hook_height: 1.0,
+        }
+    }
+}
+impl SnapFitPairUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "snap_fit_pair({}, {}, {}, {})",
+            self.length, self.width, self.thickness, self.hook_height
+        )
+    }
+}
+
+/// Boss array customizer (`boss_array(rows, cols, m_size, height, pitch, base_t)`)
+#[derive(Debug, Clone, Copy)]
+pub struct BossArrayUiState {
+    pub rows: u32,
+    pub cols: u32,
+    pub screw_m: f32,
+    pub boss_height: f32,
+    pub pitch: f32,
+    pub base_thickness: f32,
+}
+impl Default for BossArrayUiState {
+    fn default() -> Self {
+        Self {
+            rows: 2,
+            cols: 2,
+            screw_m: 3.0,
+            boss_height: 10.0,
+            pitch: 20.0,
+            base_thickness: 2.0,
+        }
+    }
+}
+impl BossArrayUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "boss_array({}, {}, {}, {}, {}, {})",
+            self.rows, self.cols, self.screw_m, self.boss_height, self.pitch, self.base_thickness
+        )
+    }
+}
+
+/// 軸受マウント板 customizer (`bearing_seat(size, plate_t, style)`)
+#[derive(Debug, Clone, Copy)]
+pub struct BearingSeatUiState {
+    pub bearing_size: f32,
+    pub plate_thickness: f32,
+    pub style: u32,
+}
+impl Default for BearingSeatUiState {
+    fn default() -> Self {
+        Self {
+            bearing_size: 22.0,
+            plate_thickness: 5.0,
+            style: 0,
+        }
+    }
+}
+impl BearingSeatUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "bearing_seat({}, {}, {})",
+            self.bearing_size, self.plate_thickness, self.style
+        )
+    }
+}
+
+/// 配線通しグロメット customizer (`cable_grommet(outer_dia, height)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CableGrommetUiState {
+    pub outer_dia: f32,
+    pub height: f32,
+}
+impl Default for CableGrommetUiState {
+    fn default() -> Self {
+        Self {
+            outer_dia: 60.0,
+            height: 15.0,
+        }
+    }
+}
+impl CableGrommetUiState {
+    pub fn to_lol(self) -> String {
+        format!("cable_grommet({}, {})", self.outer_dia, self.height)
+    }
+}
+
+/// カーテンレール壁掛けブラケット customizer (`curtain_rod_bracket(rod_dia, projection)`)
+#[derive(Debug, Clone, Copy)]
+pub struct CurtainRodBracketUiState {
+    pub rod_dia: f32,
+    pub projection: f32,
+}
+impl Default for CurtainRodBracketUiState {
+    fn default() -> Self {
+        Self {
+            rod_dia: 25.0,
+            projection: 120.0,
+        }
+    }
+}
+impl CurtainRodBracketUiState {
+    pub fn to_lol(self) -> String {
+        format!("curtain_rod_bracket({}, {})", self.rod_dia, self.projection)
+    }
+}
+
+/// Arduino マウント板 customizer (`arduino_mount_plate(board_type, extras)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ArduinoMountPlateUiState {
+    pub board_type: u32,
+    pub extra_m4_holes: u32,
+}
+impl Default for ArduinoMountPlateUiState {
+    fn default() -> Self {
+        Self {
+            board_type: 1,
+            extra_m4_holes: 0,
+        }
+    }
+}
+impl ArduinoMountPlateUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "arduino_mount_plate({}, {})",
+            self.board_type, self.extra_m4_holes
+        )
+    }
+}
+
+/// Pixhawk マウント customizer (`pixhawk_mount(size, damper_style)`)
+#[derive(Debug, Clone, Copy)]
+pub struct PixhawkMountUiState {
+    pub hole_pattern_size: f32,
+    pub damper_style: u32,
+}
+impl Default for PixhawkMountUiState {
+    fn default() -> Self {
+        Self {
+            hole_pattern_size: 45.0,
+            damper_style: 0,
+        }
+    }
+}
+impl PixhawkMountUiState {
+    pub fn to_lol(self) -> String {
+        format!(
+            "pixhawk_mount({}, {})",
+            self.hole_pattern_size, self.damper_style
+        )
+    }
+}
+
+/// サーボマウント customizer (`servo_mount(servo_type)`)
+#[derive(Debug, Clone, Copy)]
+pub struct ServoMountUiState {
+    pub servo_type: u32,
+}
+impl Default for ServoMountUiState {
+    fn default() -> Self {
+        Self { servo_type: 1 }
+    }
+}
+impl ServoMountUiState {
+    pub fn to_lol(self) -> String {
+        format!("servo_mount({})", self.servo_type)
     }
 }
 
