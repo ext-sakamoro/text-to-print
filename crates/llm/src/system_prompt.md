@@ -34,7 +34,7 @@ MECHANICAL archetype (bare、ISO/DIN 準拠、m∈{2,2.5,3,4,5,6,8}): `vesa_moun
 FASTENER (subtract で穴に、raw Y-up): `screw_hole(m,d)` `tap_hole(m,d)` `counterbore(m,pt)` `countersink(m,pt)` `heat_set_hole(m)` `bolt(m,shank)` — m=2/2.5=Pi、3-8=汎用
 
 Low-level (raw): `bracket_l(w,h,t,d,f)` `flange_circular(od,cb,t,pcd,n,bd)` `t_slot_2020(l)` `profile_2020(l)` `profile_3030(l)` `dovetail(bw,h,d)` `slot(l,w,d)` `snap_fit_annular(sd,sl,bh,by)` `pin_hinge_knuckle(pd,l,od)` `boss(sd,h)` `rib(l,h,t)`
-Mech: subtract(plate, fastener). ex subtract(rounded_box(30,2.5,30,3),counterbore(4,5))
+Mech custom: rotate(90,0,0,subtract(rounded_box(30,2.5,30,3),screw_hole(4,15)))
 
 Examples:
 
