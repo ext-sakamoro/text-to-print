@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-31T10:30:00Z",
+  "version": "2026-09-02T15:45:00Z",
   "categories": [
     {
       "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
@@ -341,18 +341,18 @@
         },
         {
           "id": "phaseX2_dowel_hole_8_15_demo",
-          "label": "demo: 家具 Ø8 dowel 穴 (実穴 Ø8.1、+0.1 glue 余裕、深 15mm、家具 flat-pack、subtract で使う素材)",
-          "lol_dsl": "dowel_hole(8, 15)"
+          "label": "demo: 家具板 + Ø8 dowel 貫通穴 60×5×60 (subtract 組合せ例、Z-up 床置き)",
+          "lol_dsl": "rotate(90, 0, 0, subtract(rounded_box(30, 2.5, 30, 3), dowel_hole(8, 15)))"
         },
         {
           "id": "phaseX2_wood_pilot_4_softwood_demo",
-          "label": "demo: 木ネジ下穴 #8 softwood (Ø2.8 × 深 20mm、dia 4×0.7、subtract で使う素材)",
-          "lol_dsl": "wood_screw_pilot(4, 0)"
+          "label": "demo: 木板 + softwood 下穴 Ø2.8 60×5×60 (subtract 組合せ例、Z-up 床置き)",
+          "lol_dsl": "rotate(90, 0, 0, subtract(rounded_box(30, 2.5, 30, 3), wood_screw_pilot(4, 0)))"
         },
         {
           "id": "phaseX2_jst_ph_4pin_demo",
-          "label": "demo: JST-PH 4-pin コネクタ slot (2.0mm pitch、10×4.5×5.5mm、subtract で使う素材)",
-          "lol_dsl": "jst_ph_slot(4)"
+          "label": "demo: 板 + JST-PH 4pin slot 60×5×60 (subtract 組合せ例、Z-up 床置き)",
+          "lol_dsl": "rotate(90, 0, 0, subtract(rounded_box(30, 2.5, 30, 3), scale_non_uniform(1, 5, 1, jst_ph_slot(4))))"
         }
       ]
     },
