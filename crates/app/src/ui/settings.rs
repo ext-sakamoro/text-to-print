@@ -126,6 +126,11 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
     ui.heading("Settings");
     ui.separator();
 
+    // Settings 全体は viewport より大きくなる可能性大 (BYO LLM UI + 各種 toggle + collapsing sections 多数)
+    // ScrollArea で wrap して全 content 到達可能に (2026-09-02 fix、user 報告事案)
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
     // ライセンス / サブスクリプション
     ui.collapsing("License / Subscription", |ui| {
         // 現在の tier 表示 (Free / Pro / Enterprise / General)
@@ -660,6 +665,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
             ui.colored_label(color, msg);
         }
     });
+        }); // ScrollArea::show close (2026-09-02 fix)
 }
 
 /// BYO LLM (2026-08-23) UI section — provider preset picker, per-provider
