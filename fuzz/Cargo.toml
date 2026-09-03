@@ -1,0 +1,37 @@
+[package]
+name = "text-to-print-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+text-to-print-core = { path = "../crates/core" }
+serde_json = "1"
+
+[[bin]]
+name = "fuzz_license_key_base64"
+path = "fuzz_targets/fuzz_license_key_base64.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_manifest_json"
+path = "fuzz_targets/fuzz_manifest_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sha256_hex"
+path = "fuzz_targets/fuzz_sha256_hex.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

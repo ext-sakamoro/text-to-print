@@ -52,3 +52,8 @@ urlencoding = "2"
 opt-level = "s"
 lto = true
 codegen-units = 1
+
+# cargo-machete false-positive suppression (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
+# 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置
+[package.metadata.cargo-machete]
+ignored = ["getrandom"]

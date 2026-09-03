@@ -33,3 +33,8 @@ path = "src/bin/gen_license_key.rs"
 
 [dev-dependencies]
 tempfile = "3"
+
+# cargo-machete false-positive suppression (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
+# 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置
+[package.metadata.cargo-machete]
+ignored = ["alice-physics", "directories", "thiserror"]

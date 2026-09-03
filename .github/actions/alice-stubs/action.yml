@@ -1,0 +1,48 @@
+name: 'text-to-print Optional Bridge Stubs'
+description: |
+  Create empty stub crates for text-to-print sibling path deps
+  (alice-sdf / alice-view / alice-llm / alice-bamboo / alice-physics).
+
+  ci.yml は real sibling checkout 使用 (PAT ALICE_ECO_TOKEN 経由)、
+  本 stub action は security-audit / fuzz などの軽量 job で real checkout
+  スキップして高速化する用途 (canonical CI template
+  [[reference_alice_ci_canonical_template]] 準拠)
+
+  license = "MIT OR Apache-2.0" 必須 (canonical 罠 #2)
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        for entry in \
+            ALICE-SDF:alice-sdf \
+            ALICE-View:alice-view \
+            ALICE-LLM:alice-llm \
+            ALICE-Bamboo:alice-bamboo \
+            ALICE-Physics:alice-physics; do
+          dir="${entry%:*}"
+          crate="${entry#*:}"
+          mkdir -p "../${dir}/src"
+          cat > "../${dir}/Cargo.toml" <<TOML
+        [package]
+        name = "${crate}"
+        version = "0.1.0"
+        edition = "2021"
+        license = "MIT OR Apache-2.0"
+
+        [features]
+        default = []
+        std = []
+        wgsl = []
+        glsl = []
+        hlsl = []
+        grammar = []
+
+        [lib]
+        path = "src/lib.rs"
+        TOML
+          : > "../${dir}/src/lib.rs"
+        done
+        echo "Created stubs: alice-sdf / alice-view / alice-llm / alice-bamboo / alice-physics"

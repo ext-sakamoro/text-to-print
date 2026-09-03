@@ -25,7 +25,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -59,7 +59,7 @@ jobs:
         working-directory: text-to-print
     steps:
       - name: Checkout text-to-print
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: text-to-print
 
@@ -67,27 +67,27 @@ jobs:
       # 5 public (SDF/LOL/View/LLM/Physics) + 1 private (Bamboo)
       # 旧 `Project-ALICE/*` 参照は 2026-08-06 修正 (repo 存在せず 404、CI ずっと red)
       - name: Checkout ALICE-SDF
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-SDF
           path: ALICE-SDF
       - name: Checkout ALICE-LOL
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-LOL
           path: ALICE-LOL
       - name: Checkout ALICE-View
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-View
           path: ALICE-View
       - name: Checkout ALICE-LLM
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-LLM
           path: ALICE-LLM
       - name: Checkout ALICE-Physics
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-Physics
           path: ALICE-Physics
@@ -97,13 +97,13 @@ jobs:
       # checkout しないと workspace 解決が fail する PAT の Repository
       # access は両 repo を include している必要あり
       - name: Checkout ALICE-Bamboo (private)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-Bamboo
           path: ALICE-Bamboo
           token: ${{ secrets.ALICE_ECO_TOKEN }}
       - name: Checkout ALICE-Print (private)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ext-sakamoro/ALICE-Print
           path: ALICE-Print
@@ -153,7 +153,7 @@ jobs:
     name: check-wasm (crates/worker)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown

@@ -30,3 +30,8 @@ jsonschema = { version = "0.30", default-features = false }
 # Mocks the Cloudflare Worker endpoint for offline E2E tests
 wiremock = "0.6"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+# cargo-machete false-positive suppression (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
+# 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置
+[package.metadata.cargo-machete]
+ignored = ["directories", "uuid"]
