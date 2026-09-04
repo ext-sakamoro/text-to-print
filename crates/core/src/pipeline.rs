@@ -152,6 +152,25 @@ pub fn validate_lol(lol_source: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("LOL parse error: {}", e.message))
 }
 
+/// Strip repeated `"LOL parse error:"` prefixes from a nested error string
+///
+/// `alice_bamboo::lol_to_sdf` internally wraps `parse_lol` with a
+/// `"LOL parse error: {e}"` prefix, and callers here historically wrapped
+/// again — producing `"LOL parse error: LOL parse error: LOL parse error at
+/// pos N: ..."` triple-nested strings that are hard to read in UI toasts
+/// and log tails Normalise to a single leading `"LOL parse error:"`
+/// followed by the raw `ParseError` `Display` output (2026-09-04 fix)
+fn dedup_lol_parse_prefix<D: std::fmt::Display>(err: D) -> String {
+    let raw = err.to_string();
+    let mut s = raw.trim();
+    let prefix = "LOL parse error:";
+    // Strip 0-many leading `LOL parse error:` occurrences
+    while let Some(rest) = s.strip_prefix(prefix) {
+        s = rest.trim_start();
+    }
+    format!("{prefix} {s}")
+}
+
 /// LOL → メッシュファイル (.3mf / .fbx / .stl) にエクスポート
 ///
 /// 3MF 経路は `alice_bamboo` を経由し、`safety_validate` (alice-physics
@@ -204,7 +223,7 @@ pub fn preview_lol_to_mesh(
     quality: Quality,
 ) -> Result<std::sync::Arc<alice_sdf::mesh::Mesh>> {
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
     let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
     let padding = Vec3::splat(1.0);
@@ -269,7 +288,7 @@ fn export_3mf_via_bamboo(
     quality: Quality,
 ) -> Result<MeshStats> {
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
 
     let safety_report = safety_validate(&sdf, "PLA", None);
     if !safety_report.is_safe {
@@ -386,7 +405,7 @@ fn export_step_via_alice_sdf(
     quality: Quality,
 ) -> Result<MeshStats> {
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
 
     // Vertex / triangle counts via a preview-quality mesh — the exported
     // STEP file uses its own internal tessellation but this at least
@@ -435,7 +454,7 @@ fn export_step_via_alice_sdf(
 /// UI can show layer count, filament usage, and print-time estimates
 fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<MeshStats> {
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
     let slice = alice_bamboo::slice_sdf(
         &sdf,
         &alice_bamboo::SlicerConfig::bambu(),
@@ -511,7 +530,7 @@ pub struct MetadataInputs<'a> {
 pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
     let sdf = match alice_bamboo::lol_to_sdf(lol_source) {
         Ok(sdf) => sdf,
-        Err(e) => return vec![format!("LOL parse error: {e}")],
+        Err(e) => return vec![dedup_lol_parse_prefix(e)],
     };
     let report = alice_bamboo::safety::safety_validate(&sdf, "PLA", None);
     if report.is_safe {
@@ -610,7 +629,7 @@ pub fn export_mesh_color4(
     cfg: Color4Config,
 ) -> Result<Vec<PathBuf>> {
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
-        .map_err(|e| anyhow::anyhow!("LOL parse error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
 
     // 2026-08-23: alice-sdf 1.7.7 breaking change (preset + try_new に統一、Default 削除)
     // 500mm bbox / iter 24 / subdivisions 16 は preset_large() の canonical 値

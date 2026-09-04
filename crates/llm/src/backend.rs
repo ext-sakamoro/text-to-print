@@ -138,6 +138,13 @@ where
 
         let violations = safety_check(&content);
         if violations.is_empty() {
+            // 2026-09-04 追加: retry 経路のトレース強化 (parse error retry 未 fire
+            // 事案 debug で「safety が empty を返した」時の evidence が
+            // 皆無だったため)
+            info!(
+                attempt,
+                retry_count, "generate_with_retry success: safety_check returned no violations"
+            );
             return Ok(RetryResult {
                 content: last_content,
                 retry_count,
@@ -145,6 +152,13 @@ where
         }
 
         if attempt >= max_retries {
+            info!(
+                attempt,
+                retry_count,
+                violations_count = violations.len(),
+                violation_preview = %violations.first().map(|s| s.chars().take(120).collect::<String>()).unwrap_or_default(),
+                "generate_with_retry exhausted: max_retries hit with unresolved violations"
+            );
             break;
         }
 
@@ -153,6 +167,13 @@ where
         if suffix.is_empty() {
             // No actionable fix instruction (all messages unclassified) —
             // stop retrying and return the current content
+            info!(
+                attempt,
+                retry_count,
+                violations_count = violations.len(),
+                violation_preview = %violations.first().map(|s| s.chars().take(120).collect::<String>()).unwrap_or_default(),
+                "generate_with_retry break: no actionable fix_prompt for violations (unclassified)"
+            );
             break;
         }
         current_prompt = format!("{user_prompt}{suffix}");

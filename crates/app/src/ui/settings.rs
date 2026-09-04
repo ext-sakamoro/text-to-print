@@ -818,6 +818,9 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
     );
 
     // API key input
+    // Note: このフィールドは write-only buffer 保存済み key は
+    // security 上再表示しない (OS Keychain に暗号化保存、
+    // memory 平文化を最小化) 起動毎に empty で始まるが正常動作
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.label("API key:");
@@ -825,19 +828,34 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
             egui::TextEdit::singleline(&mut form.form_api_key)
                 .password(true)
                 .desired_width(320.0)
-                .hint_text("Keychain 保存、平文 disk 化なし"),
+                .hint_text("保存済でも空欄表示 新規入力で上書き"),
         );
     });
-    let key_status = match keychain::get_api_key(provider.keychain_account()) {
-        Ok(Some(_)) => "Keychain に保存済",
-        Ok(None) => "未保存",
-        Err(_) => "Keychain 読出エラー",
-    };
-    ui.label(
-        egui::RichText::new(format!("Keychain 状態: {key_status}"))
-            .small()
-            .weak(),
-    );
+    // Keychain 状態を色 + icon で prominent 化 (2026-09-04 UX 改善、
+    // 「空欄 = 未保存」と誤読される report 対応 実際は Keychain 保存済)
+    match keychain::get_api_key(provider.keychain_account()) {
+        Ok(Some(_)) => {
+            ui.label(
+                egui::RichText::new("✅ Keychain に保存済 (起動毎に empty 表示は正常動作)")
+                    .color(egui::Color32::from_rgb(0x2e, 0xa0, 0x43))
+                    .strong(),
+            );
+        }
+        Ok(None) => {
+            ui.label(
+                egui::RichText::new("⚠️ 未保存 API key を入力して「保存」を押してください")
+                    .color(ui.style().visuals.warn_fg_color)
+                    .strong(),
+            );
+        }
+        Err(_) => {
+            ui.label(
+                egui::RichText::new("❌ Keychain 読出エラー")
+                    .color(ui.style().visuals.error_fg_color)
+                    .strong(),
+            );
+        }
+    }
 
     // ── 5. Action buttons ─────────────────────────────────────
     ui.add_space(6.0);

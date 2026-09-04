@@ -991,6 +991,35 @@ fn start_generation(state: &mut AppState, _lang: Lang) {
                     extracted_preview = %lol.chars().take(200).collect::<String>(),
                     "LOL extracted from LLM response"
                 );
+
+                // 2026-09-04 Fix B: pre-export parse gate LLM retry loop の
+                // safety_check_lol が parse error を検出しないケース
+                // (unclassified violations で break、backend bug 等) の
+                // fail-safe として、export 呼ぶ前に explicit parse verify
+                // 失敗時は user-friendly error を surface して early return
+                if let Err(e) = pipeline::validate_lol(&lol) {
+                    let _ = tx.send(GenerationMessage::PhaseDone(
+                        GenerationPhase::Parse,
+                        parse_start.elapsed(),
+                    ));
+                    let clean_err = format!("{e}");
+                    tracing::error!(
+                        error = %clean_err,
+                        lol_preview = %lol.chars().take(200).collect::<String>(),
+                        retry_count,
+                        "pre-export parse gate: LLM output failed to parse after retries"
+                    );
+                    let _ = tx.send(GenerationMessage::Failure {
+                        id,
+                        error: format!(
+                            "LLM が有効な LOL DSL を生成できませんでした ({clean_err})\n\n\
+                             対処: プロンプトを短く / 具体的に書き直すか、テンプレート / \
+                             カスタマイザーをお使いください (LLM 経路より高速で確実)"
+                        ),
+                    });
+                    return;
+                }
+
                 let _ = tx.send(GenerationMessage::PhaseDone(
                     GenerationPhase::Parse,
                     parse_start.elapsed(),
