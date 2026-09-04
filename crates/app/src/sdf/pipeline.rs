@@ -13,8 +13,14 @@ pub const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
 /// WGSL shader for basic Phong-lit mesh preview
 ///
-/// - Vertex: MVP transform, pass world position + normal to fragment
-/// - Fragment: ambient + diffuse + specular with a single directional light
+/// - Vertex: MVP transform, pass world position (normal input kept for
+///   layout compatibility but unused — we re-derive face normal in the
+///   fragment shader for flat shading)
+/// - Fragment: flat normal via `cross(dpdx(world_pos), dpdy(world_pos))`
+///   then ambient + diffuse + specular with a single directional light
+///   Matches Bambu Studio / slicer preview convention where face
+///   normals dominate so noisy per-vertex normals from DC/MC don't
+///   produce shading striations on flat surfaces (2026-09-04 fix)
 /// - Depth-tested, no alpha blending (opaque solid)
 const MESH_SHADER: &str = r#"
 struct Uniforms {
@@ -35,7 +41,6 @@ struct VsIn {
 struct VsOut {
     @builtin(position) clip_pos: vec4<f32>,
     @location(0) world_pos: vec3<f32>,
-    @location(1) world_normal: vec3<f32>,
 };
 
 @vertex
@@ -44,13 +49,17 @@ fn vs_main(in: VsIn) -> VsOut {
     var out: VsOut;
     out.clip_pos = u.view_proj * world;
     out.world_pos = world.xyz;
-    out.world_normal = (u.model * vec4<f32>(in.normal, 0.0)).xyz;
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    let n = normalize(in.world_normal);
+    // Flat normal derived from screen-space derivatives of world position
+    // dpdx/dpdy give partial derivatives across neighboring fragments
+    // within the same triangle, and cross-product yields the face normal
+    // This matches Bambu Studio's default slicer preview shading and is
+    // robust against per-vertex normal noise from DC/MC mesh generation
+    let n = normalize(cross(dpdx(in.world_pos), dpdy(in.world_pos)));
     let l = normalize(u.light_dir.xyz);
     let v = normalize(u.camera_pos.xyz - in.world_pos);
     let h = normalize(l + v);
