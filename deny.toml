@@ -19,6 +19,16 @@ ignore = [
     # libp2p 0.54 transitive chain (.cargo/audit.toml と同期)
     "RUSTSEC-2026-0119",  # hickory-proto v0.24
     "RUSTSEC-2026-0194",  # quick-xml v0.30
+    # 追加 unmaintained + CVE (libp2p 0.54 chain 拡張、canonical 罠 #15)
+    "RUSTSEC-2024-0384",  # instant unmaintained (libp2p transitive)
+    "RUSTSEC-2024-0436",  # paste unmaintained (pyo3-macros transitive)
+    "RUSTSEC-2025-0009",  # AES panic (libp2p transitive、overflow-checked のみ)
+    "RUSTSEC-2025-0010",  # ring < 0.17 unmaintained (libp2p transitive)
+    "RUSTSEC-2026-0098",  # (libp2p chain)
+    "RUSTSEC-2026-0099",  # (libp2p chain)
+    "RUSTSEC-2026-0104",  # (libp2p chain)
+    "RUSTSEC-2026-0192",  # ttf-parser unmaintained (egui transitive)
+    "RUSTSEC-2026-0195",  # quick-xml DoS (libp2p chain)
 ]
 
 [licenses]
