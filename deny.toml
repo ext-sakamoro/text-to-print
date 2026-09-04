@@ -49,6 +49,12 @@ allow = [
     "BSL-1.0",
     "MPL-2.0",
     "OpenSSL",
+    # font licenses (canonical 罠 #14、egui/epaint transitive)
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "NCSA",
+    # webpki-roots (Mozilla CA cert bundle、Cloudflare Worker / rustls transitive)
+    "CDLA-Permissive-2.0",
 ]
 
 [[licenses.clarify]]
