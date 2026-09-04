@@ -109,17 +109,18 @@ mod tests {
 
     #[test]
     fn default_presets_has_seed_data() {
-        // β 初期 seed に 10 preset が入っているか
+        // 累積 25 categories / 161 preset (Sprint 21-22 + Multi-domain 4 domain 展開後、2026-09-04)
+        // categories.len() は cross-crate assertion pattern (presets_client と同型)
         let v: serde_json::Value = serde_json::from_str(DEFAULT_PRESETS_JSON).unwrap();
         let cats = v["categories"].as_array().unwrap();
-        assert_eq!(cats.len(), 2, "2 categories (Both auth + FieldTest)");
+        assert_eq!(cats.len(), 25, "25 categories (実績品 2 + 生活雑貨系 17 + 機械要素系 4 + 家具 + 建築 + 電子工作)");
         let total_presets: usize = cats
             .iter()
             .map(|c| c["presets"].as_array().map(Vec::len).unwrap_or(0))
             .sum();
         assert_eq!(
-            total_presets, 10,
-            "10 preset seed (5 Both auth + 5 FieldTest incl shelf_divider)"
+            total_presets, 161,
+            "161 preset total (Sprint 21-22 + Multi-domain 4 domain 展開)"
         );
     }
 

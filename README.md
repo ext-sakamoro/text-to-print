@@ -158,17 +158,22 @@ text-to-print/
 embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
 Stripe subscription 統合 backend + app UI 完成 (Test mode)
 
-- `cargo test --workspace`: **471 pass / 0 fail / 6 ignored** (2026-08-26 gallery Phase 1-3 で core +6 / network +4)
-- `cargo test --lib on crates/worker`: **47 pass / 0 fail** (2026-08-26 gallery validate +12、pre-existing preset seed count test 1 個は無関係)
+- `cargo test --workspace`: **368 pass / 0 fail / 6 ignored** (2026-09-04 実測)
+- `cargo test --lib on crates/worker`: **48 pass / 0 fail** (2026-09-04、preset seed count 25 cat/161 preset 反映)
 - `cargo clippy --workspace --all-targets -- -D warnings`: **0 own warnings**
 - `cargo check --target wasm32-unknown-unknown -p text-to-print-worker`: **green**
-- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --lib --no-deps`: **green** (2026-08-23 hotfix intra-doc link 修正済)
-- **CI**: ALICE-LOL / text-to-print 両 repo GitHub Actions **success** (2026-08-10 doc/fmt fix 完了)
+- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --lib --no-deps`: **green**
+- **CI**: ALICE-LOL / text-to-print 両 repo GitHub Actions **success** (2026-09-04 CI run `33828102104` 18m49s success)
+- **Preset library**: **25 category / 161 preset** (Sprint 1-22 + Multi-domain 4 domain 展開完了、ALICE-Bamboo canonical + 機械要素 + 家具 + 建築 + 電子工作)
+- **Customizer**: **75 archetype** slider tuning 対応 (Sprint 1-20 61 + Sprint 21-22 + Multi-domain 16 追加、2026-08-31)
 
 Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
 
 Recent changes:
+- 2026-09-01 〜 09-04: **Phase C cavity margin rule 根本 refactor** — 過去 6 commit 連続の cavity margin 忘却事案 (arduino/pixhawk/servo/raspi/mount/reinforcement/counterbore/countersink/pin_hinge/heat_set_array/bearing_seat) を primitive API レベルで根本解決 ALICE-LOL に `stdlib::hardsurface::cavity` module 新設 (6 helper: `subtract_through_screw_hole` / `subtract_through_counterbore` / `subtract_through_countersink` / `subtract_through_cylinder` / `subtract_blind_pocket` / `subtract_blind_heat_set`)、cavity margin rule (5mm each side for through / 5mm above for blind) を helper API に intrinsic 化 7 archetype (vesa/arduino/pixhawk/servo/raspi/heat_set/bearing) を helper 経由に refactor、238→170 行 (28.6% 純減) 副次で pixhawk damper pocket が旧 code で cavity margin 0 だった bug 発見・修正 karikari-review skill § Pattern library #47 追加、feedback_cavity_margin_pattern_recurrence memory 新設
+- 2026-08-31: **Customizer 16 archetype 拡張** — Sprint 21-22 + Multi-domain の全機械要素系 archetype に slider UI 追加 (VESA/L bracket/T-slot/raspi/heat_set/flange/dovetail/profile/snap-fit/boss array/bearing/cable_grommet/curtain rod/arduino/pixhawk/servo)、customizer 59→75 archetype
+- 2026-08-27 〜 08-28: **Sprint 21-22 + Multi-domain 4 domain 展開** — 機械要素 (VESA/L-bracket/T-slot/heat-set/flange/dovetail/profile/snap-fit/boss array/bearing) + 家具 (cable_grommet/dowel_hole) + 建築 (curtain_rod_bracket/wood_screw_pilot) + 電子工作 (arduino_mount_plate/pixhawk_mount/servo_mount/jst_ph_slot) 計 17 archetype + 21 primitive を LOL DSL に追加 MetricSize M2/M2.5 拡張 + BearingKind (608/688/6001/6202) 追加、ISO/DIN/JIS/McMaster 準拠
 - 2026-08-26: **Gallery Phase 1-3 追加** — nickname (Settings > プロフィール で表示名入力、gallery display で DID hex fallback) + share confirm modal (Free tier で生成完了時に「今回だけ公開 / 公開しない / 毎回自動公開」3 択、gallery_auto_share DB flag で永続化) + Cloudflare relay endpoint (`/api/gallery/{list,publish,:id}`、新 D1 `text-to-print-gallery`、ed25519 sig verify、LOL 100 KB max、nickname 32 char max、rate limit UUID+IP hourly、canonical msg prefix で publish sig replay-as-delete 防止) + app 側 `gallery_client.rs` + gallery.rs 全書き換え (Cloudflare canonical、fork publish、自 post 🗑 削除 button、preview stub 解除で `pipeline::preview_lol_to_mesh` 経路に接続) DID + ed25519 auto provision (`Identity::load_or_create` の `identity.key` local file 生成) で user 登録 UX 追加なし、DB `profiles` に `nickname` + `gallery_auto_share` 2 column 追加、worker crate は edition 2021 のまま (workspace 除外) commit `c97a09b` / `36e9e0f` / `e9aa721` / `beaed29` / `886969e`、public 化前の残 pending は user 側 `wrangler d1 create text-to-print-gallery` + screenshot 6 個
 - 2026-08-24: **Customizer 61 archetype 到達 (Sprint 12-20 batch)** — organizer 系
   49→61 (`hairdryer_holder / kcup_holder / hex_key_holder / wrap_holder /

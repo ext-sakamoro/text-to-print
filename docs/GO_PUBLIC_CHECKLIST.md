@@ -2,7 +2,7 @@
 
 `ext-sakamoro/text-to-print` を private → public に切替える当日の手順集約 実行日の前日〜前週にこの file を通読し、当日は上から順に check していく
 
-**現状 (2026-08-26)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし)、Gallery 機能 Phase 1-3 有効化済 (nickname + share confirm dialog + Cloudflare relay endpoint + fork/delete UI)、Issue template 3 file 追加済 (bug_report / feature_request / config、`3b4b1b5`) 残 pending は **Cloudflare 側 GALLERY_DB provision** と **screenshot 6 個撮影** と **GitHub Actions billing 復旧** の 3 点
+**現状 (2026-09-04)**: private 維持、v0.1.0 β release 済 (2026-08-22、7 artifact) audit 実施済 (F、実 secret leak なし)、Gallery 機能 Phase 1-3 有効化済 (nickname + share confirm dialog + Cloudflare relay endpoint + fork/delete UI)、Issue template 3 file 追加済 (`3b4b1b5`)、**GALLERY_DB provision 済** (`cb35576`、2026-08-28)、**GitHub Actions billing 復旧済** (CI `33828102104` 18m49s success verify)、Sprint 21-22 + Multi-domain 4 domain 展開完了 (25 category / 161 preset)、Customizer 75 archetype 対応、Phase C cavity margin 根本 refactor 完了 残 pending は **screenshot 6 個撮影** のみ (user 側 GUI action)
 
 ---
 
@@ -108,10 +108,11 @@ WORKER_BASE_URL=https://staging.example.com scripts/smoke_worker.sh
 
 script は shellcheck clean、CI / cron からも exit code で pass/fail 判定可能
 
-### 2.3.1 Gallery D1 provision (Phase 3 追加、初回のみ)
+### 2.3.1 Gallery D1 provision (Phase 3 追加、初回のみ) ✅ 完了 (2026-08-28)
 
-Public 化前に一度だけ実施 GALLERY_DB provision 済なら skip
+**実施済** commit `cb35576`、database_id `e6d81f9a-717f-4c2a-a544-37cecf73c260` (APAC region) 再実施不要
 
+参考手順 (別 project で流用時):
 ```bash
 cd crates/worker
 wrangler d1 create text-to-print-gallery
@@ -120,14 +121,14 @@ wrangler d1 execute text-to-print-gallery --file=migrations/0003_gallery.sql
 wrangler deploy
 ```
 
-- [ ] `wrangler d1 list` に `text-to-print-gallery` 表示
-- [ ] `wrangler.toml` の `[[d1_databases]]` GALLERY_DB `database_id` が空文字でない
-- [ ] `/api/gallery/list` が上記 curl で 200 (未 provision なら 500 `gallery_db_unbound`)
+- [x] `wrangler d1 list` に `text-to-print-gallery` 表示 (2026-08-28 実施)
+- [x] `wrangler.toml` の `[[d1_databases]]` GALLERY_DB `database_id` が空文字でない
+- [x] `/api/gallery/list` が上記 curl で 200 (smoke_worker.sh 4/4 pass verify 済)
 
 ### 2.4 GitHub Actions billing 状態
 
-- [ ] https://github.com/settings/billing で payment method active
-- [ ] spending limit > 0 (0 だと private でも public でも全 runner block)
+- [x] https://github.com/settings/billing で payment method active (**2026-09-04 復旧確認**、CI `33828102104` 18m49s success)
+- [x] spending limit > 0 (0 だと private でも public でも全 runner block)
 - [ ] 参考 memory: `feedback_github_actions_billing_blocked_2026_08_11`
 
 ### 2.5 external OSS review skill 適用
