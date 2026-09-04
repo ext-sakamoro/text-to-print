@@ -39,6 +39,15 @@ runs:
         glsl = []
         hlsl = []
         grammar = []
+        # alice-llm 側 gguf feature (text-to-print-llm 依存)
+        gguf = []
+        # alice-llm 側 parallel feature
+        parallel = []
+        # alice-lol / alice-bamboo optional feature
+        physics = []
+        llm-bridge = []
+        # alice-sdf 側 gpu feature
+        gpu = []
 
         [lib]
         path = "src/lib.rs"
