@@ -15,12 +15,13 @@
 
 use egui::Context;
 use std::path::PathBuf;
+use text_to_print_network::node::AliceNode;
 
 use crate::state::AppState;
 
 /// Render the modal if a payload is awaiting confirmation No-op
 /// otherwise Called once per frame from `App::update`
-pub fn show(ctx: &Context, state: &mut AppState) {
+pub fn show(ctx: &Context, state: &mut AppState, node: &AliceNode) {
     let Some(path) = state.pending_share_confirm.clone() else {
         return;
     };
@@ -62,7 +63,7 @@ pub fn show(ctx: &Context, state: &mut AppState) {
         });
 
     if let Some(res) = resolution {
-        apply(state, &path, res);
+        apply(state, node, &path, res);
     }
 }
 
@@ -73,13 +74,13 @@ enum Resolution {
     AlwaysPublish,
 }
 
-fn apply(state: &mut AppState, dry_run_path: &PathBuf, res: Resolution) {
+fn apply(state: &mut AppState, node: &AliceNode, dry_run_path: &PathBuf, res: Resolution) {
     match res {
         Resolution::Skip => {
             state.pending_share_confirm = None;
         }
         Resolution::PublishOnce => {
-            enqueue_from_dry_run(state, dry_run_path);
+            enqueue_from_dry_run(state, node, dry_run_path);
             state.pending_share_confirm = None;
         }
         Resolution::AlwaysPublish => {
@@ -91,13 +92,13 @@ fn apply(state: &mut AppState, dry_run_path: &PathBuf, res: Resolution) {
             } else {
                 state.gallery_auto_share = true;
             }
-            enqueue_from_dry_run(state, dry_run_path);
+            enqueue_from_dry_run(state, node, dry_run_path);
             state.pending_share_confirm = None;
         }
     }
 }
 
-fn enqueue_from_dry_run(state: &AppState, dry_run_path: &PathBuf) {
+fn enqueue_from_dry_run(state: &AppState, node: &AliceNode, dry_run_path: &PathBuf) {
     let bytes = match std::fs::read(dry_run_path) {
         Ok(b) => b,
         Err(e) => {
@@ -112,10 +113,21 @@ fn enqueue_from_dry_run(state: &AppState, dry_run_path: &PathBuf) {
             return;
         }
     };
+    // 1. LoRA training queue (Phase 2 /api/share) — 従来経路
     let queue_dir = state.share_queue_dir();
     if let Err(e) = text_to_print_network::share::enqueue(&payload, &queue_dir) {
         tracing::warn!(error = %e, "share enqueue-on-confirm failed");
     } else {
         tracing::info!(uuid = %payload.uuid, "share enqueued via confirm dialog");
     }
+    // 2. Gallery public share (Phase 3 /api/gallery/publish) — modal 経路の追加配線
+    // 2026-09-04 fix: Phase 2 → Phase 3 統合時に modal から gallery publish
+    // trigger 忘れの bug 修正 fork action 以外にも modal の「公開する」で
+    // Gallery に反映される必要がある
+    crate::ui::gallery::spawn_gallery_publish(
+        state,
+        node,
+        payload.lol_source.clone(),
+        state.nickname.clone(),
+    );
 }

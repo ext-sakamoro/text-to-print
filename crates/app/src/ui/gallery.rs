@@ -272,7 +272,12 @@ fn spawn_gallery_delete(state: &AppState, node: &AliceNode, id: String, author_d
     });
 }
 
-fn spawn_gallery_publish(state: &AppState, node: &AliceNode, lol_source: String, nickname: String) {
+pub(crate) fn spawn_gallery_publish(
+    state: &AppState,
+    node: &AliceNode,
+    lol_source: String,
+    nickname: String,
+) {
     let endpoint = GalleryClient::resolve_endpoint();
     let signing_key = node.identity.signing_key().clone();
     let author_did = node.identity.did.id.clone();
