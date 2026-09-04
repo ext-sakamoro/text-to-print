@@ -171,6 +171,56 @@ fn dedup_lol_parse_prefix<D: std::fmt::Display>(err: D) -> String {
     format!("{prefix} {s}")
 }
 
+/// Compute an empirical AABB from a mesh's vertex positions
+///
+/// Used as a 2-pass sanity check against `compute_tight_aabb_with_config`
+/// which uses interval arithmetic and can massively overestimate for
+/// rotated shapes (`rotate(θ, 0, 0, ...)` widens Y/Z intervals even for
+/// shapes with tight actual bounds) The empirical AABB from an initial
+/// coarse pass gives us the true geometric extent, which the caller can
+/// use to re-mesh at proper cell size (2026-09-04 fix)
+///
+/// Returns `None` if the mesh has no vertices (SDF empty at given bounds)
+fn compute_empirical_aabb(mesh: &alice_sdf::mesh::Mesh) -> Option<(Vec3, Vec3)> {
+    let first = mesh.vertices.first()?;
+    let mut min = first.position;
+    let mut max = first.position;
+    for v in &mesh.vertices[1..] {
+        min = min.min(v.position);
+        max = max.max(v.position);
+    }
+    Some((min, max))
+}
+
+/// Ratio at which to trigger a 2nd-pass re-mesh Empirical AABB below this
+/// fraction of tight_aabb triggers re-mesh at empirical bounds Set to 2.0
+/// so a shape reporting 8x-15x inflated Y/Z (rotate around X pattern)
+/// always re-meshes, but small over-estimates (< 2x) don't pay 2x cost
+const AABB_REMESH_RATIO: f32 = 2.0;
+
+/// Decide whether the tight_aabb result is significantly inflated vs
+/// the empirical mesh AABB, warranting a 2nd-pass re-mesh
+///
+/// Returns `true` when any axis dimension is >2x the empirical extent
+/// (indicates interval-arithmetic loss on rotated shapes)
+fn aabb_significantly_inflated(
+    tight_min: Vec3,
+    tight_max: Vec3,
+    empirical_min: Vec3,
+    empirical_max: Vec3,
+) -> bool {
+    let tight_dims = tight_max - tight_min;
+    let emp_dims = empirical_max - empirical_min;
+    for axis in 0..3 {
+        let t = tight_dims[axis].max(1e-3);
+        let e = emp_dims[axis].max(1e-3);
+        if t / e > AABB_REMESH_RATIO {
+            return true;
+        }
+    }
+    false
+}
+
 /// LOL → メッシュファイル (.3mf / .fbx / .stl) にエクスポート
 ///
 /// 3MF 経路は `alice_bamboo` を経由し、`safety_validate` (alice-physics
@@ -227,30 +277,63 @@ pub fn preview_lol_to_mesh(
     let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
     let padding = Vec3::splat(1.0);
-    let min_bounds = aabb.min - padding;
-    let max_bounds = aabb.max + padding;
     let dims = (
         aabb.max.x - aabb.min.x,
         aabb.max.y - aabb.min.y,
         aabb.max.z - aabb.min.z,
     );
     let use_dc = should_use_dual_contouring(dims);
-    let mesh = if use_dc {
+    // 1st pass mesh (may use inflated bbox from interval arith on rotate)
+    let mesh1 = generate_mesh(
+        &sdf,
+        aabb.min - padding,
+        aabb.max + padding,
+        quality,
+        use_dc,
+    );
+    // 2-pass: empirical AABB check → re-mesh at proper cell size if inflated
+    let mesh = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
+        && aabb_significantly_inflated(aabb.min, aabb.max, emp_min, emp_max)
+    {
+        let emp_dims = (
+            emp_max.x - emp_min.x,
+            emp_max.y - emp_min.y,
+            emp_max.z - emp_min.z,
+        );
+        let use_dc2 = should_use_dual_contouring(emp_dims);
+        generate_mesh(&sdf, emp_min - padding, emp_max + padding, quality, use_dc2)
+    } else {
+        mesh1
+    };
+    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    Ok(std::sync::Arc::new(mesh))
+}
+
+/// Mesh generation helper (MC or DC dispatch based on `use_dc`)
+///
+/// Shared between preview_lol_to_mesh + export_3mf_via_bamboo so the
+/// 2-pass empirical AABB re-mesh logic works identically in both paths
+fn generate_mesh(
+    sdf: &alice_sdf::SdfNode,
+    min_bounds: Vec3,
+    max_bounds: Vec3,
+    quality: Quality,
+    use_dc: bool,
+) -> alice_sdf::mesh::Mesh {
+    if use_dc {
         let cfg = DualContouringConfig {
             resolution: quality.mesh_resolution(),
             compute_normals: true,
             ..DualContouringConfig::default()
         };
-        dual_contouring(&sdf, min_bounds, max_bounds, &cfg)
+        dual_contouring(sdf, min_bounds, max_bounds, &cfg)
     } else {
         let cfg = MarchingCubesConfig {
             resolution: quality.mesh_resolution(),
             ..Default::default()
         };
-        sdf_to_mesh(&sdf, min_bounds, max_bounds, &cfg)
-    };
-    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
-    Ok(std::sync::Arc::new(mesh))
+        sdf_to_mesh(sdf, min_bounds, max_bounds, &cfg)
+    }
 }
 
 /// mesh 生成経路 (Dual Contouring vs Marching Cubes) を bbox 寸法から判定
@@ -332,19 +415,28 @@ fn export_3mf_via_bamboo(
         "mesh route selected (aspect_ratio > 5.0 OR min_dim <= 5.0 → DC)"
     );
 
-    let mesh = if use_dc {
-        let dc_config = DualContouringConfig {
-            resolution: quality.mesh_resolution(),
-            compute_normals: true,
-            ..DualContouringConfig::default()
-        };
-        dual_contouring(&sdf, min_bounds, max_bounds, &dc_config)
+    // 1st pass mesh (2026-09-04: tight_aabb は interval 演算で rotate X 軸回転時
+    // Y/Z 軸を massive overestimate する既知欠点、生 mesh から empirical AABB を
+    // 取って再判定する 2-pass 戦略)
+    let mesh1 = generate_mesh(&sdf, min_bounds, max_bounds, quality, use_dc);
+    let mesh = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
+        && aabb_significantly_inflated(aabb.min, aabb.max, emp_min, emp_max)
+    {
+        let emp_dims = (
+            emp_max.x - emp_min.x,
+            emp_max.y - emp_min.y,
+            emp_max.z - emp_min.z,
+        );
+        let use_dc2 = should_use_dual_contouring(emp_dims);
+        info!(
+            emp_max_dim = emp_dims.0.max(emp_dims.1).max(emp_dims.2),
+            emp_min_dim = emp_dims.0.min(emp_dims.1).min(emp_dims.2),
+            use_dc_2nd = use_dc2,
+            "tight_aabb inflated → 2nd-pass re-mesh at empirical bounds for proper cell size"
+        );
+        generate_mesh(&sdf, emp_min - padding, emp_max + padding, quality, use_dc2)
     } else {
-        let mc_config = MarchingCubesConfig {
-            resolution: quality.mesh_resolution(),
-            ..Default::default()
-        };
-        sdf_to_mesh(&sdf, min_bounds, max_bounds, &mc_config)
+        mesh1
     };
     let mesh = MeshRepair::repair_all(&mesh, 5e-3);
 

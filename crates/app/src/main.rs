@@ -245,6 +245,13 @@ impl eframe::App for App {
                         &mut self.gallery,
                     );
                 });
+                // 案 A (2026-09-04): 「編集して再生成」で LOL を Generate tab
+                // に流し込み、実験機能 section を強制展開して user が即 edit 可
+                if let Some(lol) = self.gallery.edit_lol_pending.take() {
+                    self.state.prompt_input = lol;
+                    self.prompt_ui.force_open_experimental = true;
+                    self.current_tab = Tab::Generate;
+                }
                 if self.gallery.switch_to_viewer {
                     self.gallery.switch_to_viewer = false;
                     self.current_tab = Tab::Generate;

@@ -31,6 +31,10 @@ pub struct GalleryState {
     /// Set to true after a delete succeeds so the Gallery tab triggers a
     /// refresh next frame (avoids re-render of the just-deleted row)
     pub refresh_after_delete: bool,
+    /// 2026-09-04 案 A: 「編集して再生成」button click 時にセットする LOL
+    /// main.rs が Generate tab に切替 + prompt_input に流し込み + 実験機能
+    /// section を expand して user がすぐ edit 可能な状態にする
+    pub edit_lol_pending: Option<String>,
 }
 
 pub fn show(
@@ -168,6 +172,20 @@ fn show_detail(
             spawn_preview_generation(state, sdf.lol_source.clone());
             let _ = viewer; // preview is now delivered via state.viewer_mesh
             gallery.switch_to_viewer = true;
+        }
+        // 2026-09-04 案 A: Gallery item を Generate tab の実験機能欄に
+        // 流し込み、user が LOL DSL を直接編集して再生成できるようにする
+        // (Customizer archetype dispatcher は post-β 拡張候補、まずは
+        // LOL テキスト edit 経路で全 item 対応)
+        if ui
+            .button("✏️ 編集して再生成")
+            .on_hover_text(
+                "この LOL DSL を生成 tab の実験機能欄に流し込みます 編集後に「生成 (LLM)」で再生成",
+            )
+            .clicked()
+        {
+            gallery.edit_lol_pending = Some(sdf.lol_source.clone());
+            gallery.switch_to_viewer = true; // reuse tab flip flag
         }
         // Own-post delete Available only when the row's author_did
         // matches the local Identity — the Worker double-checks on the

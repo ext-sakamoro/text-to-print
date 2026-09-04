@@ -71,6 +71,10 @@ pub struct PromptUiState {
     pub last_export_error: Option<String>,
     /// GAP-B: 4-color export (Bambu AMS) config
     pub color4: Color4UiState,
+    /// 2026-09-04 案 A: Gallery「編集して再生成」button click 直後の 1 frame
+    /// だけ true にして CollapsingHeader を強制展開 その frame の中で
+    /// prompt_input が既に流し込まれているので user は即 edit 可
+    pub force_open_experimental: bool,
 }
 
 impl Default for PromptUiState {
@@ -79,6 +83,7 @@ impl Default for PromptUiState {
             export_format: UiExportFormat::ThreeMf,
             last_export_error: None,
             color4: Color4UiState::default(),
+            force_open_experimental: false,
         }
     }
 }
@@ -179,14 +184,25 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
     // land on the working templates/customizer path instead of the
     // 10-minute LLM wait that ends in a plain cube (see
     // [[feedback_llm_3b_complex_shape_hallucination]])
-    egui::CollapsingHeader::new(
+    // 案 A: force_open_experimental が true なら 1 frame だけ強制展開
+    // (Gallery「編集して再生成」click 経路から流入した LOL を user が
+    // 即 edit できるように section を開いた状態で見せる) flag は消費して false に
+    let force_open = ui_state.force_open_experimental;
+    if force_open {
+        ui_state.force_open_experimental = false;
+    }
+    let mut header = egui::CollapsingHeader::new(
         egui::RichText::new(crate::i18n::T::experimental_llm_header(lang))
             .strong()
             .color(egui::Color32::from_rgb(200, 140, 60)),
     )
-    .default_open(false)
-    .id_salt("experimental_llm_section")
-    .show(ui, |ui| {
+    .id_salt("experimental_llm_section");
+    if force_open {
+        header = header.open(Some(true));
+    } else {
+        header = header.default_open(false);
+    }
+    header.show(ui, |ui| {
         ui.label(
             egui::RichText::new(crate::i18n::T::experimental_llm_hint(lang))
                 .small()
