@@ -25,7 +25,6 @@ license = "MIT"
 # re-exports (alice-bamboo has `wgsl` feature default-on so `to_wgsl` is
 # exposed uniformly)
 alice-sdf = { path = "../ALICE-SDF" }
-alice-view = { path = "../ALICE-View", default-features = false }
 alice-llm = { path = "../ALICE-LLM", default-features = false }
 alice-bamboo = { path = "../ALICE-Bamboo" }
 alice-physics = { path = "../ALICE-Physics" }

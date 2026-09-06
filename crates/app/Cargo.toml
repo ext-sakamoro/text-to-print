@@ -70,7 +70,6 @@ directories = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 open = "5"
-alice-view = { workspace = true }
 alice-bamboo = { workspace = true }
 # viewer.rs::auto_frame_from_sdf で tight_aabb::compute_tight_aabb_with_config
 # を直呼びして camera を LOL の AABB に合わせる用途 (alice-bamboo 経由
@@ -84,7 +83,3 @@ egui-wgpu = "0.31"
 bytemuck = { version = "1", features = ["derive"] }
 glam = "0.29"
 
-# cargo-machete false-positive suppression (canonical [[reference_alice_ci_canonical_template]] 罠 #3)
-# 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置
-[package.metadata.cargo-machete]
-ignored = ["alice-view"]
