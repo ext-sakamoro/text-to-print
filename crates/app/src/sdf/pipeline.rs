@@ -11,16 +11,17 @@ pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 /// texture with correct gamma matching the rest of the UI
 pub const COLOR_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
-/// WGSL shader for basic Phong-lit mesh preview
+/// WGSL shader for slicer-style flat-shaded mesh preview
 ///
 /// - Vertex: MVP transform, pass world position (normal input kept for
 ///   layout compatibility but unused — we re-derive face normal in the
 ///   fragment shader for flat shading)
 /// - Fragment: flat normal via `cross(dpdx(world_pos), dpdy(world_pos))`
-///   then ambient + diffuse + specular with a single directional light
-///   Matches Bambu Studio / slicer preview convention where face
-///   normals dominate so noisy per-vertex normals from DC/MC don't
-///   produce shading striations on flat surfaces (2026-09-04 fix)
+///   with `faceforward`-style viewer alignment (Y-flipped projection の
+///   cross 符号逆転を defensive fix、2026-09-06)、Half-Lambert diffuse で
+///   dark side が真っ黒にならず shape 読み取り可、specular は subtle に
+///   Bambu Studio 標準の matte gray aesthetic に合わせて base_color 高輝度 +
+///   rim light の合成で 1.0 超え white 飽和していた旧 formula から改修
 /// - Depth-tested, no alpha blending (opaque solid)
 const MESH_SHADER: &str = r#"
 struct Uniforms {
@@ -54,25 +55,28 @@ fn vs_main(in: VsIn) -> VsOut {
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    // Flat normal derived from screen-space derivatives of world position
-    // dpdx/dpdy give partial derivatives across neighboring fragments
-    // within the same triangle, and cross-product yields the face normal
-    // This matches Bambu Studio's default slicer preview shading and is
-    // robust against per-vertex normal noise from DC/MC mesh generation
-    let n = normalize(cross(dpdx(in.world_pos), dpdy(in.world_pos)));
-    let l = normalize(u.light_dir.xyz);
+    // Flat normal from screen-space derivatives (per-vertex normal 噪音回避)
+    var n = normalize(cross(dpdx(in.world_pos), dpdy(in.world_pos)));
     let v = normalize(u.camera_pos.xyz - in.world_pos);
+    // Defensive: Y-flipped projection や CW/CCW winding 差異で cross の
+    // 符号が反転する case を吸収 常に viewer 向きの normal に揃える
+    if (dot(n, v) < 0.0) {
+        n = -n;
+    }
+
+    let l = normalize(u.light_dir.xyz);
     let h = normalize(l + v);
 
-    let ambient = 0.20;
-    let diffuse = max(dot(n, l), 0.0);
-    let specular = pow(max(dot(n, h), 0.0), 32.0) * 0.35;
+    // Half-Lambert diffuse: 0.5 + 0.5*dot → 常に [0, 1] range
+    // dark side が真っ黒にならず shape 読み取り可 (Valve / Bambu 系)
+    let diffuse = 0.5 + 0.5 * dot(n, l);
+    // Subtle specular (滑らかな面のみ highlight、over-bright しない)
+    let specular = pow(max(dot(n, h), 0.0), 24.0) * 0.15;
 
-    // Add a subtle rim light so back faces / silhouettes are still readable
-    let rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.15;
-
-    let lit = u.base_color.rgb * (ambient + diffuse) + vec3<f32>(specular) + vec3<f32>(rim);
-    return vec4<f32>(lit, u.base_color.a);
+    // Max: base_color * 1.0 + 0.15 = ~0.97 (white 飽和なし)
+    // Min: base_color * 0.0 + 0.0 = 黒 (実際は Half-Lambert で 0 未到達)
+    let color = u.base_color.rgb * diffuse + vec3<f32>(specular);
+    return vec4<f32>(color, u.base_color.a);
 }
 "#;
 
