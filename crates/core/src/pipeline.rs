@@ -198,6 +198,18 @@ fn compute_empirical_aabb(mesh: &alice_sdf::mesh::Mesh) -> Option<(Vec3, Vec3)> 
 /// always re-meshes, but small over-estimates (< 2x) don't pay 2x cost
 const AABB_REMESH_RATIO: f32 = 2.0;
 
+/// Padding for the 2nd-pass re-mesh (2026-09-06 fix、5mm)
+///
+/// Must exceed the 1st-pass cell size so features under-sampled by the
+/// coarse 1st pass can be recovered 1st pass at tight_aabb (~500mm) with
+/// res 96 gives cell size ~5.2mm on inflated axes, so features within
+/// ~5mm of the empirical mesh AABB may have been dropped Padding must
+/// give the 2nd pass enough room to re-scan those under-sampled edges
+///
+/// Setting to 1mm (initial 2-pass fix) was too tight — thin tilted walls
+/// lost their top ~4mm even after re-mesh (2026-09-06 スマホスタンド事案)
+const AABB_2ND_PASS_PADDING_MM: f32 = 5.0;
+
 /// Decide whether the tight_aabb result is significantly inflated vs
 /// the empirical mesh AABB, warranting a 2nd-pass re-mesh
 ///
@@ -301,7 +313,15 @@ pub fn preview_lol_to_mesh(
             emp_max.z - emp_min.z,
         );
         let use_dc2 = should_use_dual_contouring(emp_dims);
-        generate_mesh(&sdf, emp_min - padding, emp_max + padding, quality, use_dc2)
+        // 5mm padding で 1st pass の under-sample 分 (cell size ~5mm) を回収
+        let padding_2nd = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
+        generate_mesh(
+            &sdf,
+            emp_min - padding_2nd,
+            emp_max + padding_2nd,
+            quality,
+            use_dc2,
+        )
     } else {
         mesh1
     };
@@ -428,13 +448,22 @@ fn export_3mf_via_bamboo(
             emp_max.z - emp_min.z,
         );
         let use_dc2 = should_use_dual_contouring(emp_dims);
+        // 5mm padding で 1st pass の under-sample 分 (cell size ~5mm) を回収
+        let padding_2nd = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
         info!(
             emp_max_dim = emp_dims.0.max(emp_dims.1).max(emp_dims.2),
             emp_min_dim = emp_dims.0.min(emp_dims.1).min(emp_dims.2),
             use_dc_2nd = use_dc2,
+            padding_2nd_mm = AABB_2ND_PASS_PADDING_MM,
             "tight_aabb inflated → 2nd-pass re-mesh at empirical bounds for proper cell size"
         );
-        generate_mesh(&sdf, emp_min - padding, emp_max + padding, quality, use_dc2)
+        generate_mesh(
+            &sdf,
+            emp_min - padding_2nd,
+            emp_max + padding_2nd,
+            quality,
+            use_dc2,
+        )
     } else {
         mesh1
     };
