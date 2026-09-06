@@ -186,6 +186,29 @@ P1-1〜P1-7 完了後:
 
 **受入基準**: v0.1.0 GA の全 P1 タスク受入基準 pass
 
+### P1-9: ALICE-Physics `structural_solver` 応力可視化統合 (差別化価値高)
+
+現状 `alice-physics` は 71k LOC あるが `safety_validate` (warp/thermal) のみ使用 (~10%)、`structural_solver` (応力 heatmap) / `cfd_solver` (fluid) / print_pipeline_solver 内部 module (thin_wall / beam_stress / buckling / warp_risk 詳細) は未活用
+
+**Milestone**:
+- [ ] `alice-physics::structural_solver` API 調査 (mesh + material → stress field)
+- [ ] preview 上に **応力 heatmap overlay** (WGSL fragment で頂点 stress を color mapping)
+- [ ] safety_report 拡張: 「この部分は薄すぎて破断リスク」等の位置指定 warning
+- [ ] competitor 差別化: Bambu Studio / Cura は pre-print 応力解析持たない、text-to-print 独自 value
+
+**受入基準**: 「傾斜壁 2mm厚 + 底面 hole」等の弱点 shape で応力集中箇所が preview で可視化される
+
+### P1-10: `alice-print` G-code 直接生成 UI 露出
+
+現状 `ExportFormat::Gcode` library で対応済、UI picker で表示なし (3MF / FBX / STL / STEP のみ)
+
+**Milestone**:
+- [ ] Settings or Export section に G-code 直接生成 option 追加
+- [ ] `alice_print::slice_sdf` 呼びで G-code output (Bambu Lab preset)
+- [ ] 上級 user 向け UX: Bambu Studio bypass、SD 直挿し / OctoPrint 系連携可
+
+**受入基準**: 「G-code (Bambu H2D)」export で `.gcode` file が生成される、Bambu H2D で印刷成功
+
 ---
 
 ## P2 — v1.0.0 商用 (Paid tier + LoRA flywheel、数週〜数ヶ月想定)
@@ -378,3 +401,4 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-09 | **Phase T1.1-1.3 完了** — SKADIS panel canonical 化 3 段 fix (Y板厚 17mm→5mm bug + Stadium peg + connector/mount 148 hole 全再現) + pipeline aspect_ratio ベース DC/MC 判定 helper + Preview resolution 128→96 (SKADIS panel mesh gen 25 分見込→5.3s = 285x speedup) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 + UI 経過時間表示 + memory 3 file (RoundedBox 罠 / DC-MC route / SKADIS canonical) 追加 alice-lol lib test 226 pass / text-to-print workspace 232 pass |
 | 2026-08-10 | **CI green 化** — ALICE-LOL fmt fail (trailing comment 位置ずれ) + text-to-print rustdoc fail (wikilink → intra-doc link 誤解釈) 両方修正、両 CI success (ALICE-LOL 1m24s / text-to-print 5m45s) |
 | 2026-08-11 | **README / ROADMAP 更新** — Release スケジュール section (β 公開 / 本番公開 GA / 商用公開 v1.0.0 の 3 段区切り + 判断基準明示) 新設 + 2026-08-09 完了項目 6 個追加 + P2-8 Phase T1 チェックボックス更新 (14→9 items canonical) |
+| 2026-09-07 | **ALICE-* 活用度精査 + P1 拡張** — text-to-print × ALICE-* crate utilization audit (core value chain 100% 活用済、`alice-view` dead dep 撤去 `cf6c08a`) + P1-9 (`alice-physics::structural_solver` 応力可視化統合、差別化価値高) + P1-10 (`alice-print` G-code 直接生成 UI 露出、上級 user 向け) を ROADMAP に landing worker crate (2.6k LOC wasm32) の ALICE-Auth/Billing/API wrapping は wasm32 制約で意義薄いと判断 (native 実装が最適) |
