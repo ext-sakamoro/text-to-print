@@ -3,7 +3,63 @@
 本 file は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) 形式に準拠し、
 バージョン管理は [Semantic Versioning](https://semver.org/lang/ja/) に従う
 
-## [Unreleased] (v0.1.1 β 候補)
+## [v0.1.0-beta.3] - 2026-09-08
+
+P1-11 完全 English i18n 対応 (Ja/En parity) の実装完了 全 UI 本体 630+
+strings を Ja/En 対訳化、Runtime Lang switcher UI + env override + live
+per-frame re-resolution を実装 β 期間の英語圏 user 拡大対応
+
+### Added
+
+- **完全 English UI i18n (Ja/En parity)**:
+  - Phase 2 (`3cee74b`): `crates/app/src/ui/settings.rs` (1461 行) の
+    hardcoded 日本語 115 strings を `T::settings_*` fn 経由に refactor
+    (34 fn 追加、10 sub-fn signature に `lang: Lang` threading)
+  - Phase 3 (`db6d5d1`): `crates/app/src/ui/prompt.rs` (4270 行) の
+    hardcoded 日本語 566 strings を `T::prompt_*` fn 経由に refactor
+    (428 fn 追加、94 fn signature に `lang: Lang` threading、61 archetype
+    customizer 全て対応)
+  - Phase 4 (`0430982`): `main.rs` 上部右の daily usage counter
+    (`{:?} | {} 回`) i18n 化 (`header_usage_uncapped` fn)
+  - Phase 5 (`0263c25`): Cloudflare Worker (`crates/worker/src/email.rs`)
+    の Paid tier license 送信メール本文を English + 日本語 bilingual
+    併記に変更 (locale detect 不要、── 区切り)
+
+- **Runtime Lang switcher (Phase 6、`a2efbbd`)**:
+  - `Settings > Language` collapsing section 追加 (Auto / 日本語 /
+    English ComboBox)
+  - DB `profiles.lang_pref` column (`auto` / `ja` / `en`) で永続化
+  - env `APP_LANG=en` / `TEXT_TO_PRINT_LANG=en` override (OnceLock cache)
+  - `App::update()` 毎に `resolve_lang(&state.lang_pref)` re-resolution =
+    Settings 変更 live 反映 (再起動不要)
+  - 優先順: env > DB > `sys_locale::get_locale`
+
+- **README §Screenshots restructure (Phase 6 同時)**:
+  - 「日本語 UI / Japanese UI」section + 「English UI」section の 2 grid
+  - 「Print result (language-neutral)」独立 section
+  - 英語 UI mode 起動手順明記 (Settings UI / env)
+
+- **CAPTURE_GUIDE.md 12 shot rule (Phase 6 同時)**:
+  - 6 shot × Ja/En 2 版撮影ルール
+  - 英語 UI mode 起動手順 2 種 (Settings ComboBox / env variable)
+
+### Changed
+
+- **翻訳 nuance fix (`da60e29`)**: 箸ホルダー customizer En 側
+  `pair` → `pairs` (pair_count range 2-10 常に複数、文法修正) 併せて
+  label `pair count:` → `Pairs:` に統一
+
+### Test coverage
+
+- lang_pref DB persistence: 3 tests 追加 (default_to_auto / roundtrip /
+  unknown_profile_returns_auto)
+- workspace tests: 249 → 371 pass (Phase 2-6 で +122)
+
+## [v0.1.0-beta.2] - 2026-09-07 (retroactive documentation)
+
+以下 content は v0.1.0-beta.2 release (2026-09-07) 時点で既に landing
+していたが CHANGELOG への転記が漏れていたため、beta.3 release 時に
+retroactive 追記
 
 ### Added
 

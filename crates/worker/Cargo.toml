@@ -1,6 +1,6 @@
 [package]
 name = "text-to-print-worker"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 # Cargo edition is 2021 rather than the workspace-wide 2024 because this
 # crate is intentionally excluded from the workspace (wasm32-only build via
 # worker-build) and workspace.package.* inheritance requires membership
