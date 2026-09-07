@@ -4295,6 +4295,18 @@ impl T {
         }
     }
 
+    // ─── main.rs header fmt fns (Phase 4) ──────────────────────
+    pub fn header_usage_uncapped(
+        tier: impl std::fmt::Debug,
+        usage: impl std::fmt::Display,
+        l: Lang,
+    ) -> String {
+        match l {
+            Lang::Ja => format!("{:?} | {} 回", tier, usage),
+            Lang::En => format!("{:?} | {} runs", tier, usage),
+        }
+    }
+
     // ─── prompt.rs fmt fns (Phase 3, String-returning) ─────────
     pub fn prompt_fmt_usage_beta(usage: impl std::fmt::Display, l: Lang) -> String {
         match l {

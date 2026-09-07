@@ -189,7 +189,7 @@ impl eframe::App for App {
                     let limit = self.state.tier.limits().daily_generations;
                     let label = if limit == u32::MAX {
                         // v0.1.0-beta.1: 制限撤廃時は '4294967295' 表示を回避
-                        format!("{:?} | {} 回", self.state.tier, usage)
+                        i18n::T::header_usage_uncapped(self.state.tier, usage, l)
                     } else {
                         format!("{:?} | {}/{}", self.state.tier, usage, limit)
                     };
