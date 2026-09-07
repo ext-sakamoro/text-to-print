@@ -68,8 +68,10 @@ CPU/GPU DeltaNet+Attention and wgpu compute shaders
 | **App hero** — 生成 UI + 3D mesh preview | **Templates** — 即生成 preset + Cloudflare sync source |
 | ![カスタマイザー (slider 操作中)](docs/images/customizer.png) | ![LLM 生成中 (phase progress bar + mesh preview)](docs/images/llm-generation.png) |
 | **Customizer** — slider で寸法 tune → 即生成 | **LLM 経路** — 自然言語 prompt → LOL DSL 生成 |
-| ![Bambu Studio import (出力 3MF)](docs/images/bambu-import.png) | ![実プリント結果 (Bambu H2D 出力品)](docs/images/print-result.jpg) |
-| **Bambu Studio** で開いた view | **実プリント結果** (SKADIS panel 等) |
+| ![Bambu Studio import (出力 3MF)](docs/images/bambu-import.png) | ![Gallery share modal (公開確認 dialog)](docs/images/gallery-share.png) |
+| **Bambu Studio** で開いた view | **Gallery** — 生成物を DID + ed25519 で他 user 公開 (Cloudflare Relay 経由) |
+| ![実プリント結果 (Bambu H2D 出力品)](docs/images/print-result.jpg) | |
+| **実プリント結果** (SKADIS panel 等、post-β) | |
 
 撮影 / GIF 変換 guide: [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
 
