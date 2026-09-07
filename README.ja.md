@@ -2,8 +2,8 @@
 
 **[English](README.md) | [日本語](README.ja.md)**
 
-自然言語を Bambu Lab の印刷可能な 3MF file に変換する、小型 LLM 内蔵の
-スタンドアローン desktop app
+自然言語から 3D プリント用ファイル (3MF / G-code) を直接生成する、
+完全ローカル稼働のデスクトップアプリ (小型 LLM 内蔵)
 
 印刷したいものを自然言語で説明して generate を押すと、slicer で開ける
 file が出てくる ローカル pipeline に cloud 不要 / login 不要
@@ -72,25 +72,25 @@ hybrid CPU/GPU DeltaNet+Attention + wgpu compute shaders
 
 ### 英語 UI
 
-> 📸 英語 UI screenshot は撮影次第 landing 予定 (現在は broken link 表示、user 側撮影後 commit で解消)
+> 📸 英語 UI screenshot は未撮影のため、以下は日本語 UI 版画像を暫定掲載 future release で英語 UI 撮影版に差替予定 レイアウト / control は言語問わず同一
 
 UI 言語切替は **Settings > Language** (live、再起動不要) または `APP_LANG=en` で起動
 
 | | |
 |--|--|
-| ![App startup (Generate tab + 3D mesh preview)](docs/images/hero-en.png) | ![Templates section (curated presets + cache/Cloud label)](docs/images/template-section-en.png) |
+| ![App startup (Generate tab + 3D mesh preview)](docs/images/hero.png) | ![Templates section (curated presets + cache/Cloud label)](docs/images/template-section.png) |
 | **App hero** — Generate UI + 3D mesh preview | **Templates** — one-click presets + Cloudflare sync source |
-| ![Customizer (slider in use)](docs/images/customizer-en.png) | ![LLM generation (phase progress bar + mesh preview)](docs/images/llm-generation-en.png) |
+| ![Customizer (slider in use)](docs/images/customizer.png) | ![LLM generation (phase progress bar + mesh preview)](docs/images/llm-generation.png) |
 | **Customizer** — tune dimensions with sliders → instant generate | **LLM path** — natural-language prompt → LOL DSL |
-| ![Bambu Studio import (exported 3MF)](docs/images/bambu-import-en.png) | ![Gallery share modal (publish confirm dialog)](docs/images/gallery-share-en.png) |
+| ![Bambu Studio import (exported 3MF)](docs/images/bambu-import.png) | ![Gallery share modal (publish confirm dialog)](docs/images/gallery-share.png) |
 | **Bambu Studio** import view | **Gallery** — publish output to other users via DID + ed25519 (Cloudflare Relay) |
 
 ### 実プリント結果 (言語共通)
 
 | |
 |--|
-| ![実プリント結果 (Bambu H2D 出力)](docs/images/print-result.jpg) |
-| **実プリント結果** (SKADIS panel 等、post-β) |
+| ![実プリント結果 — alice-bamboo pipeline で生成した SKADIS shelf、実使用中](docs/images/print-result.jpg) |
+| **実プリント結果** — SKADIS shelf、alice-bamboo pipeline で生成 → 印刷 → 実使用中 (Bambu Lab H2D 出力) |
 
 撮影 / GIF 変換 guide (Ja/En 両版含む): [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
 

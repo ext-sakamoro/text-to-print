@@ -3,6 +3,39 @@
 本 file は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) 形式に準拠し、
 バージョン管理は [Semantic Versioning](https://semver.org/lang/ja/) に従う
 
+## [v0.1.0-beta.4] - 2026-09-08
+
+README docs polish + Zenn 過去記事から print result 実写画像を回収
+
+### Added
+
+- **README tagline 差替** (両 file 冒頭):
+  - Ja: `自然言語から 3D プリント用ファイル (3MF / G-code) を直接生成する、完全ローカル稼働のデスクトップアプリ (小型 LLM 内蔵)`
+  - En: `Fully-local desktop app that generates 3D print files (3MF / G-code) directly from natural language, with an embedded small LLM`
+  - G-code / 完全ローカル稼働 を明示 (旧 tagline は Bambu 3MF only の記述)
+- **`docs/images/print-result.jpg`** 追加 (273 KB、1330×997、JPEG)
+  Zenn 過去記事 `alice-sdf-bambu-skadis-pegboard` (2026-07-27) から
+  alice-bamboo pipeline で生成した SKADIS shelf 実使用中の写真を回収
+  両 README で `Print result` section に landing (broken link 解消)
+
+### Changed
+
+- **English UI screenshot section** の image 参照を暫定 Ja UI 版 file
+  (`hero.png` 等) に fallback (`-en` suffix 版は未撮影) note を
+  「English UI screenshots pending capture、layout / controls は言語問わず
+  同一」に更新 future release で置換予定
+- **`Print result` caption** を「SKADIS panel 等、post-β」から実物内容
+  (`SKADIS shelf、alice-bamboo pipeline で生成 → 印刷 → 実使用中`) に
+  更新
+
+### 4 gate
+
+- test: 371 pass / 0 fail / 6 ignored
+- clippy `--workspace --all-targets -- -D warnings`: 0 warnings
+- fmt: clean
+- release build: success
+- wasm32 worker check: clean
+
 ## [v0.1.0-beta.3] - 2026-09-08
 
 P1-11 完全 English i18n 対応 (Ja/En parity) の実装完了 全 UI 本体 630+

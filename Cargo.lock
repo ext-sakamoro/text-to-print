@@ -5917,7 +5917,7 @@ dependencies = [
 
 [[package]]
 name = "text-to-print"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "alice-bamboo",
  "alice-sdf",
@@ -5948,7 +5948,7 @@ dependencies = [
 
 [[package]]
 name = "text-to-print-core"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "alice-bamboo",
  "alice-physics",
@@ -5976,7 +5976,7 @@ dependencies = [
 
 [[package]]
 name = "text-to-print-llm"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "alice-llm",
  "anyhow",
@@ -5993,7 +5993,7 @@ dependencies = [
 
 [[package]]
 name = "text-to-print-network"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "alice-bamboo",
  "anyhow",
