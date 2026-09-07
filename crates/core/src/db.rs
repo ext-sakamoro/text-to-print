@@ -47,7 +47,6 @@ pub struct LlmProviderConfigRow {
     pub temperature: f32,
     /// Provider-specific cost-guard: `"minimal"` (OpenAI) / `"none"`
     /// (Gemini) / `None` (Anthropic / Custom) See
-    /// `[[llm-api-cost-guard]]` skill and
     /// `OpenAiCompatProvider::default_reasoning_effort` for the rules
     pub reasoning_effort: Option<String>,
 }
@@ -165,7 +164,6 @@ impl Database {
         // Cloudflare Worker `GET /api/presets` の response を local に持つ、
         // offline / 起動時 network 未接続でも last-known preset で app が動く
         // `id = 1` 縛りで single-row 運用 (KV 全体を JSON blob として保存)
-        // 詳細: memory/project_text_to_print_archetype_library_architecture.md
         let _ = self.conn.execute(
             "CREATE TABLE IF NOT EXISTS presets_cache (
                 id INTEGER PRIMARY KEY CHECK (id = 1),

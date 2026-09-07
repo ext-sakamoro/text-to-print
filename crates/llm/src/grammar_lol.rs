@@ -1,7 +1,7 @@
 //! LOL DSL GBNF grammar embedded for constrained decoding (Stage 3-C.11)
 //!
 //! `LOL_GBNF` is a verbatim copy of the authoritative grammar shipped with
-//! [ALICE-LOL] (`skills/lol-sdf/references/lol.gbnf`) It covers the 124
+//! [ALICE-LOL] It covers the 124
 //! constructs recognised by `alice_lol::runtime_parser::parse_lol` and
 //! enforces (a) known construct names (b) argument shape (number vs child
 //! count, comma placement, balanced parens) (c) permitted whitespace and
@@ -20,9 +20,8 @@
 
 use anyhow::{Context, Result};
 
-/// Verbatim GBNF grammar for the LOL DSL Copy of the ALICE-LOL skill's
-/// canonical grammar at `skills/lol-sdf/references/lol.gbnf` (kept in
-/// sync manually; check `git log` on the source file when updating)
+/// Verbatim GBNF grammar for the LOL DSL Copy of the ALICE-LOL canonical
+/// grammar (kept in sync manually; check `git log` on the source when updating)
 pub const LOL_GBNF: &str = include_str!("lol.gbnf");
 
 /// Parse [`LOL_GBNF`] into a runtime-usable `Grammar` Cheap enough

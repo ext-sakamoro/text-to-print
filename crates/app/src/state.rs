@@ -2653,7 +2653,6 @@ pub struct AppState {
     /// background で Cloudflare Worker `GET /api/presets` を fetch し
     /// 成功時に上書き `prompt.rs::show_prompt_templates` は本 field を
     /// dynamic に読み出して TEMPLATE_CATEGORIES const の代替とする
-    /// 詳細: memory/project_text_to_print_archetype_library_architecture.md
     pub presets: PresetsSnapshot,
     /// Gallery Phase 3 (2026-08-26): last-fetched Gallery listing from
     /// the Cloudflare relay `None` = never fetched (or fetch in-flight)

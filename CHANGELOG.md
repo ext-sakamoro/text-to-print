@@ -97,7 +97,7 @@
 
 ### Notes
 
-- Publish job は GitHub Actions billing 制限で fail、local `gh release create` 迂回で publish
+- Publish job は GitHub Actions billing 制限で fail、local `gh release create` 経由で publish
 - 7-patch iteration (`d0a2787` → `a70a7ea`) で cross-platform build 完走 (rust-toolchain pin + msi version strip + macOS 署名 optional 化 + main.wxs revert + cargo wix `-p` 復活)
 
 ## Links

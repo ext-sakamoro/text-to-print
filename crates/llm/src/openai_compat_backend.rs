@@ -11,7 +11,7 @@
 //! [`OpenAiCompatConfig`] intentionally does not derive `Serialize` /
 //! `Deserialize`, so an accidental persist path cannot leak the key
 //!
-//! Cost-guard defaults (see `[[llm-api-cost-guard]]` skill):
+//! Cost-guard defaults (minimize accidental reasoning-token spend):
 //! - OpenAI o-series / GPT-5: `reasoning_effort = "minimal"`
 //! - Google Gemini 2.5 Pro/Flash: `reasoning_effort = "none"`
 //! - Anthropic Claude: `reasoning_effort = None` (compat endpoint does

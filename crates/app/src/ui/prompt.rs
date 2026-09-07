@@ -182,8 +182,7 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
 
     // Experimental LLM path — collapsed by default so first-time users
     // land on the working templates/customizer path instead of the
-    // 10-minute LLM wait that ends in a plain cube (see
-    // [[feedback_llm_3b_complex_shape_hallucination]])
+    // 10-minute LLM wait that ends in a plain cube (local 3B model 実力壁)
     // 案 A: force_open_experimental が true なら 1 frame だけ強制展開
     // (Gallery「編集して再生成」click 経路から流入した LOL を user が
     // 即 edit できるように section を開いた状態で見せる) flag は消費して false に

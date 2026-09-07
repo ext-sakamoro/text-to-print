@@ -1,8 +1,7 @@
 //! Client for the archetype preset library (Sprint X.1、Layer 1 sync)
 //!
 //! text-to-print archetype library の 3-layer 管理設計 の Layer 1 (preset) を
-//! Cloudflare Worker `GET /api/presets` から fetch する client 詳細:
-//! `~/.claude/projects/-Users-ys/memory/project_text_to_print_archetype_library_architecture.md`
+//! Cloudflare Worker `GET /api/presets` から fetch する client
 //!
 //! ## 動作
 //!

@@ -49,8 +49,7 @@ mod tests {
         assert!(
             SYSTEM_PROMPT.len() <= MAX_CHARS,
             "system_prompt.md is {} chars, exceeds iGPU prefill budget {} chars \
-             (>~5000 causes 300s HTTP timeout on iGPU + 3B model, see \
-             feedback_text_to_print_system_prompt_size_guard.md)",
+             (>~5000 causes 300s HTTP timeout on iGPU + 3B model)",
             SYSTEM_PROMPT.len(),
             MAX_CHARS
         );

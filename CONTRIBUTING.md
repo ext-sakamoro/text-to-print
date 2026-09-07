@@ -55,8 +55,7 @@ CI (`.github/workflows/ci.yml`) は 3-OS (Ubuntu / macOS / Windows) matrix で�
 
 - Subject: **imperative form** (`feat: add ...`, `fix: handle ...`)
 - 日本語 subject 可 (例 `feat: 4色 export UI 追加`)
-- **署名は不要** (`Co-Authored-By: Claude` 等の自動署名を追加しない)
-- 誇張表現禁止 (「罠」「致命的」「破綻」等の語彙を使わない、`.claude/CLAUDE.md` §「表現ルール」参照)
+- **署名は不要** (自動署名系を追加しない)
 - 句点 (`。`) は使わず改行 or 半角スペースで区切る
 
 commit prefix:
@@ -81,13 +80,12 @@ commit prefix:
 
 ### dead code / dead field 禁止
 
-CLAUDE.md 由来: バックエンド API を実装したら **必ず呼び出し側 (UI / async task) を同 PR で接続** することが原則です 呼び出し側が未接続な状態で backend を merge することは `GAP-11` / `GAP-12` のような後追い修正を生むため避けてください
+バックエンド API を実装したら **必ず呼び出し側 (UI / async task) を同 PR で接続** することが原則です 呼び出し側が未接続な状態で backend を merge することは `GAP-11` / `GAP-12` のような後追い修正を生むため避けてください
 
 ### コメントの書き方
 
 - 「なぜ」を書く (「何」は well-named identifier が既に伝える)
 - 過去 issue や PR # を書かない (rot するため — commit message や PR description に書く)
-- ALICE-*・KARIKARI・最適化ラベルを書かない (内部レビュー用途のみ)
 
 ### 依存追加ポリシー
 

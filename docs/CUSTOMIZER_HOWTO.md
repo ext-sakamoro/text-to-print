@@ -6,8 +6,6 @@ text-to-print の **customizer 経路** (パラメータ入力可能な template
 
 **対象読者**: text-to-print / ALICE-LOL に新機能追加する開発者 (自分、または将来の外部貢献者)
 
-**関連 memory**: `success_text_to_print_customizer_pattern.md` (AI 用サマリ、詳細は本 doc)
-
 ---
 
 ## 前提: 3-layer template UX 構造
@@ -590,5 +588,3 @@ or all-field 明示 (advanced field も全部書く)
 - **既存 pattern_sdf 実装**: `~/ALICE-LOL/alice-lol/src/stdlib/hardsurface/pattern_sdf.rs`
 - **既存 runtime_parser dispatch**: `~/ALICE-LOL/alice-lol/src/runtime_parser.rs` (Phase 5.1 + Phase B/B2 sections)
 - **CustomizerState + UI**: `~/text-to-print/crates/app/src/state.rs` + `crates/app/src/ui/prompt.rs`
-- **project 軸**: `~/text-to-print/CLAUDE.md` § 「絶対規定 3 つ」 + 「anti-pattern 5 個」
-- **ALICE 三相原理**: `~/CLAUDE.md` § 「ALICE 三相原理 (Data → Law → Intent)」 (customizer 経路 = Phase 2 Law)

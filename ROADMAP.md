@@ -21,19 +21,17 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
 ### 2026-08-09 完了項目
 
-- ✅ **SKADIS panel canonical 化 (Phase T1.1)** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix: (1) Y 板厚 17mm bug (RoundedBox 6 面 inflate 罠、`~/.claude/projects/-Users-ys/memory/feedback_alice_sdf_rounded_box_six_face_inflate.md`) を `Intersection { RoundedBox, Box3d Y-cutter }` で解消、Y=5mm 正確、X/Z corner fillet 保持 (2) Stadium peg 穴 (Box3d rectangle → 中央 Box + Y 軸 Cylinder × 2 半円 ends の Union、SKADIS_SPEC.md §1 準拠 5×15mm round 2.5) (3) connector 穴 44 個 + mount 穴 6 個追加 (production `models/wall-organizer/skadis-300x300/generate.py::get_conn_positions` / `_mount_positions` を Rust に port、Python 板 origin=左下 → Rust 板 origin=中央 座標変換) 実測 148 hole 全 visible (peg 98 + conn 44 + mount 6)、mesh gen 5292ms/238700 tri/overhang 2.1%/PLA 安全性 OK、Bambu production 3MF `skadis_panel_300x300.3mf` と shape 一致 alice-lol lib test 226 pass (skadis 12 tests all pass)
+- ✅ **SKADIS panel canonical 化 (Phase T1.1)** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix: (1) Y 板厚 17mm bug (RoundedBox 6 面 inflate) を `Intersection { RoundedBox, Box3d Y-cutter }` で解消、Y=5mm 正確、X/Z corner fillet 保持 (2) Stadium peg 穴 (Box3d rectangle → 中央 Box + Y 軸 Cylinder × 2 半円 ends の Union、SKADIS_SPEC.md §1 準拠 5×15mm round 2.5) (3) connector 穴 44 個 + mount 穴 6 個追加 (production `models/wall-organizer/skadis-300x300/generate.py::get_conn_positions` / `_mount_positions` を Rust に port、Python 板 origin=左下 → Rust 板 origin=中央 座標変換) 実測 148 hole 全 visible (peg 98 + conn 44 + mount 6)、mesh gen 5292ms/238700 tri/overhang 2.1%/PLA 安全性 OK、Bambu production 3MF `skadis_panel_300x300.3mf` と shape 一致 alice-lol lib test 226 pass (skadis 12 tests all pass)
 
-- ✅ **pipeline aspect_ratio ベース DC/MC 判定 (Phase T1.2)** — `crates/core/src/pipeline.rs` の `use_dc = thickness_y < 5.0` (Y 軸単独) を `should_use_dual_contouring(dims)` helper (`aspect_ratio > 5.0 || min_dim <= 5.0`) に refactor SKADIS panel Y=17mm bug で MC 経路に落ちて Ø5mm peg 穴が MC 解像度不足 (X/Z cell 3.25mm) で消失した bug を根本予防 Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json` の `"route": "DC"/"MC"`) と実装 route 一致確認 新 test 4 個追加 (should_use_dc_for_flat_panel_shapes / thin_coins / mc_for_bulky / boundary at min_dim 5mm) 詳細: memory `feedback_alice_sdf_dc_mc_route_aspect_ratio.md`
+- ✅ **pipeline aspect_ratio ベース DC/MC 判定 (Phase T1.2)** — `crates/core/src/pipeline.rs` の `use_dc = thickness_y < 5.0` (Y 軸単独) を `should_use_dual_contouring(dims)` helper (`aspect_ratio > 5.0 || min_dim <= 5.0`) に refactor SKADIS panel Y=17mm bug で MC 経路に落ちて Ø5mm peg 穴が MC 解像度不足 (X/Z cell 3.25mm) で消失した bug を根本予防 Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json` の `"route": "DC"/"MC"`) と実装 route 一致確認 新 test 4 個追加 (should_use_dc_for_flat_panel_shapes / thin_coins / mc_for_bulky / boundary at min_dim 5mm)
 
 - ✅ **Preview resolution 128→96 (Bamboo canonical 準拠)** — Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs` 全 13 pattern 統一値 96) と揃える sample 数 128³=2.1M → 96³=885K = 2.4× 削減、mesh gen 大幅高速化 (SKADIS panel 25 分見込→5.3s = 285× speedup)
 
-- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL、anti-pattern E: examples を無視して templates を自作) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別 session で ALICE-LOL runtime_parser に primitive 追加後に取り込み)
+- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別 session で ALICE-LOL runtime_parser に primitive 追加後に取り込み)
 
 - ✅ **UI 経過時間表示** — `crates/app/src/state.rs::PhaseProgress` に `generation_start: Option<Instant>` + `elapsed()` method 追加 進捗 bar が 0% のまま LLM phase 待機中でも user が経過時間を確認可能 (旧: 「stuck か working か区別つかない」問題)
 
-- ✅ **CI green 化 (両 repo)** — ALICE-LOL fmt fail (`skadis_sdf.rs` L448/L457 trailing comment 位置ずれ、rustfmt が inline コメント直後の // 単独行を続き位置にインデントする挙動) を空行で分離して解消 text-to-print doc fail (rustdoc が `[[wikilink]]` 記法を intra-doc link と解釈して unresolved link error) を「memory `X.md` 参照」text 形式に修正 両 CI success 確認 (ALICE-LOL 1m24s / text-to-print 5m45s)
-
-- ✅ **memory 3 file 追加** (`~/.claude/projects/-Users-ys/memory/`): `feedback_alice_sdf_rounded_box_six_face_inflate.md` (RoundedBox 6 面 inflate 罠) + `feedback_alice_sdf_dc_mc_route_aspect_ratio.md` (MC/DC route 判定 rule) + `success_skadis_panel_canonical_alignment_2026_08_09.md` (production Python 対応 mirror pattern 10 段 canonical フロー、gridfinity/wall_hook/drawer/shelf 4 items で再発予定)
+- ✅ **CI green 化 (両 repo)** — ALICE-LOL fmt fail (`skadis_sdf.rs` L448/L457 trailing comment 位置ずれ、rustfmt が inline コメント直後の // 単独行を続き位置にインデントする挙動) を空行で分離して解消 text-to-print doc fail (rustdoc が unresolved link error) を text 形式に修正 両 CI success 確認 (ALICE-LOL 1m24s / text-to-print 5m45s)
 
 ### 2026-08-08 完了項目
 
@@ -92,7 +90,7 @@ capture 設定は `README.md` §Screenshot submission 参照 (1600×1200 / macOS
 - [ ] Recent changes section に Phase 5.4 (bambu_3mf 経路切替) と Phase 5.7 (Rust template embed 完了) を追記
 - [ ] Repository layout 表に `crates/worker/` (CF Workers wasm32) を追加
 
-### P0-4: `CLAUDE.md` stats 更新
+### P0-4: 内部 stats file 更新
 
 - [ ] "テスト数 80" → "207" (実測 `cargo test --workspace`)
 - [ ] クレート構成表に `crates/worker/` 追加 (現状 4 crate 表記、実 5 crate)
@@ -117,7 +115,7 @@ LLM backend polish + backend infra deploy + 実機検証
 
 ### P1-1: `crates/llm/src/embedded_backend.rs` の server.rs per-layer orchestrator 移植
 
-CLAUDE.md 「残候補 (次 session)」より、Qwen 3.5 hybrid DeltaNet + Attention の GPU native 対応 現状 Stage 3-C.15/3-C.16 で CPU auto fallback、GpuModel::load で明示 Err surface
+Qwen 3.5 hybrid DeltaNet + Attention の GPU native 対応 現状 Stage 3-C.15/3-C.16 で CPU auto fallback、GpuModel::load で明示 Err surface
 
 - [ ] `ALICE-LLM/server/server.rs` の per-layer 実行 orchestrator を `text-to-print-llm::embedded_backend::worker_main_gpu` に移植 (~2000 LOC)
 - [ ] DeltaNet layer / Attention layer の per-layer dispatch を Rust GPU 側で実装
@@ -421,8 +419,8 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | **end-to-end pipeline 完走まで到達** — LLM system_prompt を Z-up 慣習 + wedge example に刷新、`fix_prompt::LolParseError` variant で parse retry loop 完成、`max_retries` 1→2、HTTP timeout 180→300s、export silent Err bug 修正 実測 `スマホスタンド…` prompt で Bambu Studio 対応 3MF 完走 test 228 pass |
 | 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別 session で mesh 経路に refactor 予定) |
 | 2026-08-08 | **P2-8 追加** — Template アーキテクチャ再設計 議論 (現状 Japanese prompt + LLM 経路の非決定性 / 遅さ / 失敗リスクの問題共有) LLM は「novel な形状の探索」だけに使い、templates は alice-bamboo pipeline 直叩き (~1 秒、決定性 100%) にすべきという設計判断確定 Phase T1 (LOL DSL 化、本 session) / T2 (placeholder + slider UI) / T3 (ALICE-Bamboo/examples import) / T4 (history → template promote) の 4 phase に分割 |
-| 2026-08-09 | **Phase T1.1-1.3 完了** — SKADIS panel canonical 化 3 段 fix (Y板厚 17mm→5mm bug + Stadium peg + connector/mount 148 hole 全再現) + pipeline aspect_ratio ベース DC/MC 判定 helper + Preview resolution 128→96 (SKADIS panel mesh gen 25 分見込→5.3s = 285x speedup) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 + UI 経過時間表示 + memory 3 file (RoundedBox 罠 / DC-MC route / SKADIS canonical) 追加 alice-lol lib test 226 pass / text-to-print workspace 232 pass |
+| 2026-08-09 | **Phase T1.1-1.3 完了** — SKADIS panel canonical 化 3 段 fix (Y板厚 17mm→5mm bug + Stadium peg + connector/mount 148 hole 全再現) + pipeline aspect_ratio ベース DC/MC 判定 helper + Preview resolution 128→96 (SKADIS panel mesh gen 25 分見込→5.3s = 285x speedup) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 + UI 経過時間表示 alice-lol lib test 226 pass / text-to-print workspace 232 pass |
 | 2026-08-10 | **CI green 化** — ALICE-LOL fmt fail (trailing comment 位置ずれ) + text-to-print rustdoc fail (wikilink → intra-doc link 誤解釈) 両方修正、両 CI success (ALICE-LOL 1m24s / text-to-print 5m45s) |
 | 2026-08-11 | **README / ROADMAP 更新** — Release スケジュール section (β 公開 / 本番公開 GA / 商用公開 v1.0.0 の 3 段区切り + 判断基準明示) 新設 + 2026-08-09 完了項目 6 個追加 + P2-8 Phase T1 チェックボックス更新 (14→9 items canonical) |
 | 2026-09-07 | **ALICE-* 活用度精査 + P1 拡張** — text-to-print × ALICE-* crate utilization audit (core value chain 100% 活用済、`alice-view` dead dep 撤去 `cf6c08a`) + P1-9 (`alice-physics::structural_solver` 応力可視化統合、差別化価値高) + P1-10 (`alice-print` G-code 直接生成 UI 露出、上級 user 向け) を ROADMAP に landing worker crate (2.6k LOC wasm32) の ALICE-Auth/Billing/API wrapping は wasm32 制約で意義薄いと判断 (native 実装が最適) |
-| 2026-09-07 | **v0.1.0-beta.2 β release + public 化** — 78 commit 累積後 tag 打ち直し (libdbus-1-dev release.yml sync fix 1 hotfix 含む) 全 4 platform build success + Publish 完了 GitHub repo visibility public 化、CI 完全無料化 (Actions billing 制限消失) X + Facebook で告知投稿 (案 A、hero.png 添付、public-comm-style skill 準拠 句点なし / 誇張禁止) 副次: i18n gap 発覚 (UI 本体 300 文字列日本語 hardcoded、i18n infra は tab labels 5 + prompt 4 = 9 個のみ)、P1-11 (完全 English i18n) を ROADMAP に landing (英語 demand 3+ で着手 trigger) |
+| 2026-09-07 | **v0.1.0-beta.2 β release + public 化** — 78 commit 累積後 tag 打ち直し (libdbus-1-dev release.yml sync fix 1 hotfix 含む) 全 4 platform build success + Publish 完了 GitHub repo visibility public 化、CI 完全無料化 (Actions billing 制限消失) X + Facebook で告知投稿 (hero.png 添付) 副次: i18n gap 発覚 (UI 本体 300 文字列日本語 hardcoded、i18n infra は tab labels 5 + prompt 4 = 9 個のみ)、P1-11 (完全 English i18n) を ROADMAP に landing (英語 demand 3+ で着手 trigger) |
