@@ -596,8 +596,12 @@ impl T {
     }
     pub fn settings_pro_planned(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "計画: 個人向け Pro プラン ¥3,000/月 or ¥30,000/年 (完全 offline + 無制限生成)",
-            Lang::En => "Planned: personal Pro plan ¥3,000/mo or ¥30,000/yr (fully offline + unlimited generation)",
+            Lang::Ja => {
+                "計画: 個人向け Pro プラン ¥3,000/月 or ¥30,000/年 (完全 offline + 無制限生成)"
+            }
+            Lang::En => {
+                "Planned: personal Pro plan ¥3,000/mo or ¥30,000/yr (fully offline + unlimited generation)"
+            }
         }
     }
     pub fn settings_buy_monthly(l: Lang) -> &'static str {
@@ -664,8 +668,12 @@ impl T {
     }
     pub fn settings_embedded_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします",
-            Lang::En => "Embedded runs alice-llm as a linked rlib First-time selection takes ~30s for GGUF load Loading state until model DL completes Generation requests fall back to Sidecar until Ready",
+            Lang::Ja => {
+                "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします"
+            }
+            Lang::En => {
+                "Embedded runs alice-llm as a linked rlib First-time selection takes ~30s for GGUF load Loading state until model DL completes Generation requests fall back to Sidecar until Ready"
+            }
         }
     }
     pub fn settings_current(l: Lang) -> &'static str {
@@ -676,8 +684,12 @@ impl T {
     }
     pub fn settings_execution_mode_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい",
-            Lang::En => "CPU: direct Llama3Model call (mmap dequant on demand) GPU: via wgpu backend (Metal / Vulkan / DX12) GpuModel switch reloads Embedded backend Fall back to CPU manually if adapter is missing (Error state)",
+            Lang::Ja => {
+                "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい"
+            }
+            Lang::En => {
+                "CPU: direct Llama3Model call (mmap dequant on demand) GPU: via wgpu backend (Metal / Vulkan / DX12) GpuModel switch reloads Embedded backend Fall back to CPU manually if adapter is missing (Error state)"
+            }
         }
     }
     pub fn settings_custom_gguf_heading(l: Lang) -> &'static str {
@@ -724,8 +736,12 @@ impl T {
     }
     pub fn settings_bonsai_manual_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "PrismML fork Q1_0 (128-element binary ternary) の Bonsai 27B は現在 HF 非公開 GGUF ファイルを手動で models/bonsai-27b-q1_0.gguf に配置すると Embedded backend が拾います (Stage 3-C.9 の model_exists 経路)",
-            Lang::En => "Bonsai 27B (PrismML fork Q1_0, 128-element binary ternary) is currently private on HF Place the GGUF file at models/bonsai-27b-q1_0.gguf and the Embedded backend will pick it up (Stage 3-C.9 model_exists path)",
+            Lang::Ja => {
+                "PrismML fork Q1_0 (128-element binary ternary) の Bonsai 27B は現在 HF 非公開 GGUF ファイルを手動で models/bonsai-27b-q1_0.gguf に配置すると Embedded backend が拾います (Stage 3-C.9 の model_exists 経路)"
+            }
+            Lang::En => {
+                "Bonsai 27B (PrismML fork Q1_0, 128-element binary ternary) is currently private on HF Place the GGUF file at models/bonsai-27b-q1_0.gguf and the Embedded backend will pick it up (Stage 3-C.9 model_exists path)"
+            }
         }
     }
     pub fn settings_grammar_checkbox(l: Lang) -> &'static str {
@@ -736,8 +752,12 @@ impl T {
     }
     pub fn settings_grammar_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "オンにすると生成 request に text_to_print_llm::grammar_lol::LOL_GBNF (253 行) を付随して送信し、alice-llm 側で mask_logits_by_grammar を毎 token 適用します 出力は parse_lol でパース保証 (シンタックス誤り 0) オフにすると free-form output (デバッグ / 別 grammar 検証時用)",
-            Lang::En => "When on, generation requests bundle text_to_print_llm::grammar_lol::LOL_GBNF (253 lines) and alice-llm applies mask_logits_by_grammar per token Output is guaranteed parseable by parse_lol (zero syntax errors) When off, free-form output (for debugging or alternate grammar tests)",
+            Lang::Ja => {
+                "オンにすると生成 request に text_to_print_llm::grammar_lol::LOL_GBNF (253 行) を付随して送信し、alice-llm 側で mask_logits_by_grammar を毎 token 適用します 出力は parse_lol でパース保証 (シンタックス誤り 0) オフにすると free-form output (デバッグ / 別 grammar 検証時用)"
+            }
+            Lang::En => {
+                "When on, generation requests bundle text_to_print_llm::grammar_lol::LOL_GBNF (253 lines) and alice-llm applies mask_logits_by_grammar per token Output is guaranteed parseable by parse_lol (zero syntax errors) When off, free-form output (for debugging or alternate grammar tests)"
+            }
         }
     }
 
@@ -756,8 +776,12 @@ impl T {
     }
     pub fn settings_nickname_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "Gallery タブで他人が見る表示名 空欄のままなら DID (did:key:...) の先頭 12 char + 末尾 6 char が表示されます 変更しても過去に公開した post には反映されません (最新の nickname は次回公開時から反映)",
-            Lang::En => "Display name others see in the Gallery tab If empty, first 12 + last 6 chars of DID (did:key:...) are shown Changes do not propagate to previously published posts (latest nickname applies from next publish)",
+            Lang::Ja => {
+                "Gallery タブで他人が見る表示名 空欄のままなら DID (did:key:...) の先頭 12 char + 末尾 6 char が表示されます 変更しても過去に公開した post には反映されません (最新の nickname は次回公開時から反映)"
+            }
+            Lang::En => {
+                "Display name others see in the Gallery tab If empty, first 12 + last 6 chars of DID (did:key:...) are shown Changes do not propagate to previously published posts (latest nickname applies from next publish)"
+            }
         }
     }
     pub fn settings_lora_share_checkbox(l: Lang) -> &'static str {
@@ -768,8 +792,12 @@ impl T {
     }
     pub fn settings_lora_share_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "オンにすると生成した LOL DSL + 品質シグナル (prompt / LOL 原文 / mesh SHA-256 / retry_count / safety_violations 等) が ALICE-LOL LoRA 学習セットに送信対象化されます Free tier default オン、Paid tier は完全 offline\n\n送信されないもの: Apple/Google/Microsoft アカウント ID / machine ID / file path / license key / crash report / P2P share pending キュー\n\n詳細: docs/SHARE.md",
-            Lang::En => "When on, generated LOL DSL + quality signals (prompt / LOL source / mesh SHA-256 / retry_count / safety_violations, etc.) become upload candidates for the ALICE-LOL LoRA training set Free tier default on, Paid tier is fully offline\n\nNever sent: Apple/Google/Microsoft account ID / machine ID / file path / license key / crash report / P2P share pending queue\n\nDetails: docs/SHARE.md",
+            Lang::Ja => {
+                "オンにすると生成した LOL DSL + 品質シグナル (prompt / LOL 原文 / mesh SHA-256 / retry_count / safety_violations 等) が ALICE-LOL LoRA 学習セットに送信対象化されます Free tier default オン、Paid tier は完全 offline\n\n送信されないもの: Apple/Google/Microsoft アカウント ID / machine ID / file path / license key / crash report / P2P share pending キュー\n\n詳細: docs/SHARE.md"
+            }
+            Lang::En => {
+                "When on, generated LOL DSL + quality signals (prompt / LOL source / mesh SHA-256 / retry_count / safety_violations, etc.) become upload candidates for the ALICE-LOL LoRA training set Free tier default on, Paid tier is fully offline\n\nNever sent: Apple/Google/Microsoft account ID / machine ID / file path / license key / crash report / P2P share pending queue\n\nDetails: docs/SHARE.md"
+            }
         }
     }
     pub fn settings_share_status_active(l: Lang) -> &'static str {
@@ -816,8 +844,12 @@ impl T {
     }
     pub fn settings_auto_publish_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "オフ (default) だと生成完了ごとに Gallery 公開確認 dialog が出ます オンにすると dialog なしで自動公開されます (Free tier で share on の時のみ、Paid tier は常時 upload しない)",
-            Lang::En => "Off (default): Gallery confirm dialog appears after each generation On: auto-publish without dialog (Free tier with share on only; Paid tier never uploads)",
+            Lang::Ja => {
+                "オフ (default) だと生成完了ごとに Gallery 公開確認 dialog が出ます オンにすると dialog なしで自動公開されます (Free tier で share on の時のみ、Paid tier は常時 upload しない)"
+            }
+            Lang::En => {
+                "Off (default): Gallery confirm dialog appears after each generation On: auto-publish without dialog (Free tier with share on only; Paid tier never uploads)"
+            }
         }
     }
     pub fn settings_share_details_link(l: Lang) -> &'static str {
@@ -836,8 +868,12 @@ impl T {
     }
     pub fn settings_crash_hover(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "オンにするとクラッシュ発生時に crash_reports/{uuid}.json が data_dir に保存されます (現状 upload なし、backend #36 実装後に opt-in で送信予定) オフにするとログのみ",
-            Lang::En => "When on, crash_reports/{uuid}.json is saved to data_dir on crash (no upload yet; opt-in send planned after backend #36) Off: log only",
+            Lang::Ja => {
+                "オンにするとクラッシュ発生時に crash_reports/{uuid}.json が data_dir に保存されます (現状 upload なし、backend #36 実装後に opt-in で送信予定) オフにするとログのみ"
+            }
+            Lang::En => {
+                "When on, crash_reports/{uuid}.json is saved to data_dir on crash (no upload yet; opt-in send planned after backend #36) Off: log only"
+            }
         }
     }
     pub fn settings_crash_saved(l: Lang) -> &'static str {
@@ -950,8 +986,12 @@ impl T {
     }
     pub fn settings_byo_not_selected(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "現在の Inference backend は BYO LLM ではありません 上の picker で 'BYO LLM' を選択すると有効",
-            Lang::En => "Current inference backend is not BYO LLM Select 'BYO LLM' in the picker above to enable",
+            Lang::Ja => {
+                "現在の Inference backend は BYO LLM ではありません 上の picker で 'BYO LLM' を選択すると有効"
+            }
+            Lang::En => {
+                "Current inference backend is not BYO LLM Select 'BYO LLM' in the picker above to enable"
+            }
         }
     }
     pub fn settings_byo_legend(l: Lang) -> &'static str {
@@ -999,7 +1039,9 @@ impl T {
     pub fn settings_byo_reasoning_hover(l: Lang) -> &'static str {
         match l {
             Lang::Ja => "OpenAI GPT-5/o-series は 'minimal' 推奨 (silent thinking 課金抑制)",
-            Lang::En => "OpenAI GPT-5/o-series: 'minimal' recommended (limits silent-thinking billing)",
+            Lang::En => {
+                "OpenAI GPT-5/o-series: 'minimal' recommended (limits silent-thinking billing)"
+            }
         }
     }
     pub fn settings_byo_api_key_hint(l: Lang) -> &'static str {
@@ -1070,8 +1112,12 @@ impl T {
     }
     pub fn settings_byo_cost_estimate_suffix(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "/ 生成 (system_prompt ~4K in + ~500 out トークン想定、rate は 2026-08-23 時点、実際は provider の pricing page で確認)",
-            Lang::En => "/ generation (assumes ~4K in + ~500 out tokens, rate as of 2026-08-23, verify on provider's pricing page)",
+            Lang::Ja => {
+                "/ 生成 (system_prompt ~4K in + ~500 out トークン想定、rate は 2026-08-23 時点、実際は provider の pricing page で確認)"
+            }
+            Lang::En => {
+                "/ generation (assumes ~4K in + ~500 out tokens, rate as of 2026-08-23, verify on provider's pricing page)"
+            }
         }
     }
     pub fn settings_byo_cost_unknown(l: Lang) -> &'static str {
@@ -1260,6 +1306,276 @@ impl T {
         match l {
             Lang::Ja => "browser 起動失敗",
             Lang::En => "Browser launch failed",
+        }
+    }
+
+    // ─── settings.rs: extra section headers / labels (Phase 2) ────
+    pub fn settings_heading(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "設定",
+            Lang::En => "Settings",
+        }
+    }
+    pub fn settings_section_license(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ライセンス / サブスクリプション",
+            Lang::En => "License / Subscription",
+        }
+    }
+    pub fn settings_section_llm(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "LLM",
+            Lang::En => "LLM",
+        }
+    }
+    pub fn settings_section_byo(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "BYO LLM (OpenAI / Claude / Gemini / Ollama)",
+            Lang::En => "BYO LLM (OpenAI / Claude / Gemini / Ollama)",
+        }
+    }
+    pub fn settings_section_lora_share(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "LoRA 共有",
+            Lang::En => "LoRA share",
+        }
+    }
+    pub fn settings_section_crash(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "クラッシュレポート",
+            Lang::En => "Crash reports",
+        }
+    }
+    pub fn settings_section_network(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ネットワーク",
+            Lang::En => "Network",
+        }
+    }
+    pub fn settings_upgrade_pro(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Pro にアップグレード",
+            Lang::En => "Upgrade to Pro",
+        }
+    }
+    pub fn settings_enterprise_plan(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Enterprise プラン",
+            Lang::En => "Enterprise plan",
+        }
+    }
+    pub fn settings_coming_soon(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "v0.2.0 で提供予定",
+            Lang::En => "Coming soon in v0.2.0",
+        }
+    }
+    pub fn settings_email_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "メール:",
+            Lang::En => "Email:",
+        }
+    }
+    pub fn settings_inference_backend_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "推論バックエンド:",
+            Lang::En => "Inference backend:",
+        }
+    }
+    pub fn settings_execution_mode_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "実行モード:",
+            Lang::En => "Execution mode:",
+        }
+    }
+    pub fn settings_gguf_select_hover_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "HF DL を skip して指定 path から直接ロード qwen2.5-14b-instruct-q4_k_m.gguf 等の大型モデルを user 側で DL / 配置して使用"
+            }
+            Lang::En => {
+                "Skip HF download and load directly from the specified path Use to run large models (e.g. qwen2.5-14b-instruct-q4_k_m.gguf) that the user has downloaded/placed"
+            }
+        }
+    }
+    pub fn settings_clear_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "クリア",
+            Lang::En => "Clear",
+        }
+    }
+    pub fn settings_endpoint_alice_llm(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Endpoint (alice-llm-server):",
+            Lang::En => "Endpoint (alice-llm-server):",
+        }
+    }
+    pub fn settings_model_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "モデル:",
+            Lang::En => "Model:",
+        }
+    }
+    pub fn settings_temperature_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Temperature",
+            Lang::En => "Temperature",
+        }
+    }
+    pub fn settings_did_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "DID",
+            Lang::En => "DID",
+        }
+    }
+    pub fn settings_profile_id_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Profile ID",
+            Lang::En => "Profile ID",
+        }
+    }
+    pub fn settings_preset_endpoint_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Preset endpoint:",
+            Lang::En => "Preset endpoint:",
+        }
+    }
+    pub fn settings_endpoint_hover_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "空欄なら https://text-to-print.alicelaw.net/api/presets を使用 (self-hosted mirror / proxy 経由時のみ変更)"
+            }
+            Lang::En => {
+                "Empty uses https://text-to-print.alicelaw.net/api/presets (change only when using a self-hosted mirror or proxy)"
+            }
+        }
+    }
+    pub fn settings_sidecar_port_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Sidecar port:",
+            Lang::En => "Sidecar port:",
+        }
+    }
+    pub fn settings_save_network_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ネットワーク設定を保存",
+            Lang::En => "Save network settings",
+        }
+    }
+    pub fn settings_byo_intro_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "リモート LLM API 設定 (OpenAI / Anthropic / Google / Ollama 等) 保存された provider のうち 1 つを 'アクティブ' として生成に使用します"
+            }
+            Lang::En => {
+                "Remote LLM API configuration (OpenAI / Anthropic / Google / Ollama, etc.) One of the saved providers is used as the 'active' one for generation"
+            }
+        }
+    }
+    pub fn settings_provider_preset_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Provider preset:",
+            Lang::En => "Provider preset:",
+        }
+    }
+    pub fn settings_byo_free_hint_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "💡 無料で試すなら Google (Gemini 2.5 Flash) 推奨 AI Studio (aistudio.google.com/apikey) で API key 取得、無料枠 ~1500 req/day"
+            }
+            Lang::En => {
+                "💡 For free testing, Google (Gemini 2.5 Flash) is recommended Get an API key at AI Studio (aistudio.google.com/apikey); free tier ~1500 req/day"
+            }
+        }
+    }
+    pub fn settings_byo_endpoint_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Endpoint:",
+            Lang::En => "Endpoint:",
+        }
+    }
+    pub fn settings_byo_model_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Model:",
+            Lang::En => "Model:",
+        }
+    }
+    pub fn settings_byo_model_hint_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "例: OpenAI: gpt-5 / o1 / gpt-4o-mini Anthropic: claude-sonnet-4-5 / claude-opus-4-7 Google: gemini-2.5-pro / gemini-2.5-flash Ollama: qwen2.5-14b-instruct"
+            }
+            Lang::En => {
+                "e.g. OpenAI: gpt-5 / o1 / gpt-4o-mini Anthropic: claude-sonnet-4-5 / claude-opus-4-7 Google: gemini-2.5-pro / gemini-2.5-flash Ollama: qwen2.5-14b-instruct"
+            }
+        }
+    }
+    pub fn settings_byo_max_tokens_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Max tokens:",
+            Lang::En => "Max tokens:",
+        }
+    }
+    pub fn settings_byo_temperature_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Temperature:",
+            Lang::En => "Temperature:",
+        }
+    }
+    pub fn settings_byo_reasoning_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Reasoning effort:",
+            Lang::En => "Reasoning effort:",
+        }
+    }
+    pub fn settings_byo_reasoning_hover_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "OpenAI GPT-5/o-series は 'minimal' 推奨 (silent thinking 課金抑制) Google Gemini 2.5 は 'none' 推奨 (silent thinking 抑制) Anthropic / Ollama は空欄で OK"
+            }
+            Lang::En => {
+                "OpenAI GPT-5/o-series: 'minimal' recommended (limits silent-thinking billing) Google Gemini 2.5: 'none' recommended (limits silent thinking) Anthropic / Ollama: leave blank"
+            }
+        }
+    }
+    pub fn settings_byo_api_key_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "API key:",
+            Lang::En => "API key:",
+        }
+    }
+    pub fn settings_byo_cost_unknown_extra(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "予想コスト: rate table に model なし (Custom / 独自 model 使用時) API 課金は provider の pricing page で確認"
+            }
+            Lang::En => {
+                "Estimated cost: model not in rate table (Custom / user-provided model) Check the provider's pricing page for billing rates"
+            }
+        }
+    }
+    pub fn settings_http_error(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "HTTP エラー",
+            Lang::En => "HTTP error",
+        }
+    }
+    pub fn settings_plan_updated_expires(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "有効期限",
+            Lang::En => "expires",
+        }
+    }
+    pub fn settings_plan_updated_updated(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "プランに更新しました",
+            Lang::En => "plan updated",
+        }
+    }
+    pub fn settings_paid_ui_disabled_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "v0.2.0 で提供予定",
+            Lang::En => "Coming soon in v0.2.0",
         }
     }
 }

@@ -1,6 +1,7 @@
 use egui::Ui;
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::{Lang, T};
 use crate::state::AppState;
 use text_to_print_core::db::LlmProviderConfigRow;
 use text_to_print_core::keychain;
@@ -122,8 +123,8 @@ pub fn is_plausible_email(input: &str) -> bool {
     !s.is_empty() && s.contains('@') && s.len() <= 320 && !s.contains(' ')
 }
 
-pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
-    ui.heading("Settings");
+pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState, lang: Lang) {
+    ui.heading(T::settings_heading(lang));
     ui.separator();
 
     // Settings 全体は viewport より大きくなる可能性大 (BYO LLM UI + 各種 toggle + collapsing sections 多数)
@@ -131,540 +132,561 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-    // ライセンス / サブスクリプション
-    ui.collapsing("License / Subscription", |ui| {
-        // 現在の tier 表示 (Free / Pro / Enterprise / General)
-        ui.horizontal(|ui| {
-            ui.label("現在のプラン:");
-            let (label, color) = match state.tier {
-                Tier::Free => ("Free (LoRA share あり)", egui::Color32::LIGHT_GRAY),
-                Tier::General => ("General", egui::Color32::LIGHT_BLUE),
-                Tier::Pro => ("Pro", egui::Color32::GREEN),
-                Tier::Enterprise => ("Enterprise", egui::Color32::GOLD),
-            };
-            ui.colored_label(color, label);
-        });
-        ui.colored_label(
-            ui.style().visuals.warn_fg_color,
-            "BETA バージョンのためプランを選択することができません",
-        );
-
-        ui.add_space(6.0);
-        ui.separator();
-        ui.add_space(6.0);
-
-        // ── Upgrade to Pro (Free tier のみ表示) ────────────────
-        //
-        // v0.1.0 β release では Paid tier UI は disabled 表示 (Coming
-        // soon) Stripe backend deploy (Phase S3) 完了後に PAID_UI_ENABLED
-        // を true に変えるだけで購入 flow 復活 Enterprise mailto と
-        // License key 入力欄は generalized use case なので β 段階でも
-        // 有効化 (既存 license holder が activate できる経路を残す)
-        const PAID_UI_ENABLED: bool = false;
-        if matches!(state.tier, Tier::Free) {
-            ui.label(egui::RichText::new("Upgrade to Pro").strong());
-            if PAID_UI_ENABLED {
-                ui.label("Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)");
-            } else {
+            // ライセンス / サブスクリプション
+            ui.collapsing(T::settings_section_license(lang), |ui| {
+                // 現在の tier 表示 (Free / Pro / Enterprise / General)
+                ui.horizontal(|ui| {
+                    ui.label(T::settings_current_plan(lang));
+                    let (label, color): (&'static str, egui::Color32) = match state.tier {
+                        Tier::Free => {
+                            (T::settings_tier_free_label(lang), egui::Color32::LIGHT_GRAY)
+                        }
+                        Tier::General => ("General", egui::Color32::LIGHT_BLUE),
+                        Tier::Pro => ("Pro", egui::Color32::GREEN),
+                        Tier::Enterprise => ("Enterprise", egui::Color32::GOLD),
+                    };
+                    ui.colored_label(color, label);
+                });
                 ui.colored_label(
                     ui.style().visuals.warn_fg_color,
-                    "Pro subscription is coming in v0.2.0 (Beta では unavailable)",
+                    T::settings_beta_plan_gated(lang),
                 );
-                ui.label(
-                    "計画: 個人向け Pro プラン ¥3,000/月 or ¥30,000/年 (完全 offline + 無制限生成)",
-                );
-            }
-            ui.add_space(4.0);
 
-            ui.horizontal(|ui| {
-                ui.label("Email:");
-                ui.add_enabled(
-                    PAID_UI_ENABLED,
-                    egui::TextEdit::singleline(&mut settings.checkout_email),
-                );
-            });
-            let email_ok = PAID_UI_ENABLED && is_plausible_email(&settings.checkout_email);
+                ui.add_space(6.0);
+                ui.separator();
+                ui.add_space(6.0);
 
-            ui.horizontal(|ui| {
-                let monthly = ui
-                    .add_enabled(email_ok, egui::Button::new("Buy Monthly ¥3,000/月"))
-                    .on_disabled_hover_text("Coming soon in v0.2.0");
-                if monthly.clicked() {
-                    spawn_checkout(state, settings, "pro_monthly");
+                // ── Upgrade to Pro (Free tier のみ表示) ────────────────
+                //
+                // v0.1.0 β release では Paid tier UI は disabled 表示 (Coming
+                // soon) Stripe backend deploy (Phase S3) 完了後に PAID_UI_ENABLED
+                // を true に変えるだけで購入 flow 復活 Enterprise mailto と
+                // License key 入力欄は generalized use case なので β 段階でも
+                // 有効化 (既存 license holder が activate できる経路を残す)
+                const PAID_UI_ENABLED: bool = false;
+                if matches!(state.tier, Tier::Free) {
+                    ui.label(egui::RichText::new(T::settings_upgrade_pro(lang)).strong());
+                    if PAID_UI_ENABLED {
+                        ui.label(T::settings_pro_description(lang));
+                    } else {
+                        ui.colored_label(
+                            ui.style().visuals.warn_fg_color,
+                            T::settings_pro_coming_soon(lang),
+                        );
+                        ui.label(T::settings_pro_planned(lang));
+                    }
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label(T::settings_email_label(lang));
+                        ui.add_enabled(
+                            PAID_UI_ENABLED,
+                            egui::TextEdit::singleline(&mut settings.checkout_email),
+                        );
+                    });
+                    let email_ok = PAID_UI_ENABLED && is_plausible_email(&settings.checkout_email);
+
+                    ui.horizontal(|ui| {
+                        let monthly = ui
+                            .add_enabled(email_ok, egui::Button::new(T::settings_buy_monthly(lang)))
+                            .on_disabled_hover_text(T::settings_paid_ui_disabled_hover(lang));
+                        if monthly.clicked() {
+                            spawn_checkout(state, settings, "pro_monthly", lang);
+                        }
+                        let yearly = ui
+                            .add_enabled(email_ok, egui::Button::new(T::settings_buy_yearly(lang)))
+                            .on_disabled_hover_text(T::settings_paid_ui_disabled_hover(lang));
+                        if yearly.clicked() {
+                            spawn_checkout(state, settings, "pro_yearly", lang);
+                        }
+                    });
+
+                    if PAID_UI_ENABLED && !email_ok && !settings.checkout_email.is_empty() {
+                        ui.colored_label(
+                            ui.style().visuals.warn_fg_color,
+                            T::settings_email_invalid(lang),
+                        );
+                    }
+                    if let Some((msg, ok)) = &settings.checkout_message {
+                        let color = if *ok {
+                            egui::Color32::LIGHT_BLUE
+                        } else {
+                            egui::Color32::RED
+                        };
+                        ui.colored_label(color, msg);
+                    }
+
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new(T::settings_enterprise_plan(lang)).strong());
+                    ui.horizontal(|ui| {
+                        ui.label(T::settings_enterprise_prompt(lang));
+                        if ui.button(T::settings_contact_button(lang)).clicked()
+                            && let Err(e) = open::that(ENTERPRISE_MAILTO)
+                        {
+                            settings.checkout_message = Some((
+                                format!("{}: {e}", T::settings_mailer_launch_fail(lang)),
+                                false,
+                            ));
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(6.0);
                 }
-                let yearly = ui
-                    .add_enabled(email_ok, egui::Button::new("Buy Yearly ¥30,000/年 (-17%)"))
-                    .on_disabled_hover_text("Coming soon in v0.2.0");
-                if yearly.clicked() {
-                    spawn_checkout(state, settings, "pro_yearly");
-                }
-            });
 
-            if PAID_UI_ENABLED && !email_ok && !settings.checkout_email.is_empty() {
-                ui.colored_label(
-                    ui.style().visuals.warn_fg_color,
-                    "有効な email 形式で入力してください",
-                );
-            }
-            if let Some((msg, ok)) = &settings.checkout_message {
-                let color = if *ok {
-                    egui::Color32::LIGHT_BLUE
-                } else {
-                    egui::Color32::RED
-                };
-                ui.colored_label(color, msg);
-            }
+                // ── License key 入力 (受信 email から貼付) ───────────────
+                ui.label(egui::RichText::new(T::settings_license_input_heading(lang)).strong());
+                ui.label(T::settings_license_input_hint(lang));
+                ui.add_space(2.0);
+                ui.text_edit_multiline(&mut settings.license_input);
 
-            ui.add_space(6.0);
-            ui.label(egui::RichText::new("Enterprise plan").strong());
-            ui.horizontal(|ui| {
-                ui.label("複数ユーザー / 商用 / カスタム機能:");
-                if ui.button("問合わせ").clicked()
-                    && let Err(e) = open::that(ENTERPRISE_MAILTO)
-                {
-                    settings.checkout_message = Some((format!("メーラー起動失敗: {e}"), false));
+                ui.horizontal(|ui| {
+                    if ui.button(T::apply_license(lang)).clicked()
+                        && !settings.license_input.trim().is_empty()
+                    {
+                        apply_license(state, settings, lang);
+                    }
+                    if !matches!(state.tier, Tier::Free)
+                        && ui.button(T::settings_license_clear(lang)).clicked()
+                    {
+                        clear_license(state, settings, lang);
+                    }
+                });
+
+                if let Some((msg, success)) = &settings.license_message {
+                    let color = if *success {
+                        egui::Color32::GREEN
+                    } else {
+                        egui::Color32::RED
+                    };
+                    ui.colored_label(color, msg);
                 }
             });
 
             ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(6.0);
-        }
 
-        // ── License key 入力 (受信 email から貼付) ───────────────
-        ui.label(egui::RichText::new("ライセンスキー入力").strong());
-        ui.label("Stripe 決済後に email で届いたキーを貼付してください");
-        ui.add_space(2.0);
-        ui.text_edit_multiline(&mut settings.license_input);
-
-        ui.horizontal(|ui| {
-            if ui.button("ライセンスを適用").clicked() && !settings.license_input.trim().is_empty()
-            {
-                apply_license(state, settings);
-            }
-            if !matches!(state.tier, Tier::Free)
-                && ui.button("ライセンスをクリア (Free に戻す)").clicked()
-            {
-                clear_license(state, settings);
-            }
-        });
-
-        if let Some((msg, success)) = &settings.license_message {
-            let color = if *success {
-                egui::Color32::GREEN
-            } else {
-                egui::Color32::RED
-            };
-            ui.colored_label(color, msg);
-        }
-    });
-
-    ui.add_space(8.0);
-
-    // LLM 設定
-    ui.collapsing("LLM", |ui| {
-        // Stage 3-C.6: inference backend picker
-        // BYO LLM (2026-08-23): added OpenAiCompat variant for remote
-        // API providers (OpenAI / Anthropic / Google / Ollama)
-        ui.label("Inference backend:");
-        let current_kind = state.backend_kind;
-        let mut new_kind = current_kind;
-        ui.vertical(|ui| {
-            ui.selectable_value(
-                &mut new_kind,
-                BackendKind::Sidecar,
-                BackendKind::Sidecar.label(),
-            );
-            ui.selectable_value(
-                &mut new_kind,
-                BackendKind::Embedded,
-                BackendKind::Embedded.label(),
-            );
-            ui.selectable_value(
-                &mut new_kind,
-                BackendKind::OpenAiCompat,
-                BackendKind::OpenAiCompat.label(),
-            );
-        });
-        if new_kind != current_kind {
-            state.switch_backend_kind(new_kind);
-        }
-        // Embedded load status (only meaningful when Embedded is selected)
-        if state.backend_kind == BackendKind::Embedded {
-            let status = state.embedded_status();
-            ui.label(format!("Embedded 状態: {}", status.label()))
-                .on_hover_text(
-                    "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします",
-                );
-            // Stage 3-C.12: CPU / GPU picker (only relevant to Embedded)
-            ui.add_space(4.0);
-            ui.label("Execution mode:");
-            let prev_mode = state.execution_mode;
-            let mut new_mode = prev_mode;
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut new_mode, ExecutionMode::Cpu, ExecutionMode::Cpu.label());
-                ui.selectable_value(&mut new_mode, ExecutionMode::Gpu, ExecutionMode::Gpu.label());
-            });
-            if new_mode != prev_mode {
-                state.switch_execution_mode(new_mode);
-            }
-            ui.label(format!("現在: {}", state.execution_mode.label()))
-                .on_hover_text(
-                    "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい",
-                );
-
-            // BYO LLM (2026-08-23): custom GGUF path override
-            ui.add_space(6.0);
-            ui.label(egui::RichText::new("Custom GGUF (Model 選択より優先)").strong());
-            let display_path = state
-                .custom_gguf_path
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "(未設定、上の Model dropdown を使用)".to_string());
-            ui.label(
-                egui::RichText::new(display_path)
-                    .small()
-                    .color(if state.custom_gguf_path.is_some() {
-                        egui::Color32::LIGHT_GREEN
-                    } else {
-                        ui.style().visuals.weak_text_color()
-                    }),
-            );
-            ui.horizontal(|ui| {
-                if ui
-                    .button("GGUF ファイル選択")
-                    .on_hover_text(
-                        "HF DL を skip して指定 path から直接ロード \
-                         qwen2.5-14b-instruct-q4_k_m.gguf 等の大型モデルを \
-                         user 側で DL / 配置して使用",
-                    )
-                    .clicked()
-                    && let Some(path) = rfd::FileDialog::new()
-                        .add_filter("GGUF", &["gguf"])
-                        .pick_file()
-                {
-                    state.set_custom_gguf_path(Some(path));
-                }
-                if state.custom_gguf_path.is_some()
-                    && ui
-                        .button("クリア")
-                        .on_hover_text("override 解除、上の Model dropdown に戻す")
-                        .clicked()
-                {
-                    state.set_custom_gguf_path(None);
-                }
-            });
-        }
-        ui.add_space(6.0);
-
-        ui.label("Endpoint (alice-llm-server):");
-        ui.text_edit_singleline(&mut state.llm_config.endpoint);
-
-        ui.add_space(4.0);
-        ui.label("Model:");
-        // Stage 3-C.9: capture the previous choice so we can detect a
-        // change after the ComboBox mutates state and invoke the model-
-        // swap hook (only meaningful in Embedded mode)
-        let prev_choice = state.llm_config.model_choice;
-        egui::ComboBox::from_id_salt("llm_model_choice")
-            .selected_text(state.llm_config.model_choice.label())
-            .show_ui(ui, |ui| {
-                for choice in ModelChoice::all() {
+            // LLM 設定
+            ui.collapsing(T::settings_section_llm(lang), |ui| {
+                // Stage 3-C.6: inference backend picker
+                // BYO LLM (2026-08-23): added OpenAiCompat variant for remote
+                // API providers (OpenAI / Anthropic / Google / Ollama)
+                ui.label(T::settings_inference_backend_label(lang));
+                let current_kind = state.backend_kind;
+                let mut new_kind = current_kind;
+                ui.vertical(|ui| {
                     ui.selectable_value(
-                        &mut state.llm_config.model_choice,
-                        *choice,
-                        choice.label(),
+                        &mut new_kind,
+                        BackendKind::Sidecar,
+                        BackendKind::Sidecar.label(),
                     );
+                    ui.selectable_value(
+                        &mut new_kind,
+                        BackendKind::Embedded,
+                        BackendKind::Embedded.label(),
+                    );
+                    ui.selectable_value(
+                        &mut new_kind,
+                        BackendKind::OpenAiCompat,
+                        BackendKind::OpenAiCompat.label(),
+                    );
+                });
+                if new_kind != current_kind {
+                    state.switch_backend_kind(new_kind);
                 }
-            });
-        if state.llm_config.model_choice != prev_choice {
-            state.on_model_choice_changed(prev_choice);
-        }
-        // Stage 3-C.17: surface manual-placement requirement for the
-        // Bonsai variant (HF repo not public yet) The download flow
-        // still tries but 404s; this label tells the user why and where
-        // to place the file if they have it
-        if state.llm_config.model_choice.requires_manual_placement() {
-            ui.colored_label(
-                ui.style().visuals.warn_fg_color,
-                format!(
-                    "手動配置要: HF repo 非公開のため {} を models_dir に配置",
-                    state.llm_config.model_choice.default_filename()
-                ),
-            )
-            .on_hover_text(
-                "PrismML fork Q1_0 (128-element binary ternary) の Bonsai 27B は現在 HF 非公開 GGUF ファイルを手動で models/bonsai-27b-q1_0.gguf に配置すると Embedded backend が拾います (Stage 3-C.9 の model_exists 経路)",
-            );
-        }
+                // Embedded load status (only meaningful when Embedded is selected)
+                if state.backend_kind == BackendKind::Embedded {
+                    let status = state.embedded_status();
+                    ui.label(format!(
+                        "{} {}",
+                        T::settings_embedded_status(lang),
+                        status.label()
+                    ))
+                    .on_hover_text(T::settings_embedded_hover(lang));
+                    // Stage 3-C.12: CPU / GPU picker (only relevant to Embedded)
+                    ui.add_space(4.0);
+                    ui.label(T::settings_execution_mode_label(lang));
+                    let prev_mode = state.execution_mode;
+                    let mut new_mode = prev_mode;
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut new_mode,
+                            ExecutionMode::Cpu,
+                            ExecutionMode::Cpu.label(),
+                        );
+                        ui.selectable_value(
+                            &mut new_mode,
+                            ExecutionMode::Gpu,
+                            ExecutionMode::Gpu.label(),
+                        );
+                    });
+                    if new_mode != prev_mode {
+                        state.switch_execution_mode(new_mode);
+                    }
+                    ui.label(format!(
+                        "{} {}",
+                        T::settings_current(lang),
+                        state.execution_mode.label()
+                    ))
+                    .on_hover_text(T::settings_execution_mode_hover(lang));
 
-        ui.add_space(4.0);
-        ui.label(format!("Temperature: {:.1}", state.llm_config.temperature));
-        ui.add(egui::Slider::new(
-            &mut state.llm_config.temperature,
-            0.0..=2.0,
-        ));
+                    // BYO LLM (2026-08-23): custom GGUF path override
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new(T::settings_custom_gguf_heading(lang)).strong());
+                    let display_path = state
+                        .custom_gguf_path
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| T::settings_custom_gguf_unset(lang).to_string());
+                    ui.label(egui::RichText::new(display_path).small().color(
+                        if state.custom_gguf_path.is_some() {
+                            egui::Color32::LIGHT_GREEN
+                        } else {
+                            ui.style().visuals.weak_text_color()
+                        },
+                    ));
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(T::settings_gguf_select_button(lang))
+                            .on_hover_text(T::settings_gguf_select_hover_extra(lang))
+                            .clicked()
+                            && let Some(path) = rfd::FileDialog::new()
+                                .add_filter("GGUF", &["gguf"])
+                                .pick_file()
+                        {
+                            state.set_custom_gguf_path(Some(path));
+                        }
+                        if state.custom_gguf_path.is_some()
+                            && ui
+                                .button(T::settings_clear_button(lang))
+                                .on_hover_text(T::settings_gguf_clear_hover(lang))
+                                .clicked()
+                        {
+                            state.set_custom_gguf_path(None);
+                        }
+                    });
+                }
+                ui.add_space(6.0);
 
-        // Stage 3-C.14: LOL GBNF grammar-constrained decoding toggle
-        ui.add_space(6.0);
-        let mut enforce = state.enforce_lol_grammar;
-        if ui
-            .checkbox(&mut enforce, "LOL DSL grammar 強制 (GBNF)")
-            .on_hover_text(
-                "オンにすると生成 request に text_to_print_llm::grammar_lol::LOL_GBNF (253 行) を付随して送信し、alice-llm 側で mask_logits_by_grammar を毎 token 適用します 出力は parse_lol でパース保証 (シンタックス誤り 0) オフにすると free-form output (デバッグ / 別 grammar 検証時用)",
-            )
-            .changed()
-        {
-            state.enforce_lol_grammar = enforce;
-            if let Err(e) = state
-                .db
-                .set_enforce_lol_grammar(&state.profile_id, enforce)
-            {
-                tracing::warn!(error = %e, "failed to persist enforce_lol_grammar toggle");
-            }
-        }
-    });
+                ui.label(T::settings_endpoint_alice_llm(lang));
+                ui.text_edit_singleline(&mut state.llm_config.endpoint);
 
-    ui.add_space(8.0);
+                ui.add_space(4.0);
+                ui.label(T::settings_model_label(lang));
+                // Stage 3-C.9: capture the previous choice so we can detect a
+                // change after the ComboBox mutates state and invoke the model-
+                // swap hook (only meaningful in Embedded mode)
+                let prev_choice = state.llm_config.model_choice;
+                egui::ComboBox::from_id_salt("llm_model_choice")
+                    .selected_text(state.llm_config.model_choice.label())
+                    .show_ui(ui, |ui| {
+                        for choice in ModelChoice::all() {
+                            ui.selectable_value(
+                                &mut state.llm_config.model_choice,
+                                *choice,
+                                choice.label(),
+                            );
+                        }
+                    });
+                if state.llm_config.model_choice != prev_choice {
+                    state.on_model_choice_changed(prev_choice);
+                }
+                // Stage 3-C.17: surface manual-placement requirement for the
+                // Bonsai variant (HF repo not public yet) The download flow
+                // still tries but 404s; this label tells the user why and where
+                // to place the file if they have it
+                if state.llm_config.model_choice.requires_manual_placement() {
+                    ui.colored_label(
+                        ui.style().visuals.warn_fg_color,
+                        format!(
+                            "{} {} {}",
+                            T::settings_manual_placement_prefix(lang),
+                            state.llm_config.model_choice.default_filename(),
+                            T::settings_manual_placement_suffix(lang),
+                        ),
+                    )
+                    .on_hover_text(T::settings_bonsai_manual_hover(lang));
+                }
 
-    // BYO LLM (2026-08-23): OpenAI-compat provider configuration
-    ui.collapsing("BYO LLM (OpenAI / Claude / Gemini / Ollama)", |ui| {
-        show_byo_llm(ui, state, &mut settings.byo_llm);
-    });
+                ui.add_space(4.0);
+                ui.label(format!(
+                    "{}: {:.1}",
+                    T::settings_temperature_label(lang),
+                    state.llm_config.temperature
+                ));
+                ui.add(egui::Slider::new(
+                    &mut state.llm_config.temperature,
+                    0.0..=2.0,
+                ));
 
-    ui.add_space(8.0);
-
-    // Gallery Phase 1 (2026-08-26): profile display name shown in the
-    // Gallery in place of the raw DID hex Empty = fallback to DID
-    // short-form 32 char cap enforced client-side
-    ui.collapsing("プロフィール (Gallery 表示名)", |ui| {
-        let mut nickname = state.nickname.clone();
-        let response = ui
-            .add(
-                egui::TextEdit::singleline(&mut nickname)
-                    .hint_text("Gallery で表示される名前 (空欄なら DID)")
-                    .char_limit(32)
-                    .desired_width(240.0),
-            )
-            .on_hover_text(
-                "Gallery タブで他人が見る表示名 空欄のままなら DID (did:key:...) の先頭 12 char + 末尾 6 char が表示されます 変更しても過去に公開した post には反映されません (最新の nickname は次回公開時から反映)",
-            );
-        if response.lost_focus() && nickname != state.nickname {
-            state.nickname = nickname.clone();
-            if let Err(e) = state.db.set_nickname(&state.profile_id, &nickname) {
-                tracing::warn!(error = %e, "failed to persist nickname");
-            }
-        }
-        ui.add_space(4.0);
-        ui.label(format!(
-            "DID: {}",
-            &state.profile_id[..16.min(state.profile_id.len())]
-        ));
-    });
-
-    ui.add_space(8.0);
-
-    // LoRA share opt-out (Stage 5 T5.2)
-    ui.collapsing("LoRA share", |ui| {
-        let mut share = state.share_lol_dsl;
-        if ui
-            .checkbox(&mut share, "LoRA 学習データ提供に協力する")
-            .on_hover_text(
-                "オンにすると生成した LOL DSL + 品質シグナル (prompt / LOL 原文 / mesh SHA-256 / retry_count / safety_violations 等) が ALICE-LOL LoRA 学習セットに送信対象化されます Free tier default オン、Paid tier は完全 offline\n\n送信されないもの: Apple/Google/Microsoft アカウント ID / machine ID / file path / license key / crash report / P2P share pending キュー\n\n詳細: docs/SHARE.md",
-            )
-            .changed()
-        {
-            state.share_lol_dsl = share;
-            if let Err(e) = state.db.set_share_lol_dsl(&state.profile_id, share) {
-                tracing::warn!(error = %e, "failed to persist share_lol_dsl toggle");
-            }
-        }
-        ui.add_space(4.0);
-        // Stage 5: tier-effective status Paid tiers force opt-out
-        // regardless of the checkbox — surface that explicitly so users
-        // don't wonder why their toggle isn't taking effect
-        let effective_status = if state.share_effective_enabled() {
-            "現在: 共有中 (LoRA 品質向上に貢献)"
-        } else if state.share_lol_dsl {
-            "現在: 有料 tier のため自動 opt-out (アップロードしません)"
-        } else {
-            "現在: opt-out (アップロードしません)"
-        };
-        ui.label(effective_status);
-        ui.add_space(4.0);
-        // Stage 5: surface both queue counts — dry-run kept as local
-        // audit corpus, share_queue is the real upload backlog drained by
-        // `retry_queued_uploads` on startup
-        let dry_queued =
-            text_to_print_network::share::count_dry_run_queued(&state.share_dry_run_dir());
-        let queue_pending = text_to_print_network::share::count_pending(&state.share_queue_dir());
-        ui.label(format!(
-            "アップロード待ち: 実キュー {queue_pending} 件 / dry-run {dry_queued} 件"
-        ));
-        ui.add_space(4.0);
-        // Gallery Phase 2 (2026-08-26): confirm-dialog opt-in Only
-        // meaningful when the parent LoRA share is on; Paid tiers
-        // never reach the dialog either way
-        let mut auto = state.gallery_auto_share;
-        let auto_response = ui
-            .add_enabled(
-                state.share_effective_enabled(),
-                egui::Checkbox::new(&mut auto, "毎回自動公開 (公開確認 dialog を表示しない)"),
-            )
-            .on_hover_text(
-                "オフ (default) だと生成完了ごとに Gallery 公開確認 dialog が出ます オンにすると dialog なしで自動公開されます (Free tier で share on の時のみ、Paid tier は常時 upload しない)",
-            );
-        if auto_response.changed() {
-            state.gallery_auto_share = auto;
-            if let Err(e) = state.db.set_gallery_auto_share(&state.profile_id, auto) {
-                tracing::warn!(error = %e, "failed to persist gallery_auto_share toggle");
-            }
-        }
-        ui.add_space(4.0);
-        ui.hyperlink_to(
-            "詳細な送信内容と opt-out 手順 (docs/SHARE.md)",
-            "https://github.com/ext-sakamoro/text-to-print/blob/main/docs/SHARE.md",
-        );
-    });
-
-    ui.add_space(8.0);
-
-    // Crash reports opt-in (#36)
-    ui.collapsing("クラッシュレポート", |ui| {
-        let mut enabled = text_to_print_core::crash_report::is_optin(&state.data_dir);
-        if ui
-            .checkbox(&mut enabled, "クラッシュ発生時にローカル report を保存する")
-            .on_hover_text(
-                "オンにするとクラッシュ発生時に crash_reports/{uuid}.json が data_dir に保存されます (現状 upload なし、backend #36 実装後に opt-in で送信予定) オフにするとログのみ",
-            )
-            .changed()
-            && let Err(e) =
-                text_to_print_core::crash_report::set_optin(&state.data_dir, enabled)
-        {
-            tracing::warn!(error = %e, "failed to persist crash report opt-in");
-        }
-        ui.add_space(4.0);
-        let pending = text_to_print_core::crash_report::count_pending(&state.data_dir);
-        ui.label(format!("保存済 report: {pending} 件"));
-        if pending > 0
-            && ui.button("フォルダを開く").clicked()
-        {
-            let _ = open::that(
-                text_to_print_core::crash_report::crash_reports_dir(&state.data_dir),
-            );
-        }
-    });
-
-    ui.add_space(8.0);
-
-    // ネットワーク情報
-    ui.collapsing("Network", |ui| {
-        ui.label(format!("Profile ID: {}", &state.profile_id[..8]));
-        ui.label(format!("本日の使用量: {} 回", state.daily_usage()));
-        let limit = state.tier.limits().daily_generations;
-        if limit == u32::MAX {
-            ui.label("生成上限: 無制限");
-        } else {
-            ui.label(format!("生成上限: {} 回/日", limit));
-        }
-
-        ui.separator();
-        ui.label(
-            egui::RichText::new("Advanced (次回起動時に反映)")
-                .small()
-                .weak(),
-        );
-
-        // 初回だけ DB から現在値を SettingsState に load
-        if !settings.network_loaded {
-            settings.presets_endpoint_input = state
-                .db
-                .get_presets_endpoint(&state.profile_id)
-                .unwrap_or_default();
-            settings.sidecar_port_input = state
-                .db
-                .get_sidecar_port(&state.profile_id)
-                .unwrap_or(8000)
-                .to_string();
-            settings.network_loaded = true;
-        }
-
-        // Preset library endpoint (custom URL / 空 = default Cloudflare)
-        ui.horizontal(|ui| {
-            ui.label("Preset endpoint:");
-            ui.add(
-                egui::TextEdit::singleline(&mut settings.presets_endpoint_input)
-                    .hint_text("空 = 既定 (Cloudflare)")
-                    .desired_width(340.0),
-            );
-        });
-        ui.label(
-            egui::RichText::new(
-                "空欄なら https://text-to-print.alicelaw.net/api/presets を使用 \
-                 (self-hosted mirror / proxy 経由時のみ変更)",
-            )
-            .small()
-            .weak(),
-        );
-
-        // Preset sync enable toggle
-        let mut sync_enabled = state
-            .db
-            .get_presets_sync_enabled(&state.profile_id)
-            .unwrap_or(true);
-        if ui
-            .checkbox(&mut sync_enabled, "起動時に preset library を同期する")
-            .changed()
-        {
-            let _ = state
-                .db
-                .set_presets_sync_enabled(&state.profile_id, sync_enabled);
-        }
-
-        // Sidecar port (u16)
-        ui.horizontal(|ui| {
-            ui.label("Sidecar port:");
-            ui.add(
-                egui::TextEdit::singleline(&mut settings.sidecar_port_input).desired_width(80.0),
-            );
-            ui.label(
-                egui::RichText::new("(既定 8000、使用中なら +1 で自動 fallback)")
-                    .small()
-                    .weak(),
-            );
-        });
-
-        // Save button
-        if ui.button("Save network settings").clicked() {
-            let endpoint = settings.presets_endpoint_input.trim().to_string();
-            let port_result = settings.sidecar_port_input.trim().parse::<u16>();
-            let mut errors = Vec::new();
-            match port_result {
-                Ok(p) if (1024..=65535).contains(&p) => {
-                    if let Err(e) = state.db.set_sidecar_port(&state.profile_id, p) {
-                        errors.push(format!("port save 失敗: {e}"));
+                // Stage 3-C.14: LOL GBNF grammar-constrained decoding toggle
+                ui.add_space(6.0);
+                let mut enforce = state.enforce_lol_grammar;
+                if ui
+                    .checkbox(&mut enforce, T::settings_grammar_checkbox(lang))
+                    .on_hover_text(T::settings_grammar_hover(lang))
+                    .changed()
+                {
+                    state.enforce_lol_grammar = enforce;
+                    if let Err(e) = state.db.set_enforce_lol_grammar(&state.profile_id, enforce) {
+                        tracing::warn!(error = %e, "failed to persist enforce_lol_grammar toggle");
                     }
                 }
-                _ => errors.push("port は 1024-65535 の整数".to_string()),
-            }
-            if let Err(e) = state.db.set_presets_endpoint(&state.profile_id, &endpoint) {
-                errors.push(format!("endpoint save 失敗: {e}"));
-            }
-            if errors.is_empty() {
-                settings.network_message = Some(("保存完了 次回起動時に反映".to_string(), true));
-            } else {
-                settings.network_message = Some((errors.join(" / "), false));
-            }
-        }
+            });
 
-        if let Some((msg, ok)) = &settings.network_message {
-            let color = if *ok {
-                egui::Color32::LIGHT_GREEN
-            } else {
-                egui::Color32::LIGHT_RED
-            };
-            ui.colored_label(color, msg);
-        }
-    });
+            ui.add_space(8.0);
+
+            // BYO LLM (2026-08-23): OpenAI-compat provider configuration
+            ui.collapsing(T::settings_section_byo(lang), |ui| {
+                show_byo_llm(ui, state, &mut settings.byo_llm, lang);
+            });
+
+            ui.add_space(8.0);
+
+            // Gallery Phase 1 (2026-08-26): profile display name shown in the
+            // Gallery in place of the raw DID hex Empty = fallback to DID
+            // short-form 32 char cap enforced client-side
+            ui.collapsing(T::settings_profile_section(lang), |ui| {
+                let mut nickname = state.nickname.clone();
+                let response = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut nickname)
+                            .hint_text(T::settings_nickname_hint(lang))
+                            .char_limit(32)
+                            .desired_width(240.0),
+                    )
+                    .on_hover_text(T::settings_nickname_hover(lang));
+                if response.lost_focus() && nickname != state.nickname {
+                    state.nickname = nickname.clone();
+                    if let Err(e) = state.db.set_nickname(&state.profile_id, &nickname) {
+                        tracing::warn!(error = %e, "failed to persist nickname");
+                    }
+                }
+                ui.add_space(4.0);
+                ui.label(format!(
+                    "{}: {}",
+                    T::settings_did_label(lang),
+                    &state.profile_id[..16.min(state.profile_id.len())]
+                ));
+            });
+
+            ui.add_space(8.0);
+
+            // LoRA share opt-out (Stage 5 T5.2)
+            ui.collapsing(T::settings_section_lora_share(lang), |ui| {
+                let mut share = state.share_lol_dsl;
+                if ui
+                    .checkbox(&mut share, T::settings_lora_share_checkbox(lang))
+                    .on_hover_text(T::settings_lora_share_hover(lang))
+                    .changed()
+                {
+                    state.share_lol_dsl = share;
+                    if let Err(e) = state.db.set_share_lol_dsl(&state.profile_id, share) {
+                        tracing::warn!(error = %e, "failed to persist share_lol_dsl toggle");
+                    }
+                }
+                ui.add_space(4.0);
+                // Stage 5: tier-effective status Paid tiers force opt-out
+                // regardless of the checkbox — surface that explicitly so users
+                // don't wonder why their toggle isn't taking effect
+                let effective_status: &'static str = if state.share_effective_enabled() {
+                    T::settings_share_status_active(lang)
+                } else if state.share_lol_dsl {
+                    T::settings_share_status_paid(lang)
+                } else {
+                    T::settings_share_status_off(lang)
+                };
+                ui.label(effective_status);
+                ui.add_space(4.0);
+                // Stage 5: surface both queue counts — dry-run kept as local
+                // audit corpus, share_queue is the real upload backlog drained by
+                // `retry_queued_uploads` on startup
+                let dry_queued =
+                    text_to_print_network::share::count_dry_run_queued(&state.share_dry_run_dir());
+                let queue_pending =
+                    text_to_print_network::share::count_pending(&state.share_queue_dir());
+                ui.label(format!(
+                    "{} {queue_pending} {} / dry-run {dry_queued} {}",
+                    T::settings_upload_queue(lang),
+                    T::settings_upload_queue_items(lang),
+                    T::settings_upload_queue_items(lang),
+                ));
+                ui.add_space(4.0);
+                // Gallery Phase 2 (2026-08-26): confirm-dialog opt-in Only
+                // meaningful when the parent LoRA share is on; Paid tiers
+                // never reach the dialog either way
+                let mut auto = state.gallery_auto_share;
+                let auto_response = ui
+                    .add_enabled(
+                        state.share_effective_enabled(),
+                        egui::Checkbox::new(&mut auto, T::settings_auto_publish_checkbox(lang)),
+                    )
+                    .on_hover_text(T::settings_auto_publish_hover(lang));
+                if auto_response.changed() {
+                    state.gallery_auto_share = auto;
+                    if let Err(e) = state.db.set_gallery_auto_share(&state.profile_id, auto) {
+                        tracing::warn!(error = %e, "failed to persist gallery_auto_share toggle");
+                    }
+                }
+                ui.add_space(4.0);
+                ui.hyperlink_to(
+                    T::settings_share_details_link(lang),
+                    "https://github.com/ext-sakamoro/text-to-print/blob/main/docs/SHARE.md",
+                );
+            });
+
+            ui.add_space(8.0);
+
+            // Crash reports opt-in (#36)
+            ui.collapsing(T::settings_section_crash(lang), |ui| {
+                let mut enabled = text_to_print_core::crash_report::is_optin(&state.data_dir);
+                if ui
+                    .checkbox(&mut enabled, T::settings_crash_checkbox(lang))
+                    .on_hover_text(T::settings_crash_hover(lang))
+                    .changed()
+                    && let Err(e) =
+                        text_to_print_core::crash_report::set_optin(&state.data_dir, enabled)
+                {
+                    tracing::warn!(error = %e, "failed to persist crash report opt-in");
+                }
+                ui.add_space(4.0);
+                let pending = text_to_print_core::crash_report::count_pending(&state.data_dir);
+                ui.label(format!(
+                    "{} {pending} {}",
+                    T::settings_crash_saved(lang),
+                    T::settings_upload_queue_items(lang),
+                ));
+                if pending > 0 && ui.button(T::settings_crash_open_folder(lang)).clicked() {
+                    let _ = open::that(text_to_print_core::crash_report::crash_reports_dir(
+                        &state.data_dir,
+                    ));
+                }
+            });
+
+            ui.add_space(8.0);
+
+            // ネットワーク情報
+            ui.collapsing(T::settings_section_network(lang), |ui| {
+                ui.label(format!(
+                    "{}: {}",
+                    T::settings_profile_id_label(lang),
+                    &state.profile_id[..8]
+                ));
+                ui.label(format!(
+                    "{} {} {}",
+                    T::settings_today_usage(lang),
+                    state.daily_usage(),
+                    T::settings_times_unit(lang),
+                ));
+                let limit = state.tier.limits().daily_generations;
+                if limit == u32::MAX {
+                    ui.label(T::settings_limit_unlimited(lang));
+                } else {
+                    ui.label(format!(
+                        "{} {} {}",
+                        T::settings_limit_daily_prefix(lang),
+                        limit,
+                        T::settings_limit_per_day(lang),
+                    ));
+                }
+
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(T::settings_advanced_section(lang))
+                        .small()
+                        .weak(),
+                );
+
+                // 初回だけ DB から現在値を SettingsState に load
+                if !settings.network_loaded {
+                    settings.presets_endpoint_input = state
+                        .db
+                        .get_presets_endpoint(&state.profile_id)
+                        .unwrap_or_default();
+                    settings.sidecar_port_input = state
+                        .db
+                        .get_sidecar_port(&state.profile_id)
+                        .unwrap_or(8000)
+                        .to_string();
+                    settings.network_loaded = true;
+                }
+
+                // Preset library endpoint (custom URL / 空 = default Cloudflare)
+                ui.horizontal(|ui| {
+                    ui.label(T::settings_preset_endpoint_label(lang));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut settings.presets_endpoint_input)
+                            .hint_text(T::settings_endpoint_hint(lang))
+                            .desired_width(340.0),
+                    );
+                });
+                ui.label(
+                    egui::RichText::new(T::settings_endpoint_hover_extra(lang))
+                        .small()
+                        .weak(),
+                );
+
+                // Preset sync enable toggle
+                let mut sync_enabled = state
+                    .db
+                    .get_presets_sync_enabled(&state.profile_id)
+                    .unwrap_or(true);
+                if ui
+                    .checkbox(&mut sync_enabled, T::settings_preset_sync_checkbox(lang))
+                    .changed()
+                {
+                    let _ = state
+                        .db
+                        .set_presets_sync_enabled(&state.profile_id, sync_enabled);
+                }
+
+                // Sidecar port (u16)
+                ui.horizontal(|ui| {
+                    ui.label(T::settings_sidecar_port_label(lang));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut settings.sidecar_port_input)
+                            .desired_width(80.0),
+                    );
+                    ui.label(
+                        egui::RichText::new(T::settings_port_default_hint(lang))
+                            .small()
+                            .weak(),
+                    );
+                });
+
+                // Save button
+                if ui.button(T::settings_save_network_button(lang)).clicked() {
+                    let endpoint = settings.presets_endpoint_input.trim().to_string();
+                    let port_result = settings.sidecar_port_input.trim().parse::<u16>();
+                    let mut errors = Vec::new();
+                    match port_result {
+                        Ok(p) if (1024..=65535).contains(&p) => {
+                            if let Err(e) = state.db.set_sidecar_port(&state.profile_id, p) {
+                                errors.push(format!("{}: {e}", T::settings_port_save_error(lang)));
+                            }
+                        }
+                        _ => errors.push(T::settings_port_range_error(lang).to_string()),
+                    }
+                    if let Err(e) = state.db.set_presets_endpoint(&state.profile_id, &endpoint) {
+                        errors.push(format!("{}: {e}", T::settings_endpoint_save_error(lang)));
+                    }
+                    if errors.is_empty() {
+                        settings.network_message =
+                            Some((T::settings_save_next_launch(lang).to_string(), true));
+                    } else {
+                        settings.network_message = Some((errors.join(" / "), false));
+                    }
+                }
+
+                if let Some((msg, ok)) = &settings.network_message {
+                    let color = if *ok {
+                        egui::Color32::LIGHT_GREEN
+                    } else {
+                        egui::Color32::LIGHT_RED
+                    };
+                    ui.colored_label(color, msg);
+                }
+            });
         }); // ScrollArea::show close (2026-09-02 fix)
 }
 
@@ -672,7 +694,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState) {
 /// config form (endpoint / model / max_tokens / temperature /
 /// reasoning_effort / API key), Save / Test / Delete / Activate actions,
 /// and per-generation cost estimate
-fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
+fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings, lang: Lang) {
     // ── 1. One-shot init from DB ──────────────────────────────
     if !form.loaded {
         form.configured_providers = state
@@ -693,24 +715,21 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
 
     // ── 2. Info banner ────────────────────────────────────────
     ui.label(
-        egui::RichText::new(
-            "リモート LLM API 設定 (OpenAI / Anthropic / Google / Ollama 等) \
-             保存された provider のうち 1 つを 'アクティブ' として生成に使用します",
-        )
-        .small()
-        .weak(),
+        egui::RichText::new(T::settings_byo_intro_extra(lang))
+            .small()
+            .weak(),
     );
     ui.add_space(4.0);
     if state.backend_kind != BackendKind::OpenAiCompat {
         ui.colored_label(
             ui.style().visuals.warn_fg_color,
-            "現在の Inference backend は BYO LLM ではありません 上の picker で 'BYO LLM' を選択すると有効",
+            T::settings_byo_not_selected(lang),
         );
         ui.add_space(4.0);
     }
 
     // ── 3. Provider preset buttons ────────────────────────────
-    ui.label("Provider preset:");
+    ui.label(T::settings_provider_preset_label(lang));
     ui.horizontal_wrapped(|ui| {
         for p in [
             OpenAiCompatProvider::OpenAi,
@@ -733,67 +752,67 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
         }
     });
     ui.label(
-        egui::RichText::new("★ = アクティブ (生成に使用中) / ● = 保存済 (未アクティブ)")
+        egui::RichText::new(T::settings_byo_legend(lang))
             .small()
             .weak(),
     );
     ui.label(
-        egui::RichText::new(
-            "💡 無料で試すなら Google (Gemini 2.5 Flash) 推奨 \
-             AI Studio (aistudio.google.com/apikey) で API key 取得、無料枠 ~1500 req/day",
-        )
-        .small()
-        .color(egui::Color32::from_rgb(120, 180, 220)),
+        egui::RichText::new(T::settings_byo_free_hint_extra(lang))
+            .small()
+            .color(egui::Color32::from_rgb(120, 180, 220)),
     );
 
     let Some(provider) = form.form_provider else {
         ui.add_space(4.0);
-        ui.label(egui::RichText::new("上のボタンで provider を選択").weak());
+        ui.label(egui::RichText::new(T::settings_byo_select_provider(lang)).weak());
         return;
     };
 
     // ── 4. Form fields ────────────────────────────────────────
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        ui.label("Endpoint:");
+        ui.label(T::settings_byo_endpoint_label(lang));
         ui.add(egui::TextEdit::singleline(&mut form.form_endpoint).desired_width(420.0));
     });
     ui.horizontal(|ui| {
-        ui.label("Model:");
+        ui.label(T::settings_byo_model_label(lang));
         ui.add(egui::TextEdit::singleline(&mut form.form_model).desired_width(300.0))
-            .on_hover_text(
-                "例: OpenAI: gpt-5 / o1 / gpt-4o-mini \
-                 Anthropic: claude-sonnet-4-5 / claude-opus-4-7 \
-                 Google: gemini-2.5-pro / gemini-2.5-flash \
-                 Ollama: qwen2.5-14b-instruct",
-            );
+            .on_hover_text(T::settings_byo_model_hint_extra(lang));
     });
     ui.horizontal(|ui| {
-        ui.label("Max tokens:");
+        ui.label(T::settings_byo_max_tokens_label(lang));
         ui.add(egui::TextEdit::singleline(&mut form.form_max_tokens).desired_width(80.0));
         ui.label(
-            egui::RichText::new("(既定 256、大きくすると 1 生成コスト増)")
+            egui::RichText::new(T::settings_byo_max_tokens_hint(lang))
                 .small()
                 .weak(),
         );
     });
     ui.horizontal(|ui| {
-        ui.label("Temperature:");
+        ui.label(T::settings_byo_temperature_label(lang));
         ui.add(egui::TextEdit::singleline(&mut form.form_temperature).desired_width(60.0));
-        ui.label(egui::RichText::new("(0.0-2.0、既定 0.7)").small().weak());
+        ui.label(
+            egui::RichText::new(T::settings_byo_temperature_hint(lang))
+                .small()
+                .weak(),
+        );
     });
 
     // Reasoning effort (cost guard)
     ui.horizontal(|ui| {
-        ui.label("Reasoning effort:");
+        ui.label(T::settings_byo_reasoning_label(lang));
         egui::ComboBox::from_id_salt("byo_llm_reasoning_effort")
             .selected_text(if form.form_reasoning_effort.is_empty() {
-                "(未指定)"
+                T::settings_byo_reasoning_unset(lang)
             } else {
                 form.form_reasoning_effort.as_str()
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut form.form_reasoning_effort, String::new(), "(未指定)");
+                ui.selectable_value(
+                    &mut form.form_reasoning_effort,
+                    String::new(),
+                    T::settings_byo_reasoning_unset(lang),
+                );
                 ui.selectable_value(
                     &mut form.form_reasoning_effort,
                     "minimal".to_string(),
@@ -808,13 +827,9 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
             });
     });
     ui.label(
-        egui::RichText::new(
-            "OpenAI GPT-5/o-series は 'minimal' 推奨 (silent thinking 課金抑制) \
-             Google Gemini 2.5 は 'none' 推奨 (silent thinking 抑制) \
-             Anthropic / Ollama は空欄で OK",
-        )
-        .small()
-        .weak(),
+        egui::RichText::new(T::settings_byo_reasoning_hover_extra(lang))
+            .small()
+            .weak(),
     );
 
     // API key input
@@ -823,12 +838,12 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
     // memory 平文化を最小化) 起動毎に empty で始まるが正常動作
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        ui.label("API key:");
+        ui.label(T::settings_byo_api_key_label(lang));
         ui.add(
             egui::TextEdit::singleline(&mut form.form_api_key)
                 .password(true)
                 .desired_width(320.0)
-                .hint_text("保存済でも空欄表示 新規入力で上書き"),
+                .hint_text(T::settings_byo_api_key_hint(lang)),
         );
     });
     // Keychain 状態を色 + icon で prominent 化 (2026-09-04 UX 改善、
@@ -836,21 +851,21 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
     match keychain::get_api_key(provider.keychain_account()) {
         Ok(Some(_)) => {
             ui.label(
-                egui::RichText::new("✅ Keychain に保存済 (起動毎に empty 表示は正常動作)")
+                egui::RichText::new(T::settings_byo_keychain_saved(lang))
                     .color(egui::Color32::from_rgb(0x2e, 0xa0, 0x43))
                     .strong(),
             );
         }
         Ok(None) => {
             ui.label(
-                egui::RichText::new("⚠️ 未保存 API key を入力して「保存」を押してください")
+                egui::RichText::new(T::settings_byo_keychain_unset(lang))
                     .color(ui.style().visuals.warn_fg_color)
                     .strong(),
             );
         }
         Err(_) => {
             ui.label(
-                egui::RichText::new("❌ Keychain 読出エラー")
+                egui::RichText::new(T::settings_byo_keychain_error(lang))
                     .color(ui.style().visuals.error_fg_color)
                     .strong(),
             );
@@ -860,18 +875,18 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
     // ── 5. Action buttons ─────────────────────────────────────
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
-        if ui.button("保存").clicked() {
-            save_byo_llm_form(state, form, provider);
+        if ui.button(T::settings_save_button(lang)).clicked() {
+            save_byo_llm_form(state, form, provider, lang);
         }
         if ui
-            .button("テスト送信 (~16 tokens)")
-            .on_hover_text("フォーム内容で 1 回だけ生成 (最大 30 秒 UI ブロック)")
+            .button(T::settings_byo_test_button(lang))
+            .on_hover_text(T::settings_byo_test_hover(lang))
             .clicked()
         {
-            test_byo_llm(state, form, provider);
+            test_byo_llm(state, form, provider, lang);
         }
-        if ui.button("削除").clicked() {
-            delete_byo_llm_form(state, form, provider);
+        if ui.button(T::settings_delete_button(lang)).clicked() {
+            delete_byo_llm_form(state, form, provider, lang);
         }
         let is_saved = form
             .configured_providers
@@ -881,11 +896,11 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
         if is_saved
             && !is_active
             && ui
-                .button("この provider をアクティブ化")
-                .on_hover_text("生成時にこの provider を使うよう切替")
+                .button(T::settings_byo_activate_button(lang))
+                .on_hover_text(T::settings_byo_activate_hover(lang))
                 .clicked()
         {
-            activate_byo_llm(state, form, provider);
+            activate_byo_llm(state, form, provider, lang);
         }
     });
 
@@ -895,19 +910,18 @@ fn show_byo_llm(ui: &mut Ui, state: &mut AppState, form: &mut ByoLlmSettings) {
         Some(usd) => {
             ui.label(
                 egui::RichText::new(format!(
-                    "予想コスト: 約 ${usd:.4} / 生成 (system_prompt ~4K in + ~500 out トークン想定、rate は 2026-08-23 時点、実際は provider の pricing page で確認)"
+                    "{} ${usd:.4} {}",
+                    T::settings_byo_cost_estimate_prefix(lang),
+                    T::settings_byo_cost_estimate_suffix(lang),
                 ))
                 .small(),
             );
         }
         None => {
             ui.label(
-                egui::RichText::new(
-                    "予想コスト: rate table に model なし (Custom / 独自 model 使用時) \
-                     API 課金は provider の pricing page で確認",
-                )
-                .small()
-                .weak(),
+                egui::RichText::new(T::settings_byo_cost_unknown_extra(lang))
+                    .small()
+                    .weak(),
             );
         }
     }
@@ -964,28 +978,29 @@ fn save_byo_llm_form(
     state: &mut AppState,
     form: &mut ByoLlmSettings,
     provider: OpenAiCompatProvider,
+    lang: Lang,
 ) {
     // Parse + validate
     let max_tokens = match form.form_max_tokens.trim().parse::<u32>() {
         Ok(v) if v > 0 => v,
         _ => {
-            form.message = Some(("max_tokens は正の整数".to_string(), false));
+            form.message = Some((T::settings_max_tokens_positive_int(lang).to_string(), false));
             return;
         }
     };
     let temperature = match form.form_temperature.trim().parse::<f32>() {
         Ok(v) if (0.0..=2.0).contains(&v) => v,
         _ => {
-            form.message = Some(("temperature は 0.0-2.0 の実数".to_string(), false));
+            form.message = Some((T::settings_temperature_range(lang).to_string(), false));
             return;
         }
     };
     if form.form_endpoint.trim().is_empty() {
-        form.message = Some(("endpoint が空".to_string(), false));
+        form.message = Some((T::settings_endpoint_empty(lang).to_string(), false));
         return;
     }
     if form.form_model.trim().is_empty() {
-        form.message = Some(("model が空".to_string(), false));
+        form.message = Some((T::settings_model_empty(lang).to_string(), false));
         return;
     }
 
@@ -994,7 +1009,10 @@ fn save_byo_llm_form(
     if api_key_typed
         && let Err(e) = keychain::set_api_key(provider.keychain_account(), form.form_api_key.trim())
     {
-        form.message = Some((format!("Keychain 保存失敗: {e}"), false));
+        form.message = Some((
+            format!("{}: {e}", T::settings_keychain_save_fail(lang)),
+            false,
+        ));
         return;
     }
 
@@ -1002,14 +1020,14 @@ fn save_byo_llm_form(
     let api_key = match keychain::get_api_key(provider.keychain_account()) {
         Ok(Some(k)) => k,
         Ok(None) => {
-            form.message = Some((
-                "API key が未入力 (Keychain にも保存なし)".to_string(),
-                false,
-            ));
+            form.message = Some((T::settings_api_key_missing(lang).to_string(), false));
             return;
         }
         Err(e) => {
-            form.message = Some((format!("Keychain 読出失敗: {e}"), false));
+            form.message = Some((
+                format!("{}: {e}", T::settings_keychain_read_fail(lang)),
+                false,
+            ));
             return;
         }
     };
@@ -1029,7 +1047,7 @@ fn save_byo_llm_form(
         reasoning_effort: reasoning_effort.clone(),
     };
     if let Err(e) = state.db.set_llm_provider_config(&state.profile_id, &row) {
-        form.message = Some((format!("DB 保存失敗: {e}"), false));
+        form.message = Some((format!("{}: {e}", T::settings_db_save_fail(lang)), false));
         return;
     }
 
@@ -1060,7 +1078,7 @@ fn save_byo_llm_form(
         form.configured_providers.sort();
     }
     form.form_api_key.clear();
-    form.message = Some(("保存完了".to_string(), true));
+    form.message = Some((T::settings_saved_ok(lang).to_string(), true));
 }
 
 /// Remove the saved config for a provider Deletes both the DB row and
@@ -1069,16 +1087,20 @@ fn delete_byo_llm_form(
     state: &mut AppState,
     form: &mut ByoLlmSettings,
     provider: OpenAiCompatProvider,
+    lang: Lang,
 ) {
     if let Err(e) = state
         .db
         .delete_llm_provider_config(&state.profile_id, provider.to_db_str())
     {
-        form.message = Some((format!("DB 削除失敗: {e}"), false));
+        form.message = Some((format!("{}: {e}", T::settings_db_delete_fail(lang)), false));
         return;
     }
     if let Err(e) = keychain::delete_api_key(provider.keychain_account()) {
-        form.message = Some((format!("Keychain 削除失敗: {e}"), false));
+        form.message = Some((
+            format!("{}: {e}", T::settings_keychain_delete_fail(lang)),
+            false,
+        ));
         return;
     }
     if form.active_provider == provider.to_db_str()
@@ -1089,7 +1111,7 @@ fn delete_byo_llm_form(
     form.configured_providers
         .retain(|s| s != provider.to_db_str());
     form.form_api_key.clear();
-    form.message = Some(("削除完了".to_string(), true));
+    form.message = Some((T::settings_deleted_ok(lang).to_string(), true));
 }
 
 /// Mark the given provider as the active generation target Persists the
@@ -1099,12 +1121,16 @@ fn activate_byo_llm(
     state: &mut AppState,
     form: &mut ByoLlmSettings,
     provider: OpenAiCompatProvider,
+    lang: Lang,
 ) {
     if let Err(e) = state
         .db
         .set_openai_compat_active_provider(&state.profile_id, provider.to_db_str())
     {
-        form.message = Some((format!("active provider 保存失敗: {e}"), false));
+        form.message = Some((
+            format!("{}: {e}", T::settings_active_save_fail(lang)),
+            false,
+        ));
         return;
     }
     form.active_provider = provider.to_db_str().to_string();
@@ -1114,24 +1140,21 @@ fn activate_byo_llm(
     {
         Ok(Some(r)) => r,
         _ => {
-            form.message = Some((
-                "この provider は未保存 まず '保存' して下さい".to_string(),
-                false,
-            ));
+            form.message = Some((T::settings_provider_not_saved(lang).to_string(), false));
             return;
         }
     };
     let api_key = match keychain::get_api_key(provider.keychain_account()) {
         Ok(Some(k)) => k,
         Ok(None) => {
-            form.message = Some((
-                "Keychain に API key なし まず '保存' して下さい".to_string(),
-                false,
-            ));
+            form.message = Some((T::settings_no_api_key_saved(lang).to_string(), false));
             return;
         }
         Err(e) => {
-            form.message = Some((format!("Keychain 読出失敗: {e}"), false));
+            form.message = Some((
+                format!("{}: {e}", T::settings_keychain_read_fail(lang)),
+                false,
+            ));
             return;
         }
     };
@@ -1145,34 +1168,43 @@ fn activate_byo_llm(
     if let Ok(mut slot) = state.openai_compat.lock() {
         *slot = Some(OpenAiCompatBackend::new(cfg));
     }
-    form.message = Some((format!("{} をアクティブ化しました", provider.label()), true));
+    form.message = Some((
+        format!(
+            "{} {}",
+            provider.label(),
+            T::settings_activated_ok_suffix(lang)
+        ),
+        true,
+    ));
 }
 
 /// Fire a short synthetic generation request against the currently-
 /// edited form config Blocks the UI thread for up to 30 s (acceptable
 /// for a manual Test button) API key resolution: form input takes
 /// priority; falls back to Keychain-stored value
-fn test_byo_llm(state: &AppState, form: &mut ByoLlmSettings, provider: OpenAiCompatProvider) {
+fn test_byo_llm(
+    state: &AppState,
+    form: &mut ByoLlmSettings,
+    provider: OpenAiCompatProvider,
+    lang: Lang,
+) {
     let api_key = if !form.form_api_key.trim().is_empty() {
         form.form_api_key.trim().to_string()
     } else {
         match keychain::get_api_key(provider.keychain_account()) {
             Ok(Some(k)) => k,
             _ => {
-                form.message = Some((
-                    "API key が form / Keychain のどちらにもなし".to_string(),
-                    false,
-                ));
+                form.message = Some((T::settings_api_key_both_missing(lang).to_string(), false));
                 return;
             }
         }
     };
     if form.form_endpoint.trim().is_empty() {
-        form.message = Some(("endpoint が空".to_string(), false));
+        form.message = Some((T::settings_endpoint_empty(lang).to_string(), false));
         return;
     }
     if form.form_model.trim().is_empty() {
-        form.message = Some(("model が空".to_string(), false));
+        form.message = Some((T::settings_model_empty(lang).to_string(), false));
         return;
     }
     let cfg = OpenAiCompatConfig {
@@ -1207,10 +1239,13 @@ fn test_byo_llm(state: &AppState, form: &mut ByoLlmSettings, provider: OpenAiCom
     form.message = Some(match outcome {
         Ok(Ok(reply)) => {
             let preview: String = reply.chars().take(80).collect();
-            (format!("成功: {preview}"), true)
+            (
+                format!("{} {preview}", T::settings_test_success_prefix(lang)),
+                true,
+            )
         }
-        Ok(Err(e)) => (format!("失敗: {e}"), false),
-        Err(_) => ("失敗: 30 秒でタイムアウト".to_string(), false),
+        Ok(Err(e)) => (format!("{} {e}", T::settings_test_fail_prefix(lang)), false),
+        Err(_) => (T::settings_test_timeout(lang).to_string(), false),
     });
 }
 
@@ -1259,14 +1294,15 @@ fn estimate_cost_per_generation(model: &str) -> Option<f64> {
     })
 }
 
-fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
+fn apply_license(state: &mut AppState, settings: &mut SettingsState, lang: Lang) {
     let input = settings.license_input.trim();
 
     // Base64 デコード
     let key = match LicenseKey::from_base64(input) {
         Ok(k) => k,
         Err(e) => {
-            settings.license_message = Some((format!("無効なキー: {e}"), false));
+            settings.license_message =
+                Some((format!("{}: {e}", T::settings_license_invalid(lang)), false));
             return;
         }
     };
@@ -1275,7 +1311,8 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
     let verifier = match LicenseVerifier::new(&LICENSE_PUBLIC_KEY) {
         Ok(v) => v,
         Err(_) => {
-            settings.license_message = Some(("ライセンスシステム未設定".to_string(), false));
+            settings.license_message =
+                Some((T::settings_license_system_missing(lang).to_string(), false));
             return;
         }
     };
@@ -1293,13 +1330,20 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
             state.tier = tier;
 
             settings.license_message = Some((
-                format!("{tier:?} プランに更新しました (有効期限 {expires})"),
+                format!(
+                    "{tier:?} {} ({} {expires})",
+                    T::settings_plan_updated_updated(lang),
+                    T::settings_plan_updated_expires(lang),
+                ),
                 true,
             ));
             tracing::info!(tier = ?tier, expires = %expires, "license applied");
         }
         Err(e) => {
-            settings.license_message = Some((format!("検証失敗: {e}"), false));
+            settings.license_message = Some((
+                format!("{}: {e}", T::settings_license_verify_fail(lang)),
+                false,
+            ));
         }
     }
 }
@@ -1307,7 +1351,7 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState) {
 /// Revert to Free tier — clears the stored license_key so subsequent
 /// starts don't reinstate the paid tier from DB (Phase S2 UX for testing
 /// / user-requested cancel)
-fn clear_license(state: &mut AppState, settings: &mut SettingsState) {
+fn clear_license(state: &mut AppState, settings: &mut SettingsState, lang: Lang) {
     let free_str = format!("{:?}", Tier::Free);
     match state
         .db
@@ -1316,11 +1360,13 @@ fn clear_license(state: &mut AppState, settings: &mut SettingsState) {
         Ok(()) => {
             state.tier = Tier::Free;
             settings.license_input.clear();
-            settings.license_message = Some(("Free に戻しました".to_string(), true));
+            settings.license_message =
+                Some((T::settings_license_reverted_free(lang).to_string(), true));
             tracing::info!("license cleared, tier reverted to Free");
         }
         Err(e) => {
-            settings.license_message = Some((format!("DB 更新失敗: {e}"), false));
+            settings.license_message =
+                Some((format!("{}: {e}", T::settings_db_update_fail(lang)), false));
         }
     }
 }
@@ -1328,13 +1374,17 @@ fn clear_license(state: &mut AppState, settings: &mut SettingsState) {
 /// Kick off a checkout request to the CF Workers backend and open the
 /// returned Stripe URL in the user's browser Runs the network call on
 /// the shared tokio runtime so the UI thread is not blocked
-fn spawn_checkout(state: &AppState, settings: &mut SettingsState, plan: &str) {
+fn spawn_checkout(state: &AppState, settings: &mut SettingsState, plan: &str, lang: Lang) {
     let email = settings.checkout_email.trim().to_string();
     if !is_plausible_email(&email) {
-        settings.checkout_message = Some(("email が未入力または不正です".to_string(), false));
+        settings.checkout_message =
+            Some((T::settings_email_invalid_short(lang).to_string(), false));
         return;
     }
-    settings.checkout_message = Some((format!("{plan} の checkout URL を取得中..."), true));
+    settings.checkout_message = Some((
+        format!("{plan} {}", T::settings_checkout_fetching(lang)),
+        true,
+    ));
 
     let endpoint = checkout_endpoint();
     let body = CheckoutRequestBody {
@@ -1344,7 +1394,7 @@ fn spawn_checkout(state: &AppState, settings: &mut SettingsState, plan: &str) {
     let tx = state.result_tx.clone();
 
     state.runtime.spawn(async move {
-        let outcome = fetch_and_open_checkout(&endpoint, &body).await;
+        let outcome = fetch_and_open_checkout(&endpoint, &body, lang).await;
         // Piggyback on the existing generation-status channel to notify
         // the UI thread — a dedicated channel would be tidier but adds
         // wiring for a purely informational side effect
@@ -1363,6 +1413,7 @@ fn spawn_checkout(state: &AppState, settings: &mut SettingsState, plan: &str) {
 async fn fetch_and_open_checkout(
     endpoint: &str,
     body: &CheckoutRequestBody,
+    lang: Lang,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
     let resp = client
@@ -1370,7 +1421,7 @@ async fn fetch_and_open_checkout(
         .json(body)
         .send()
         .await
-        .map_err(|e| format!("HTTP エラー: {e}"))?;
+        .map_err(|e| format!("{}: {e}", T::settings_http_error(lang)))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
@@ -1379,8 +1430,9 @@ async fn fetch_and_open_checkout(
     let parsed: CheckoutResponseBody = resp
         .json()
         .await
-        .map_err(|e| format!("レスポンス parse 失敗: {e}"))?;
-    open::that(&parsed.url).map_err(|e| format!("browser 起動失敗: {e}"))?;
+        .map_err(|e| format!("{}: {e}", T::settings_response_parse_fail(lang)))?;
+    open::that(&parsed.url)
+        .map_err(|e| format!("{}: {e}", T::settings_browser_launch_fail(lang)))?;
     Ok(parsed.url)
 }
 

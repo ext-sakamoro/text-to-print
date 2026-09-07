@@ -266,7 +266,7 @@ impl eframe::App for App {
             }
             Tab::Settings => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::settings::show(ui, &mut self.state, &mut self.settings);
+                    ui::settings::show(ui, &mut self.state, &mut self.settings, self.lang);
                 });
             }
             Tab::About => {
