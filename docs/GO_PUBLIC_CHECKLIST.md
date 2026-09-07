@@ -43,19 +43,20 @@ grep -E "description|repository|homepage" Cargo.toml crates/*/Cargo.toml
 - [ ] `.gitignore` に `CLAUDE.md` + `.claude/` エントリ存在
 - [ ] `git check-ignore CLAUDE.md` が hit する (無出力なら ignored)
 
-### 1.5 README screenshot 全 6 個 file 存在
+### 1.5 README screenshot file 存在
 
 ```bash
 ls docs/images/
 ```
 
-- [ ] `hero.gif`
-- [ ] `hero.png`
-- [ ] `template-section.png`
-- [ ] `customizer.png`
-- [ ] `llm-generation.png`
-- [ ] `bambu-import.png`
-- [ ] `print-result.jpg`
+- [x] `hero.png` (マグカップ生成完了、2026-09-07 撮影)
+- [x] `template-section.png` (VESA preview + preset 群)
+- [x] `customizer.png` (monitor riser + slider)
+- [x] `llm-generation.png` (スマホスタンド prompt + phase + retry)
+- [x] `bambu-import.png` (Bambu Studio import view)
+- [x] `gallery-share.png` (Gallery 公開 modal + 生成物、bonus 追加 2026-09-07)
+- [ ] `print-result.jpg` (optional、実プリント物、β 後 後追い掲載可)
+- [~] ~~`hero.gif`~~ (2026-09-07 skip 決定、静止画 6 shot で十分と判断 post-β で追加検討可)
 
 `docs/images/CAPTURE_GUIDE.md` 参照 (1600×1200 / macOS Dark / max 5 MB / GIF ~15 fps) user 側で撮影
 
@@ -168,7 +169,7 @@ gh repo edit ext-sakamoro/text-to-print --visibility public --accept-visibility-
 
 - [ ] `public-comm-style` skill 準拠 (句点なし / 誇張禁止 / 淡々)
 - [ ] 特徴 3 点 (Standalone / LLM 経由 / Bambu 3MF 直接生成)
-- [ ] Release URL + hero.gif 添付
+- [ ] Release URL + hero.png 添付 (静止画、hero.gif は skip、post-β で GIF 追加検討可)
 
 ### 4.3 ALICE community (該当あれば)
 

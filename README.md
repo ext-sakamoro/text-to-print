@@ -56,10 +56,6 @@ CPU/GPU DeltaNet+Attention and wgpu compute shaders
   `docs/images/CAPTURE_GUIDE.md` にまとめている
 -->
 
-### Hero (workflow demo GIF)
-
-![text-to-print — text prompt to Bambu 3MF end-to-end (~20s workflow)](docs/images/hero.gif)
-
 ### Stills
 
 | | |

@@ -13,7 +13,13 @@
 | 5 | `bambu-import.png` | 出力した 3MF を Bambu Studio で開いた view (mesh の色付き、AMS filament assignment 見える) | 1600×1000 | Bambu Studio window scoped capture |
 | 6 | `print-result.jpg` (optional) | 実際の 3D 印刷物の写真 (SKADIS panel or Gridfinity bin、Bambu H2D 出力品) | 実物撮影 4:3 | iPhone 等 |
 
-## GIF (Level 2、~20s workflow)
+## GIF (Level 2、~20s workflow) — **2026-09-07 skip 決定、post-β 検討候補**
+
+β release では **静止画 6 shot で十分** と判断 (hero + template-section +
+customizer + llm-generation + bambu-import + gallery-share bonus) 動画は
+post-β 追加検討 (Ko-fi tutorial や Zenn 記事執筆時に追加撮影)
+
+以下 spec は参考として残置 撮影する時は再開始点として使う
 
 | # | file name | 内容 | 変換前 | 変換後 |
 |--|--|--|--|--|
