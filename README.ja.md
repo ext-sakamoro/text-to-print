@@ -1,0 +1,336 @@
+# text-to-print
+
+**[English](README.md) | [日本語](README.ja.md)**
+
+自然言語を Bambu Lab の印刷可能な 3MF file に変換する、小型 LLM 内蔵の
+スタンドアローン desktop app
+
+印刷したいものを自然言語で説明して generate を押すと、slicer で開ける
+file が出てくる ローカル pipeline に cloud 不要 / login 不要
+
+```
+テキスト prompt
+    │
+    ▼
+Embedded ALICE-LLM (Qwen 3.5-4B Q4_K_M / Bonsai 27B Q1_0)
+    │  system prompt = LOL DSL Text-to-CAD 指示
+    │  LoRA fine-tune (523+ samples, Free 貢献で継続増加)
+    ▼
+LOL DSL source
+    │
+    ▼
+ALICE-LOL parser → SdfNode tree
+    │
+    ├── 厚物: ALICE-SDF marching cubes → watertight mesh (標準)
+    │
+    └── 薄物 (< 5mm): ALICE-SDF dual_contouring → watertight mesh
+                      (Hermite data で feature 保存、極薄 1.7mm でも non_manifold_edges=0
+                       実測、MC の resolution 512 で 24,808 non-manifold issue を完全回避)
+    │
+    ▼
+ALICE-Physics 印刷安全性 pipeline
+  - 薄壁 check
+  - overhang report + heatmap
+  - support 体積 mm³ 見積り
+  - warp risk
+  - beam stress + buckling (荷重指定時)
+    │
+    ▼
+ALICE-Bamboo 3MF export (+ optional 4-color AMS split, overhang layer)
+  or alice-sdf 経由の STEP export (Fusion 360 / FreeCAD への CAD import)
+  or alice-print 経由の直接 G-code (Bambu Studio 不要 mode)
+    │
+    ▼
+.3mf file → Bambu Studio で開く → print
+.step file → Fusion 360 / FreeCAD に import して CAD tweak
+.gcode file → プリンタに直送 (Bambu / Marlin / Klipper)
+```
+
+全ての演算は single machine で完結 cloud GPU 不要 LLM 推論は
+[ALICE-LLM](https://github.com/ext-sakamoro/ALICE-LLM) を使用、
+hybrid CPU/GPU DeltaNet+Attention + wgpu compute shaders
+
+## スクリーンショット
+
+<!--
+  assets は `docs/images/` 配下に格納、本 section から参照
+  撮影 guide (Ja/En 両版の file 名、推奨 size、ffmpeg 変換 command、
+  英語 UI mode の起動方法) は `docs/images/CAPTURE_GUIDE.md` にまとめている
+  UI 言語切替: Settings tab → Language → "English" or env `APP_LANG=en`
+-->
+
+### 日本語 UI
+
+| | |
+|--|--|
+| ![App 起動画面 (生成 tab + 3D preview mesh)](docs/images/hero.png) | ![テンプレート section (実績品 preset + cache/Cloud label)](docs/images/template-section.png) |
+| **App hero** — 生成 UI + 3D mesh preview | **Templates** — 即生成 preset + Cloudflare sync source |
+| ![カスタマイザー (slider 操作中)](docs/images/customizer.png) | ![LLM 生成中 (phase progress bar + mesh preview)](docs/images/llm-generation.png) |
+| **Customizer** — slider で寸法 tune → 即生成 | **LLM 経路** — 自然言語 prompt → LOL DSL 生成 |
+| ![Bambu Studio import (出力 3MF)](docs/images/bambu-import.png) | ![Gallery share modal (公開確認 dialog)](docs/images/gallery-share.png) |
+| **Bambu Studio** で開いた view | **Gallery** — 生成物を DID + ed25519 で他 user 公開 (Cloudflare Relay 経由) |
+
+### 英語 UI
+
+> 📸 英語 UI screenshot は撮影次第 landing 予定 (現在は broken link 表示、user 側撮影後 commit で解消)
+
+UI 言語切替は **Settings > Language** (live、再起動不要) または `APP_LANG=en` で起動
+
+| | |
+|--|--|
+| ![App startup (Generate tab + 3D mesh preview)](docs/images/hero-en.png) | ![Templates section (curated presets + cache/Cloud label)](docs/images/template-section-en.png) |
+| **App hero** — Generate UI + 3D mesh preview | **Templates** — one-click presets + Cloudflare sync source |
+| ![Customizer (slider in use)](docs/images/customizer-en.png) | ![LLM generation (phase progress bar + mesh preview)](docs/images/llm-generation-en.png) |
+| **Customizer** — tune dimensions with sliders → instant generate | **LLM path** — natural-language prompt → LOL DSL |
+| ![Bambu Studio import (exported 3MF)](docs/images/bambu-import-en.png) | ![Gallery share modal (publish confirm dialog)](docs/images/gallery-share-en.png) |
+| **Bambu Studio** import view | **Gallery** — publish output to other users via DID + ed25519 (Cloudflare Relay) |
+
+### 実プリント結果 (言語共通)
+
+| |
+|--|
+| ![実プリント結果 (Bambu H2D 出力)](docs/images/print-result.jpg) |
+| **実プリント結果** (SKADIS panel 等、post-β) |
+
+撮影 / GIF 変換 guide (Ja/En 両版含む): [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
+
+## 料金
+
+個人向け tool として最小構成 全て Stripe subscription で管理 (Phase S1/S2 実装済、
+S3 で Live 切替 → 課金開始)
+
+| Tier | 価格 | 共有動作 |
+|--|--|--|
+| **Free** | ¥0 | 生成した LOL DSL + 3MF を opt-in で ALICE-LOL プロジェクトに共有 (LoRA 学習データに寄与、全 user が恩恵) |
+| **Pro Monthly** | ¥3,000/月 | 完全 offline (LoRA 共有 OFF 強制)、無制限生成 |
+| **Pro Yearly** | ¥30,000/年 (-17%) | 同 Monthly、年払い割引 |
+| **Enterprise** | 要問合わせ | 複数 user / 商用 / カスタム機能 対応 mailto:enterprise@alicelaw.net |
+
+Free contribution が LoRA training set を育て、model の生成品質が全 user に還元される
+flywheel Paid tier は privacy 保証 (完全 offline、生成物は local のみ)
+
+License は Ed25519 署名で client 側 offline verify、subscription 解約 3 日後の grace
+period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無料枠
+(`crates/worker`) + Resend 経由 email 配信 全 Rust
+
+## 技術スタック
+
+| Layer | Technology |
+|--|--|
+| GUI | Rust `eframe` + `egui` + `wgpu` (native desktop) |
+| LLM 推論 | ALICE-LLM embedded (wgpu compute shaders + GGUF K-quant + LOL_GBNF grammar constrained decoding) |
+| DSL parse / SDF / mesh | alice-lol / alice-sdf / alice-physics / alice-bamboo (path deps) |
+| 3D preview | in-process wgpu **mesh** viewer (exporter が 3MF に書き出す `alice_sdf::mesh::Mesh` と同じ mesh を描画 — viewer と Bambu Studio の見た目は一致) |
+| Gallery / share | Cloudflare Worker relay canonical (list / publish / delete、ed25519 sig verify、100KB LOL max、rate limit)、legacy libp2p (mdns / gossipsub / kad) は path deps に残るが β では未使用 |
+| Identity | ed25519 DID (`did:key:<64hex>`、起動時に `identity.key` 自動生成、user 登録経路なし) |
+| Local DB | rusqlite (project history / license state / tier / model choice / nickname / gallery_auto_share) |
+| Payment | Stripe subscription (Test mode scaffold 完成、Phase S3 で Live 切替) |
+| Backend | Cloudflare Workers wasm32 (`crates/worker`、share endpoint + Stripe webhook + license 発行 + preset library `/api/presets` KV-backed + gallery `/api/gallery/{list,publish,:id}` D1-backed) |
+| License | Ed25519 (`ed25519-dalek`、`text_to_print_core::license` client-side offline verify) |
+| Email | Resend API (license 配信、backend 未設定時は log-only fallback) |
+| Auto-update | GitHub Releases + `self-update` (crates/app/src/updater.rs) |
+
+## Export フォーマット
+
+| Format | Path | Producer | 用途 |
+|--|--|--|--|
+| **3MF (MakerWorld 対応)** | `alice_bamboo::bambu_3mf::export_bambu_3mf` (template embed、12-file zip、Phase 5.7) | Bambu Lab AMS / MakerWorld 直接 upload | 標準 FDM 印刷 |
+| **STL** | `alice_bamboo::print_export::lol_to_stl` (Stage 4 集約後) | 任意の slicer | Legacy pipelines |
+| **FBX** | `alice_bamboo::print_export::lol_to_fbx` (Stage 4 集約後) | 3D animation / game engines | 印刷以外の交換用途 |
+| **STEP** | `alice_sdf::io::step::export_step` | Fusion 360 / FreeCAD / SolidWorks | CAD 編集 round-trip |
+| **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | 直接印刷 | Bambu Studio 不要 |
+| **3MF (4色)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
+
+## リポジトリ構成
+
+```
+text-to-print/
+├── crates/
+│   ├── app/       - Rust desktop GUI (egui + wgpu、main entry、Settings に
+│   │                Upgrade / License 入力 / プロフィール (nickname) UI、
+│   │                ui/gallery.rs (Cloudflare relay 経路 + fork/delete)、
+│   │                ui/share_confirm.rs (Phase 2 modal 3 択))
+│   ├── core/      - LOL → mesh export pipeline、Ed25519 license
+│   │                verify、tier 管理、rusqlite persist、
+│   │                pipeline::preview_lol_to_mesh (gallery プレビュー用)
+│   ├── llm/       - Sidecar + Embedded backend (Qwen3.5-4B / Gemma2-27B /
+│   │                Bonsai27B) + LOL_GBNF grammar constrained decoding
+│   ├── network/   - identity (DID + ed25519 key auto provision)、
+│   │                gallery_client (Cloudflare relay list/publish/delete、
+│   │                canonical msg + sig)、share (LoRA dry-run + upload
+│   │                queue)、legacy libp2p (未使用、Phase X で削除検討)
+│   └── worker/    - Cloudflare Workers wasm32 backend (share endpoint +
+│                    Stripe webhook + license 発行 + Resend email +
+│                    preset library `/api/presets` (KV-backed、Sprint X.1) +
+│                    gallery `/api/gallery/{list,publish,:id}` (D1-backed、
+│                    ed25519 sig verify、Phase 3)、workspace 除外、
+│                    `wrangler deploy` で運用)
+├── datasets/      - LoRA training data (523+ samples, growing)
+├── scripts/       - LoRA training / dataset generation
+├── assets/        - static resources (NotoSansJP.ttf 等)
+├── docs/          - design / release / share / STRIPE_SETUP / images
+├── ROADMAP.md     - v0.1.0 β / GA / v1.0.0 商用 の milestone breakdown
+└── .cargo/        - audit.toml (cargo audit ignore list、per-entry rationale 付き)
+```
+
+## ステータス
+
+**Standalone desktop app** (v0.1.0 β release、2026-08-22) core パイプライン (text prompt →
+embedded ALICE-LLM → LOL DSL → SDF → MakerWorld 対応 12-file zip 3MF) 完成、
+Stripe subscription 統合 backend + app UI 完成 (Test mode)
+
+- `cargo test --workspace`: **368 pass / 0 fail / 6 ignored** (2026-09-04 実測)
+- `cargo test --lib on crates/worker`: **48 pass / 0 fail** (2026-09-04、preset seed count 25 cat/161 preset 反映)
+- `cargo clippy --workspace --all-targets -- -D warnings`: **0 own warnings**
+- `cargo check --target wasm32-unknown-unknown -p text-to-print-worker`: **green**
+- `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --lib --no-deps`: **green**
+- **CI**: ALICE-LOL / text-to-print 両 repo GitHub Actions **success** (2026-09-04 CI run `33828102104` 18m49s success)
+- **Preset library**: **25 category / 161 preset** (Sprint 1-22 + Multi-domain 4 domain 展開完了、ALICE-Bamboo canonical + 機械要素 + 家具 + 建築 + 電子工作)
+- **Customizer**: **75 archetype** slider tuning 対応 (Sprint 1-20 61 + Sprint 21-22 + Multi-domain 16 追加、2026-08-31)
+- **UI 言語**: **Japanese-first** (β 期間) tab labels は English 切替対応、UI 本体 300 文字列は日本語 hardcoded 完全 English i18n (Ja/En parity) は post-β [ROADMAP P1-11](ROADMAP.md) で対応予定 英語 user は README + Google Translate 経由で操作、demand 上がった時点で優先着手
+
+v0.1.0 β / v0.1.0 GA / v1.0.0 商用 release の milestone breakdown と残タスクは
+[`ROADMAP.md`](ROADMAP.md) に集約
+
+最近の変更:
+- 2026-09-01 〜 09-04: **Phase C cavity margin rule 根本 refactor** — 過去 6 commit 連続の cavity margin 忘却事案 (arduino/pixhawk/servo/raspi/mount/reinforcement/counterbore/countersink/pin_hinge/heat_set_array/bearing_seat) を primitive API レベルで根本解決 ALICE-LOL に `stdlib::hardsurface::cavity` module 新設 (6 helper: `subtract_through_screw_hole` / `subtract_through_counterbore` / `subtract_through_countersink` / `subtract_through_cylinder` / `subtract_blind_pocket` / `subtract_blind_heat_set`)、cavity margin rule (5mm each side for through / 5mm above for blind) を helper API に intrinsic 化 7 archetype (vesa/arduino/pixhawk/servo/raspi/heat_set/bearing) を helper 経由に refactor、238→170 行 (28.6% 純減) 副次で pixhawk damper pocket が旧 code で cavity margin 0 だった bug 発見・修正
+- 2026-08-31: **Customizer 16 archetype 拡張** — Sprint 21-22 + Multi-domain の全機械要素系 archetype に slider UI 追加 (VESA/L bracket/T-slot/raspi/heat_set/flange/dovetail/profile/snap-fit/boss array/bearing/cable_grommet/curtain rod/arduino/pixhawk/servo)、customizer 59→75 archetype
+- 2026-08-27 〜 08-28: **Sprint 21-22 + Multi-domain 4 domain 展開** — 機械要素 (VESA/L-bracket/T-slot/heat-set/flange/dovetail/profile/snap-fit/boss array/bearing) + 家具 (cable_grommet/dowel_hole) + 建築 (curtain_rod_bracket/wood_screw_pilot) + 電子工作 (arduino_mount_plate/pixhawk_mount/servo_mount/jst_ph_slot) 計 17 archetype + 21 primitive を LOL DSL に追加 MetricSize M2/M2.5 拡張 + BearingKind (608/688/6001/6202) 追加、ISO/DIN/JIS/McMaster 準拠
+- 2026-08-26: **Gallery Phase 1-3 追加** — nickname (Settings > プロフィール で表示名入力、gallery display で DID hex fallback) + share confirm modal (Free tier で生成完了時に「今回だけ公開 / 公開しない / 毎回自動公開」3 択、gallery_auto_share DB flag で永続化) + Cloudflare relay endpoint (`/api/gallery/{list,publish,:id}`、新 D1 `text-to-print-gallery`、ed25519 sig verify、LOL 100 KB max、nickname 32 char max、rate limit UUID+IP hourly、canonical msg prefix で publish sig replay-as-delete 防止) + app 側 `gallery_client.rs` + gallery.rs 全書き換え (Cloudflare canonical、fork publish、自 post 🗑 削除 button、preview stub 解除で `pipeline::preview_lol_to_mesh` 経路に接続) DID + ed25519 auto provision (`Identity::load_or_create` の `identity.key` local file 生成) で user 登録 UX 追加なし、DB `profiles` に `nickname` + `gallery_auto_share` 2 column 追加、worker crate は edition 2021 のまま (workspace 除外) commit `c97a09b` / `36e9e0f` / `e9aa721` / `beaed29` / `886969e`、public 化前の残 pending は user 側 `wrangler d1 create text-to-print-gallery` + screenshot 6 個
+- 2026-08-24: **Customizer 61 archetype 到達 (Sprint 12-20 batch)** — organizer 系
+  49→61 (`hairdryer_holder / kcup_holder / hex_key_holder / wrap_holder /
+  sock_divider / soap_tray / razor_holder / chopstick_holder / swatch_holder /
+  tp_holder / sd_card_holder / driver_rack / cotton_dispenser / sink_caddy /
+  clamp_rack / dry_box / outdoor_enclosure / jewelry_stand / phone_dock /
+  cutting_board_rack / tape_dispenser / shower_caddy / caliper_holder /
+  bag_clip_org / can_rack / led_hub_box / makeup_organizer`)
+  kitchen + electronics category 100% 完走 決定論 slider 経路で LLM bypass、
+  複合形状 (3B iGPU 弱点) を preset 経路で cover
+- 2026-08-23: **β release polish — Settings → Network + path leak 削減 + Screenshots section restructure**
+  - **Settings → Network section** 新設 (`crates/app/src/ui/settings.rs`) preset library endpoint の custom URL 入力 (self-hosted mirror / proxy 経由)、起動時 sync 有効化 toggle (offline 運用対応)、sidecar port override (8000/8001 が他 app と衝突時) 全 3 field を DB `profiles` table に persist、`TTP_PRESETS_ENDPOINT` / `TTP_PRESETS_SYNC_DISABLE` / `TTP_SIDECAR_PORT` env でも override 可
+  - **Path leak 削減** `.cargo/config.toml` に `RUSTFLAGS = ["--remap-path-prefix", ...]` 追加、release binary strings から `/Users/runner/.cargo/registry/...` (GitHub Actions runner path、Rust panic info の副産物) を `/cargo/...` に generic 化 privacy 系の弱い懸念解消 + binary size 数十 KB 削減
+  - **README Screenshots section restructure** Hero GIF + 6 shot grid、`docs/images/CAPTURE_GUIDE.md` に撮影手順集約
+- 2026-08-22: **Sprint X.1 Cloudflare preset library 完了** — worker `/api/presets` KV-backed preset library deploy 完了 (Custom Domain `text-to-print.alicelaw.net`)、app 起動時に background で fetch → ETag/304 cache 経路で 10 preset 同期、UI に "presets: Bundled / Cache / Cloud" 3 tier ラベル表示、DB `presets_cache` (SQLite single row) + `PresetsSnapshot` + `spawn_presets_sync` mpsc → UI 反映 β user が新 preset 追加を起動時に auto propagate 受信可能に 副次で worker crate 0.5→0.8 upgrade (wasm-bindgen schema mismatch fix)、log 増強 (begin/304 info/error Debug/elapsed_ms、silent failure 診断不能事案の反省) 副次実測 β verify で macOS + Tailscale MagicDNS が Cloudflare Custom Domain の A record を silent drop する経路罠を発見、Tailscale 撤去で恒久解決
+- 2026-08-09: **SKADIS panel canonical 化 + Template アーキテクチャ Phase T1** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix (Y板厚 17mm → 5mm、Stadium peg 穴 5×15、connector 穴 44 + mount 穴 6、合計 148 hole 全再現、Bambu production 3MF `~/ALICE-Bamboo/models/wall-organizer/skadis-300x300/skadis_panel_300x300.3mf` と shape 一致) + text-to-print pipeline `should_use_dual_contouring(dims)` helper で `aspect_ratio > 5.0 || min_dim <= 5.0` ベースの DC/MC route 判定 (旧 `thickness_y < 5.0` の Y 軸単独判定で SKADIS panel が MC 経路に落ちて peg 穴消失した bug の根本予防) + Preview resolution 128→96 (Bamboo canonical 準拠、sample 数 2.1M→885K = 2.4x 削減、SKADIS panel 実測 25 分見込 → 5.3s に短縮、285x 高速化) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 (自作 15 items 削除、anti-pattern E 解消、`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1) + UI 経過時間表示 (state.rs `elapsed()` method) 追加
+- 2026-08-08: **3D preview を mesh renderer に置換** (WGSL raymarching 廃止) 生成 pipeline が MC/DC で作った同一 `Mesh` を wgpu vertex/index buffer に upload して Phong lit で描画 viewer と Bambu Studio が同じ形状を表示するため生成結果の確認が信頼できるようになった (旧 raymarching だと Y-up world / camera artifact で違って見える混乱があった) `crates/app/src/sdf/` は名前は残るが中身は mesh pipeline
+- 2026-08-07: **end-to-end 完走まで到達** — LLM system_prompt を Z-up 慣習 + 適切な `rotate(90, 0, 0, cylinder(...))` を教える wedge example に刷新、`fix_prompt::LolParseError` variant + directive で parse 失敗時の retry loop を接続 (以前は空 suffix で silent break)、`max_retries` 1→2 + HTTP timeout 180→300s + export `.ok()` silent 破棄 bug 修正 現行 Qwen 3B (grammar OFF) で「スマホスタンド、幅80mm…」prompt から Bambu Studio 表示可能な wedge shape の 3MF が確実に出るところまで動作確認
+- 2026-08-07: **P2-1 Phase S1 + S2 完了** — Stripe subscription 統合 (CF Workers
+  backend scaffold + app UI Upgrade section / Enter License Key / Grace period
+  表示 / Enterprise mailto 導線) Test mode で完結、Live 切替は Phase S3
+- 2026-08-07: CI 修正 (`cargo audit` rationale 付き ignore list `.cargo/audit.toml`、
+  `fmt` job を `clippy-test-doc` に merge、`ALICE_ECO_TOKEN` secret 登録手順明記)
+- 2026-08-07: `legacy-saas/` 完全削除 (2.6 GB uncompressed、tracked 91 file)、
+  復活時は fresh 実装方針
+- 2026-08-07: UI phase state machine test 追加、`crates/worker` の wasm32 CI check 追加
+- 2026-08-06: Phase 5.7 完了 (`alice_bamboo::bambu_3mf::export_bambu_3mf`、Rust
+  から MakerWorld 対応 12-file zip 3MF 直接生成、template embed)
+- 2026-08-01: Stage 4 完了 (alice-lol → alice-bamboo 集約) + Stage 5 (Freemium
+  share/private opt-in) + Stage 3-C.11 (LOL_GBNF grammar constrained decoding)
+- 2026-07-29: renamed `3dvbgaran` → `text-to-print` standalone pivot
+- 2026-04-22: LoRA training pipeline (Paperspace A6000/A100) + 523 sample set
+- 2026-04-18: Rust desktop app Phase 1-2 (egui + wgpu + libp2p)
+
+## インストール (β 期間、無署名)
+
+v0.1.0 β 期間中、macOS 版 (`.tar.gz`) と Windows 版 (`.msi` / `.zip`) は
+**無署名** で配布されている OS がインストール時に警告を出す場合の回避手順:
+
+- **macOS**: Finder で `.tar.gz` を展開 → 出た `text-to-print` を右クリック → **開く** → 「開発元を確認できません」ダイアログの 「開く」 ボタン (初回のみ、以降は通常起動)
+- **Windows**: SmartScreen が「認識されないアプリ」warning を出したら「詳細情報」→「実行」 (`.msi` 直接 install も可、Authenticode 未署名警告あり)
+- **Linux**: **`.AppImage` (portable、推奨)** を DL → `chmod +x` → 実行 `.deb` は glibc 2.39+ 環境 (Ubuntu 24.04+ / Debian 13+) 限定、旧環境は AppImage or `.tar.gz` を使用
+
+Apple Developer Program 加入 + Windows Authenticode cert 導入は Phase S3 (Live 課金化) 以降に実施予定 β 期間は「install できる」を優先、警告 UX は割り切り
+
+### Platform 検証状況 (2026-09-07 実測、β release 時点)
+
+| Platform | Artifact | Build | 実機動作 | Note |
+|--|--|--|--|--|
+| **macOS Apple Silicon** (M1/M2/M3) | `.tar.gz` | ✅ CI green | ✅ M3 実機 verified | primary dev env |
+| macOS Intel | `.tar.gz` | ✅ CI green | ⚠️ untested | build 成功のみ、実機報告歓迎 |
+| Windows 10/11 x64 | `.msi` / `.zip` | ✅ CI green | ⏳ pending | user 側で検証予定 (`docs/WINDOWS_SMOKE_TEST.md` 参照) |
+| Linux x86_64 (Ubuntu 24.04+ / Debian 13+) | `.deb` | ✅ CI green | ⚠️ metadata verified | glibc 2.39 requirement (`dpkg-deb -I` 確認済) |
+| Linux x86_64 (Ubuntu 22.04 / Debian 12) | `.AppImage` / `.tar.gz` | ✅ CI green | ⚠️ untested | static-pie 推奨 (portable) |
+| **Linux arm64 Debian bookworm** (RasPi 5) | (source build) | ✅ verified | ✅ **CLI smoke OK** | 17m56s build、wgpu backend 選択、ALICE node/P2P 起動 |
+| **Linux arm64 Ubuntu 22.04** (Jetson Orin Nano) | (source build) | ✅ verified | ✅ **CLI smoke OK** | build success、wgpu backend 選択、ALICE node/P2P 起動 |
+
+**arm64 Linux 実測** (2026-09-07 RasPi 5 + Jetson Orin Nano):
+- Rust workspace + 6 ALICE-* sibling deps 全 build 成功 (~18 分 on 4-core Cortex-A76 / ~6-core Ampere)
+- Binary size: 36-37 MB (stripped、dynamically linked)
+- Shared libs: `libssl.so.3` + `libdbus-1.so.3` + `libcrypto.so.3` (Debian bookworm / Ubuntu 22.04 標準)
+- **wgpu backend 自動選択** (eframe: "Both glow and wgpu renderers are available. Using wgpu.")
+- ALICE node + DID identity 生成 + libp2p P2P swarm 起動 ✅
+- 実機 GUI 起動 test は headless SSH のため skip、build + init phase まで verified
+
+**β release 期間の方針**: 実機検証待ちの platform は「build 成功のみ」明示 動作報告 (bug でも「動きました」でも) は GitHub Issues で歓迎 arm64 Linux release artifact 提供は post-β で release.yml に arm64 job 追加検討 (需要確認次第)
+
+## ビルド
+
+```bash
+# Standalone desktop app
+cargo build --release --package text-to-print
+
+# 内蔵 LLM sidecar (`alice-llm-server` binary、app に同梱)
+scripts/build_sidecar.sh
+
+# LoRA license utility
+cargo build --release --package text-to-print-core --bin gen-license-key
+```
+
+必要環境:
+- Rust 1.75+ (rust-toolchain.toml pinned)
+- ALICE ecosystem sibling checkout: `../ALICE-SDF`, `../ALICE-LOL`,
+  `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`, `../ALICE-LLM`
+
+> **注**: `ALICE-Bamboo` (+ transitive dep `ALICE-Print`) は **private repo**
+> Source build には `Contents: Read-only` scope の Fine-grained PAT が必要
+> (詳細 `.github/workflows/ci.yml` の `ALICE_ECO_TOKEN` セットアップ手順)
+> エンドユーザーは [Releases](https://github.com/ext-sakamoro/text-to-print/releases)
+> から バイナリ DL 推奨 (`.tar.gz` / `.msi` / `.deb` / `.AppImage`)
+
+Release installer (`.msi` follow-up pending, `.deb`, `.AppImage`,
+`.tar.gz`, `.zip`) は desktop binary の隣に `alice-llm-server` を同梱
+`crates/llm/src/sidecar.rs::resolve_bin_path` が exe directory を先に見て、
+なければ `PATH` を fallback するため、end user は追加 install 不要
+
+## 実行
+
+```bash
+cargo run --release --package text-to-print
+```
+
+## LoRA training
+
+523+ sample dataset for LOL DSL generation Fine-tune scripts は
+Paperspace A6000/A100 で実行
+
+```bash
+scripts/train_lora.py --config configs/lora_qwen3_5_4b.yaml
+```
+
+## ライセンス
+
+- コード: MIT
+- Assets and training data: `datasets/` 配下の個別 `LICENSE` file を参照
+
+## 関連リポジトリ
+
+- [ALICE-LLM](https://github.com/ext-sakamoro/ALICE-LLM) — pure Rust LLM
+  inference engine (本 app に内蔵)
+- [ALICE-LLM-Studio](https://github.com/ext-sakamoro/ALICE-LLM-Studio) —
+  汎用 LLM chat desktop app (Tauri v2)、sister project
+- [ALICE-LOL](https://github.com/ext-sakamoro/ALICE-LOL) — LOL DSL parser and
+  Text-to-CAD system prompt library
+- [ALICE-Bamboo](https://github.com/ext-sakamoro/ALICE-Bamboo) — 3D print
+  pipeline (LOL → SDF → Physics → 3MF export)
+- [ALICE-Physics](https://github.com/ext-sakamoro/ALICE-Physics) —
+  deterministic 128-bit fixed-point physics engine (印刷安全性 verification)
+
+## History
+
+- 2026-07-29 standalone pivot: 本 project は元々 SaaS deployment
+  (Cloudflare Tunnel + Supabase Auth + Stripe Billing + Next.js frontend +
+  Rust API gateway) だったが、SaaS layer を廃止して
+  上記の single-binary desktop app に pivot
+- 2026-08-07: `legacy-saas/` directory を repository から削除 将来 Paid
+  tier で server-side payment / license 発行が必要になった場合は、
+  廃止済 SaaS code を復活させず fresh 実装する
