@@ -23,9 +23,11 @@ pub const DEFAULT_CHECKOUT_ENDPOINT: &str =
     "https://text-to-print.alicelaw.net/stripe/checkout-session";
 
 /// Enterprise inquiry destination (mailto:) opened by the "Contact for
-/// Enterprise" button in Settings
+/// Enterprise" button in Settings Points to the extoria corporate contact
+/// address (44-alias aggregation, canonical B2B channel per
+/// `~/CLAUDE.md`)
 pub const ENTERPRISE_MAILTO: &str =
-    "mailto:enterprise@alicelaw.net?subject=text-to-print%20Enterprise%20plan";
+    "mailto:contact@extoria.co.jp?subject=text-to-print%20Enterprise%20plan";
 
 #[derive(Default)]
 pub struct SettingsState {
@@ -1538,9 +1540,9 @@ mod tests {
     }
 
     #[test]
-    fn enterprise_mailto_points_to_alicelaw_net() {
+    fn enterprise_mailto_points_to_extoria_contact() {
         assert!(ENTERPRISE_MAILTO.starts_with("mailto:"));
-        assert!(ENTERPRISE_MAILTO.contains("enterprise@alicelaw.net"));
+        assert!(ENTERPRISE_MAILTO.contains("contact@extoria.co.jp"));
     }
 
     #[test]

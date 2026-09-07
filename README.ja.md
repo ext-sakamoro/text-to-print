@@ -104,7 +104,7 @@ S3 で Live 切替 → 課金開始)
 | **Free** | ¥0 | 生成した LOL DSL + 3MF を opt-in で ALICE-LOL プロジェクトに共有 (LoRA 学習データに寄与、全 user が恩恵) |
 | **Pro Monthly** | ¥3,000/月 | 完全 offline (LoRA 共有 OFF 強制)、無制限生成 |
 | **Pro Yearly** | ¥30,000/年 (-17%) | 同 Monthly、年払い割引 |
-| **Enterprise** | 要問合わせ | 複数 user / 商用 / カスタム機能 対応 mailto:enterprise@alicelaw.net |
+| **Enterprise** | 要問合わせ | 複数 user / 商用 / カスタム機能 対応 mailto:contact@extoria.co.jp |
 
 Free contribution が LoRA training set を育て、model の生成品質が全 user に還元される
 flywheel Paid tier は privacy 保証 (完全 offline、生成物は local のみ)

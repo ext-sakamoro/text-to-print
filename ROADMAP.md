@@ -265,7 +265,7 @@ X post 2026-09-07 発信直後、demand data 収集中)
 - ✅ **`crates/app/src/ui/settings.rs` UI 大幅拡張** (+299 行、8 test 追加):
   - License / Subscription collapsible 再構成 (Tier badge with color / Free 時のみ Upgrade section 表示)
   - Email 入力 + "Buy Monthly ¥3,000/月" / "Buy Yearly ¥30,000/年 (-17%)" ボタン → `spawn_checkout` (tokio runtime 上で `reqwest::Client::post` → `open::that` で browser open、UI thread ブロックしない)
-  - "Enterprise 問合わせ" ボタン (mailto:enterprise@alicelaw.net)
+  - "Enterprise 問合わせ" ボタン (mailto:contact@extoria.co.jp)
   - "ライセンスをクリア (Free に戻す)" ボタン (Paid 時のみ表示、db.update_profile_tier で Free + 空 license_key に更新)
   - `apply_license` に有効期限表示追加 (payload.expires_at → "有効期限 YYYY-MM-DD")
   - `is_plausible_email` client-side validation (worker と同 rule)

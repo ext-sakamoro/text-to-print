@@ -28,6 +28,15 @@ README docs polish + Zenn 過去記事から print result 実写画像を回収
   (`SKADIS shelf、alice-bamboo pipeline で生成 → 印刷 → 実使用中`) に
   更新
 
+### Fixed
+
+- **Enterprise 問い合わせ先 email address 修正**: `enterprise@alicelaw.net`
+  (実在せず、GAM `Service not applicable/Does not exist` 実測) →
+  `contact@extoria.co.jp` (44 alias 集約先の canonical 法人窓口) 5 hit
+  修正 (README.md / README.ja.md / ROADMAP.md / settings.rs const /
+  settings.rs test) tag `v0.1.0-beta.4` は published 直後に revert +
+  同 tag で打ち直し
+
 ### 4 gate
 
 - test: 371 pass / 0 fail / 6 ignored

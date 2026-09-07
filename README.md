@@ -106,7 +106,7 @@ Minimal setup as a tool for individuals All managed via Stripe subscription
 | **Free** | ¥0 | Generated LOL DSL + 3MF is opt-in shared with the ALICE-LOL project (contributes to LoRA training data, benefiting all users) |
 | **Pro Monthly** | ¥3,000/mo | Fully offline (LoRA sharing forced OFF), unlimited generation |
 | **Pro Yearly** | ¥30,000/yr (-17%) | Same as Monthly with annual discount |
-| **Enterprise** | Contact us | Multi-user / commercial / custom features — mailto:enterprise@alicelaw.net |
+| **Enterprise** | Contact us | Multi-user / commercial / custom features — mailto:contact@extoria.co.jp |
 
 Free-tier contributions grow the LoRA training set, and improvements in
 model generation quality flow back to every user (flywheel) Paid tiers
