@@ -1,19 +1,20 @@
 use egui::Ui;
 
+use crate::i18n::{Lang, T};
 use crate::state::AppState;
 
-pub fn show(ui: &mut Ui, state: &mut AppState) {
-    ui.heading("生成履歴");
+pub fn show(ui: &mut Ui, state: &mut AppState, lang: Lang) {
+    ui.heading(T::generation_history(lang));
     ui.separator();
 
-    if ui.button("更新").clicked() {
+    if ui.button(T::refresh(lang)).clicked() {
         state.refresh_history();
     }
 
     ui.add_space(8.0);
 
     if state.history.is_empty() {
-        ui.label("まだ生成履歴がありません");
+        ui.label(T::no_history(lang));
         return;
     }
 
@@ -29,7 +30,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState) {
                     ui.colored_label(status_color, &row.status);
                     ui.label(&row.created_at);
                     if row.is_public {
-                        ui.label("(公開)");
+                        ui.label(T::published_tag(lang));
                     }
                 });
 

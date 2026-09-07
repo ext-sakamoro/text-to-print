@@ -17,45 +17,44 @@ use egui::Context;
 use std::path::PathBuf;
 use text_to_print_network::node::AliceNode;
 
+use crate::i18n::{Lang, T};
 use crate::state::AppState;
 
 /// Render the modal if a payload is awaiting confirmation No-op
 /// otherwise Called once per frame from `App::update`
-pub fn show(ctx: &Context, state: &mut AppState, node: &AliceNode) {
+pub fn show(ctx: &Context, state: &mut AppState, node: &AliceNode, lang: Lang) {
     let Some(path) = state.pending_share_confirm.clone() else {
         return;
     };
 
     let mut resolution: Option<Resolution> = None;
 
-    egui::Window::new("Gallery に公開しますか?")
+    egui::Window::new(T::share_confirm_title(lang))
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             ui.set_min_width(360.0);
-            ui.label("この生成物 (LOL DSL + prompt + 品質シグナル) を Gallery に公開しますか?");
+            ui.label(T::share_confirm_body(lang));
             ui.add_space(4.0);
-            ui.label("公開すると他の user から fork / 参考にされる可能性があります");
-            ui.label("公開しなくても local audit ログには残ります (Settings から確認可)");
+            ui.label(T::share_confirm_visibility(lang));
+            ui.label(T::share_confirm_audit(lang));
             ui.add_space(8.0);
             ui.separator();
             ui.add_space(6.0);
 
             ui.horizontal(|ui| {
-                if ui.button("今回だけ公開").clicked() {
+                if ui.button(T::share_confirm_publish_once(lang)).clicked() {
                     resolution = Some(Resolution::PublishOnce);
                 }
-                if ui.button("公開しない").clicked() {
+                if ui.button(T::share_confirm_skip(lang)).clicked() {
                     resolution = Some(Resolution::Skip);
                 }
             });
             ui.add_space(4.0);
             if ui
-                .button("毎回自動公開 (以降 dialog 出ない)")
-                .on_hover_text(
-                    "Settings > プロフィール からいつでも off に戻せます auto 中も Paid tier に変更すれば自動で upload 停止",
-                )
+                .button(T::share_confirm_always(lang))
+                .on_hover_text(T::share_confirm_always_hover(lang))
                 .clicked()
             {
                 resolution = Some(Resolution::AlwaysPublish);

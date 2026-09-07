@@ -89,6 +89,7 @@ pub fn show(
     state: &AppState,
     viewer: &mut MeshViewer,
     render_state: Option<&egui_wgpu::RenderState>,
+    lang: crate::i18n::Lang,
 ) {
     let rect = ui.available_rect_before_wrap();
 
@@ -193,8 +194,12 @@ pub fn show(
                 egui::pos2(rect.min.x + 8.0, rect.min.y + 8.0),
                 egui::Align2::LEFT_TOP,
                 format!(
-                    "Mesh preview  頂点: {}  三角形: {}",
-                    stats.vertex_count, stats.triangle_count
+                    "{}  {} {}  {} {}",
+                    crate::i18n::T::mesh_preview_label(lang),
+                    crate::i18n::T::vertices(lang),
+                    stats.vertex_count,
+                    crate::i18n::T::triangles(lang),
+                    stats.triangle_count
                 ),
                 egui::FontId::monospace(11.0),
                 egui::Color32::from_rgba_unmultiplied(210, 210, 220, 200),
@@ -206,9 +211,9 @@ pub fn show(
             .rect_filled(rect, 4.0, egui::Color32::from_rgb(28, 28, 34));
 
         let msg = match &state.generation_status {
-            GenerationStatus::Generating => "生成中...",
-            GenerationStatus::Error(_) => "生成に失敗しました",
-            _ => "テキストを入力して「生成」を押してください",
+            GenerationStatus::Generating => crate::i18n::T::generating(lang),
+            GenerationStatus::Error(_) => crate::i18n::T::generation_failed(lang),
+            _ => crate::i18n::T::enter_prompt(lang),
         };
         ui.painter().text(
             rect.center(),

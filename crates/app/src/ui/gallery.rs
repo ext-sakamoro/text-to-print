@@ -16,6 +16,7 @@
 
 use egui::Ui;
 
+use crate::i18n::{Lang, T};
 use crate::state::{AppState, GalleryLoadState};
 use crate::ui::viewer::SdfViewer;
 use text_to_print_core::pipeline::{self, Quality};
@@ -43,8 +44,9 @@ pub fn show(
     node: &AliceNode,
     viewer: &mut SdfViewer,
     gallery: &mut GalleryState,
+    lang: Lang,
 ) {
-    ui.heading("Gallery");
+    ui.heading(T::gallery_heading(lang));
     ui.separator();
 
     // Kick off a refresh if a delete just succeeded (clears the deleted
@@ -59,18 +61,23 @@ pub fn show(
     ui.horizontal(|ui| {
         match &state.gallery {
             Some(GalleryLoadState::Loaded(items)) => {
-                ui.label(format!("公開中 3D モデル: {} 件", items.len()));
+                ui.label(format!(
+                    "{}: {} {}",
+                    T::gallery_public_count(lang),
+                    items.len(),
+                    T::gallery_items_suffix(lang)
+                ));
             }
             Some(GalleryLoadState::Error(msg)) => {
-                ui.colored_label(egui::Color32::LIGHT_RED, "取得失敗");
+                ui.colored_label(egui::Color32::LIGHT_RED, T::gallery_fetch_failed(lang));
                 ui.label(egui::RichText::new(msg).small().weak());
             }
             None => {
-                ui.label("取得中...");
+                ui.label(T::gallery_loading(lang));
             }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.small_button("↻ 更新").clicked() {
+            if ui.small_button(T::gallery_refresh_button(lang)).clicked() {
                 spawn_gallery_refresh(state);
             }
         });
@@ -81,16 +88,14 @@ pub fn show(
         Some(GalleryLoadState::Loaded(v)) if !v.is_empty() => v.clone(),
         Some(GalleryLoadState::Loaded(_)) => {
             ui.add_space(16.0);
-            ui.label("まだ公開されている 3D モデルがありません");
-            ui.label("公開された生成物がここに表示されます");
+            ui.label(T::gallery_empty(lang));
+            ui.label(T::gallery_empty_hint(lang));
             return;
         }
         Some(GalleryLoadState::Error(_)) => {
             ui.add_space(16.0);
-            ui.label("network に接続できないか、Gallery サーバーが応答していません");
-            ui.label(
-                "Settings > プロフィール から DID を確認、ネットワーク復帰後に再試行してください",
-            );
+            ui.label(T::gallery_network_error(lang));
+            ui.label(T::gallery_network_hint(lang));
             return;
         }
         None => {
@@ -121,12 +126,12 @@ pub fn show(
         ui.vertical(|ui| {
             if let Some(selected_id) = gallery.selected_id.clone() {
                 if let Some(sdf) = items.iter().find(|s| s.id == selected_id) {
-                    show_detail(ui, sdf, &own_did, state, node, viewer, gallery);
+                    show_detail(ui, sdf, &own_did, state, node, viewer, gallery, lang);
                 } else {
                     gallery.selected_id = None;
                 }
             } else {
-                ui.label("3D モデルを選択してください");
+                ui.label(T::gallery_select_prompt(lang));
             }
         });
     });
@@ -150,15 +155,32 @@ fn show_detail(
     node: &AliceNode,
     viewer: &mut SdfViewer,
     gallery: &mut GalleryState,
+    lang: Lang,
 ) {
-    ui.heading("詳細");
-    ui.label(format!("ID: {}", &sdf.id[..16.min(sdf.id.len())]));
-    ui.label(format!("Author: {}", author_label(sdf)));
-    ui.label(format!("DID: {}", short_did(&sdf.author_did)));
-    ui.label(format!("Created: {}", sdf.created_at));
+    ui.heading(T::gallery_detail_heading(lang));
+    ui.label(format!(
+        "{}: {}",
+        T::gallery_id_label(lang),
+        &sdf.id[..16.min(sdf.id.len())]
+    ));
+    ui.label(format!(
+        "{}: {}",
+        T::gallery_author_label(lang),
+        author_label(sdf)
+    ));
+    ui.label(format!(
+        "{}: {}",
+        T::gallery_did_label(lang),
+        short_did(&sdf.author_did)
+    ));
+    ui.label(format!(
+        "{}: {}",
+        T::gallery_created_label(lang),
+        sdf.created_at
+    ));
 
     ui.add_space(8.0);
-    ui.label("LOL ソース:");
+    ui.label(T::gallery_source_label(lang));
     let mut lol_display = sdf.lol_source.clone();
     ui.add(
         egui::TextEdit::multiline(&mut lol_display)
@@ -168,20 +190,14 @@ fn show_detail(
 
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if ui.button("3D プレビューで表示").clicked() {
+        if ui.button(T::gallery_show_preview(lang)).clicked() {
             spawn_preview_generation(state, sdf.lol_source.clone());
             let _ = viewer; // preview is now delivered via state.viewer_mesh
             gallery.switch_to_viewer = true;
         }
-        // 2026-09-04 案 A: Gallery item を Generate tab の実験機能欄に
-        // 流し込み、user が LOL DSL を直接編集して再生成できるようにする
-        // (Customizer archetype dispatcher は post-β 拡張候補、まずは
-        // LOL テキスト edit 経路で全 item 対応)
         if ui
-            .button("✏️ 編集して再生成")
-            .on_hover_text(
-                "この LOL DSL を生成 tab の実験機能欄に流し込みます 編集後に「生成 (LLM)」で再生成",
-            )
+            .button(T::gallery_edit_and_regen(lang))
+            .on_hover_text(T::gallery_edit_and_regen_hover(lang))
             .clicked()
         {
             gallery.edit_lol_pending = Some(sdf.lol_source.clone());
@@ -192,7 +208,7 @@ fn show_detail(
         // server side (sig verify + author_did match)
         let is_own = sdf.author_did == own_did;
         if is_own {
-            let btn = ui.button("🗑 削除 (自分の post)");
+            let btn = ui.button(T::gallery_delete_own(lang));
             if btn.clicked() {
                 spawn_gallery_delete(state, node, sdf.id.clone(), sdf.author_did.clone());
                 gallery.refresh_after_delete = true;
@@ -201,9 +217,9 @@ fn show_detail(
     });
 
     ui.add_space(8.0);
-    ui.label("フォーク (リミックス):");
+    ui.label(T::gallery_fork_prompt(lang));
     ui.text_edit_multiline(&mut gallery.fork_input);
-    if ui.button("フォークして公開").clicked() && !gallery.fork_input.trim().is_empty() {
+    if ui.button(T::gallery_fork_publish(lang)).clicked() && !gallery.fork_input.trim().is_empty() {
         // Validate LOL locally before publish so the Worker doesn't
         // spend a rate-limit slot on obvious junk (parse error surfaces
         // in the log; retry after fix)

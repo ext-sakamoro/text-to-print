@@ -232,6 +232,7 @@ impl eframe::App for App {
                         &self.state,
                         &mut self.viewer,
                         self.render_state.as_ref(),
+                        self.lang,
                     );
                 });
             }
@@ -243,6 +244,7 @@ impl eframe::App for App {
                         &self.node,
                         &mut self.viewer,
                         &mut self.gallery,
+                        self.lang,
                     );
                 });
                 // 案 A (2026-09-04): 「編集して再生成」で LOL を Generate tab
@@ -259,7 +261,7 @@ impl eframe::App for App {
             }
             Tab::History => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::history::show(ui, &mut self.state);
+                    ui::history::show(ui, &mut self.state, self.lang);
                 });
             }
             Tab::Settings => {
@@ -269,7 +271,7 @@ impl eframe::App for App {
             }
             Tab::About => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui::about::show(ui);
+                    ui::about::show(ui, self.lang);
                 });
             }
         }
@@ -278,6 +280,6 @@ impl eframe::App for App {
         // current tab after all panels are drawn so it stays on top and
         // can be triggered from any tab (currently only Generate but
         // future flows may enqueue from History or Gallery too)
-        ui::share_confirm::show(ctx, &mut self.state, &self.node);
+        ui::share_confirm::show(ctx, &mut self.state, &self.node, self.lang);
     }
 }
