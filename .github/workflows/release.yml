@@ -413,3 +413,8 @@ jobs:
           files: release-assets/*
           fail_on_unmatched_files: true
           generate_release_notes: true
+          # β / rc / alpha 系 tag は Pre-release として mark
+          # v0.1.0-beta.3 事案 (2026-09-08): softprops default false で
+          # GitHub UI 上の Pre-release マークが外れ、user 側で手動 flip 要
+          # 対応 前 β release との一貫性のため tag 名で自動判定
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') }}
