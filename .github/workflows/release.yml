@@ -112,6 +112,14 @@ jobs:
         with:
           workspaces: text-to-print
 
+      # keyring crate (BYO LLM API key の OS Keychain 保管) は Linux で
+      # libdbus-sys 経由で libdbus-1-dev を build-time に要求 ci.yml では
+      # c8a9730 (2026-08-23) で fix 済だったが release.yml に未反映で
+      # v0.1.0-beta.2 build fail した (2026-09-07)
+      - name: Install libdbus-1-dev (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+
       - name: cargo build --release
         run: cargo build --release --target ${{ matrix.target }} --bin text-to-print
 
