@@ -3337,13 +3337,13 @@ impl T {
     pub fn prompt_p277(l: Lang) -> &'static str {
         match l {
             Lang::Ja => "pair 個数:",
-            Lang::En => "pair count:",
+            Lang::En => "Pairs:",
         }
     }
     pub fn prompt_p278(l: Lang) -> &'static str {
         match l {
             Lang::Ja => "箸ホルダー {} pair × W{}×L{}mm",
-            Lang::En => "Chopstick holder {} pair × W{}×L{}mm",
+            Lang::En => "Chopstick holder {} pairs × W{}×L{}mm",
         }
     }
     pub fn prompt_p279(l: Lang) -> &'static str {
@@ -4890,7 +4890,7 @@ impl T {
     ) -> String {
         match l {
             Lang::Ja => format!("箸ホルダー {} pair × W{}×L{}mm", a, b, c),
-            Lang::En => format!("Chopstick holder {} pair × W{}×L{}mm", a, b, c),
+            Lang::En => format!("Chopstick holder {} pairs × W{}×L{}mm", a, b, c),
         }
     }
     pub fn prompt_fmt_swatch_label(
