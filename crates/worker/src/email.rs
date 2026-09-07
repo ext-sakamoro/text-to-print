@@ -83,10 +83,24 @@ pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &s
 
 /// Build the Resend `POST /emails` request body Kept as a pure function
 /// so `#[test]` verifies the wire format without live network calls
+///
+/// Bilingual body (English first, Japanese second) recipient locale is not
+/// available at license issuance time so we send both languages in the same
+/// mail
 pub fn build_email_body(from: &str, to: &str, license_key: &str, tier: &str) -> serde_json::Value {
     let subject = format!("text-to-print {tier} license key");
     let text = format!(
-        "text-to-print をご利用いただきありがとうございます\n\n\
+        "── English ──\n\
+         Thank you for using text-to-print\n\n\
+         Paste the license key below into the app at Settings > Enter License Key\n\n\
+         Tier: {tier}\n\n\
+         ── License key ──\n{license_key}\n────────────────\n\n\
+         The license renews automatically while the subscription is active\n\
+         Cancelling the paid subscription rolls the account back to the Free tier\n\
+         at the end of the current billing period\n\n\
+         Support: support@alicelaw.net\n\n\
+         ── 日本語 ──\n\
+         text-to-print をご利用いただきありがとうございます\n\n\
          下記のライセンスキーを アプリの Settings > Enter License Key に貼付してください\n\n\
          Tier: {tier}\n\n\
          ── License key ──\n{license_key}\n────────────────\n\n\
