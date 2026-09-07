@@ -213,9 +213,31 @@ v0.1.0 β 期間中、macOS 版 (`.tar.gz`) と Windows 版 (`.msi` / `.zip`) �
 
 - **macOS**: Finder で `.tar.gz` を展開 → 出た `text-to-print` を右クリック → **開く** → 「開発元を確認できません」ダイアログの 「開く」 ボタン (初回のみ、以降は通常起動)
 - **Windows**: SmartScreen が「認識されないアプリ」warning を出したら「詳細情報」→「実行」 (`.msi` 直接 install も可、Authenticode 未署名警告あり)
-- **Linux**: `.deb` (Debian/Ubuntu) or `.AppImage` (portable、`chmod +x` してから実行)
+- **Linux**: **`.AppImage` (portable、推奨)** を DL → `chmod +x` → 実行 `.deb` は glibc 2.39+ 環境 (Ubuntu 24.04+ / Debian 13+) 限定、旧環境は AppImage or `.tar.gz` を使用
 
 Apple Developer Program 加入 + Windows Authenticode cert 導入は Phase S3 (Live 課金化) 以降に実施予定 β 期間は「install できる」を優先、警告 UX は割り切り
+
+### Platform verification status (2026-09-07 実測、β release 時点)
+
+| Platform | Artifact | Build | 実機動作 | Note |
+|--|--|--|--|--|
+| **macOS Apple Silicon** (M1/M2/M3) | `.tar.gz` | ✅ CI green | ✅ M3 実機 verified | primary dev env |
+| macOS Intel | `.tar.gz` | ✅ CI green | ⚠️ untested | build 成功のみ、実機報告歓迎 |
+| Windows 10/11 x64 | `.msi` / `.zip` | ✅ CI green | ⏳ pending | user 側で検証予定 (`docs/WINDOWS_SMOKE_TEST.md` 参照) |
+| Linux x86_64 (Ubuntu 24.04+ / Debian 13+) | `.deb` | ✅ CI green | ⚠️ metadata verified | glibc 2.39 requirement (`dpkg-deb -I` 確認済) |
+| Linux x86_64 (Ubuntu 22.04 / Debian 12) | `.AppImage` / `.tar.gz` | ✅ CI green | ⚠️ untested | static-pie 推奨 (portable) |
+| **Linux arm64 Debian bookworm** (RasPi 5) | (source build) | ✅ verified | ✅ **CLI smoke OK** | 17m56s build、wgpu backend 選択、ALICE node/P2P 起動 |
+| **Linux arm64 Ubuntu 22.04** (Jetson Orin Nano) | (source build) | ✅ verified | ✅ **CLI smoke OK** | build success、wgpu backend 選択、ALICE node/P2P 起動 |
+
+**arm64 Linux 実測** (2026-09-07 RasPi 5 + Jetson Orin Nano):
+- Rust workspace + 6 ALICE-* sibling deps 全 build 成功 (~18 分 on 4-core Cortex-A76 / ~6-core Ampere)
+- Binary size: 36-37 MB (stripped、dynamically linked)
+- Shared libs: `libssl.so.3` + `libdbus-1.so.3` + `libcrypto.so.3` (Debian bookworm / Ubuntu 22.04 標準)
+- **wgpu backend 自動選択** (eframe: "Both glow and wgpu renderers are available. Using wgpu.")
+- ALICE node + DID identity 生成 + libp2p P2P swarm 起動 ✅
+- 実機 GUI 起動 test は headless SSH のため skip、build + init phase まで verified
+
+**β release 期間の方針**: 実機検証待ちの platform は「build 成功のみ」明示 動作報告 (bug でも「動きました」でも) は GitHub Issues で歓迎 arm64 Linux release artifact 提供は post-β で release.yml に arm64 job 追加検討 (需要確認次第)
 
 ## Build
 
