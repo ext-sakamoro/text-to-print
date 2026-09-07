@@ -562,6 +562,706 @@ impl T {
             Lang::En => "Fork (remix):",
         }
     }
+
+    // ─── settings.rs: plan / license ────────────────────────────
+    pub fn settings_current_plan(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在のプラン:",
+            Lang::En => "Current plan:",
+        }
+    }
+    pub fn settings_tier_free_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Free (LoRA share あり)",
+            Lang::En => "Free (LoRA share enabled)",
+        }
+    }
+    pub fn settings_beta_plan_gated(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "BETA バージョンのためプランを選択することができません",
+            Lang::En => "Plan selection is disabled during BETA",
+        }
+    }
+    pub fn settings_pro_description(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Pro プランは無制限生成 + 完全 offline (LoRA 共有 OFF 強制)",
+            Lang::En => "Pro plan: unlimited generation + fully offline (LoRA share forced off)",
+        }
+    }
+    pub fn settings_pro_coming_soon(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Pro subscription is coming in v0.2.0 (Beta では unavailable)",
+            Lang::En => "Pro subscription is coming in v0.2.0 (unavailable during BETA)",
+        }
+    }
+    pub fn settings_pro_planned(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "計画: 個人向け Pro プラン ¥3,000/月 or ¥30,000/年 (完全 offline + 無制限生成)",
+            Lang::En => "Planned: personal Pro plan ¥3,000/mo or ¥30,000/yr (fully offline + unlimited generation)",
+        }
+    }
+    pub fn settings_buy_monthly(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Buy Monthly ¥3,000/月",
+            Lang::En => "Buy Monthly ¥3,000/mo",
+        }
+    }
+    pub fn settings_buy_yearly(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Buy Yearly ¥30,000/年 (-17%)",
+            Lang::En => "Buy Yearly ¥30,000/yr (-17%)",
+        }
+    }
+    pub fn settings_email_invalid(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "有効な email 形式で入力してください",
+            Lang::En => "Please enter a valid email",
+        }
+    }
+    pub fn settings_enterprise_prompt(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "複数ユーザー / 商用 / カスタム機能:",
+            Lang::En => "Multi-user / commercial / custom features:",
+        }
+    }
+    pub fn settings_contact_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "問合わせ",
+            Lang::En => "Contact",
+        }
+    }
+    pub fn settings_mailer_launch_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "メーラー起動失敗",
+            Lang::En => "Failed to launch mail client",
+        }
+    }
+    pub fn settings_license_input_heading(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ライセンスキー入力",
+            Lang::En => "Enter license key",
+        }
+    }
+    pub fn settings_license_input_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Stripe 決済後に email で届いたキーを貼付してください",
+            Lang::En => "Paste the key you received by email after Stripe payment",
+        }
+    }
+    pub fn settings_license_clear(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ライセンスをクリア (Free に戻す)",
+            Lang::En => "Clear license (revert to Free)",
+        }
+    }
+
+    // ─── settings.rs: LLM backend ────────────────────────────────
+    pub fn settings_embedded_status(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Embedded 状態:",
+            Lang::En => "Embedded status:",
+        }
+    }
+    pub fn settings_embedded_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Embedded は alice-llm を rlib 直リンクで実行します 初回選択時は GGUF ロードに ~30 秒 model DL 完了までは Loading 状態 生成 request は Ready 前は Sidecar にフォールバックします",
+            Lang::En => "Embedded runs alice-llm as a linked rlib First-time selection takes ~30s for GGUF load Loading state until model DL completes Generation requests fall back to Sidecar until Ready",
+        }
+    }
+    pub fn settings_current(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在:",
+            Lang::En => "Current:",
+        }
+    }
+    pub fn settings_execution_mode_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "CPU: Llama3Model 直呼び (mmap dequant on demand) GPU: wgpu backend (Metal / Vulkan / DX12) 経由 GpuModel 切替時は Embedded backend を再ロードします adapter 不在時は Error → 手動で CPU に戻して下さい",
+            Lang::En => "CPU: direct Llama3Model call (mmap dequant on demand) GPU: via wgpu backend (Metal / Vulkan / DX12) GpuModel switch reloads Embedded backend Fall back to CPU manually if adapter is missing (Error state)",
+        }
+    }
+    pub fn settings_custom_gguf_heading(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Custom GGUF (Model 選択より優先)",
+            Lang::En => "Custom GGUF (overrides Model selection)",
+        }
+    }
+    pub fn settings_custom_gguf_unset(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "(未設定、上の Model dropdown を使用)",
+            Lang::En => "(unset, using Model dropdown above)",
+        }
+    }
+    pub fn settings_gguf_select_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "GGUF ファイル選択",
+            Lang::En => "Select GGUF file",
+        }
+    }
+    pub fn settings_gguf_select_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "HF DL を skip して指定 path から直接ロード",
+            Lang::En => "Skip HF download and load directly from the specified path",
+        }
+    }
+    pub fn settings_gguf_clear_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "override 解除、上の Model dropdown に戻す",
+            Lang::En => "Clear override, revert to Model dropdown above",
+        }
+    }
+    pub fn settings_manual_placement_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "手動配置要: HF repo 非公開のため",
+            Lang::En => "Manual placement required (HF repo private):",
+        }
+    }
+    pub fn settings_manual_placement_suffix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "を models_dir に配置",
+            Lang::En => "into models_dir",
+        }
+    }
+    pub fn settings_bonsai_manual_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "PrismML fork Q1_0 (128-element binary ternary) の Bonsai 27B は現在 HF 非公開 GGUF ファイルを手動で models/bonsai-27b-q1_0.gguf に配置すると Embedded backend が拾います (Stage 3-C.9 の model_exists 経路)",
+            Lang::En => "Bonsai 27B (PrismML fork Q1_0, 128-element binary ternary) is currently private on HF Place the GGUF file at models/bonsai-27b-q1_0.gguf and the Embedded backend will pick it up (Stage 3-C.9 model_exists path)",
+        }
+    }
+    pub fn settings_grammar_checkbox(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "LOL DSL grammar 強制 (GBNF)",
+            Lang::En => "Enforce LOL DSL grammar (GBNF)",
+        }
+    }
+    pub fn settings_grammar_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "オンにすると生成 request に text_to_print_llm::grammar_lol::LOL_GBNF (253 行) を付随して送信し、alice-llm 側で mask_logits_by_grammar を毎 token 適用します 出力は parse_lol でパース保証 (シンタックス誤り 0) オフにすると free-form output (デバッグ / 別 grammar 検証時用)",
+            Lang::En => "When on, generation requests bundle text_to_print_llm::grammar_lol::LOL_GBNF (253 lines) and alice-llm applies mask_logits_by_grammar per token Output is guaranteed parseable by parse_lol (zero syntax errors) When off, free-form output (for debugging or alternate grammar tests)",
+        }
+    }
+
+    // ─── settings.rs: profile / share ────────────────────────────
+    pub fn settings_profile_section(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "プロフィール (Gallery 表示名)",
+            Lang::En => "Profile (Gallery display name)",
+        }
+    }
+    pub fn settings_nickname_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Gallery で表示される名前 (空欄なら DID)",
+            Lang::En => "Name displayed in Gallery (DID if empty)",
+        }
+    }
+    pub fn settings_nickname_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Gallery タブで他人が見る表示名 空欄のままなら DID (did:key:...) の先頭 12 char + 末尾 6 char が表示されます 変更しても過去に公開した post には反映されません (最新の nickname は次回公開時から反映)",
+            Lang::En => "Display name others see in the Gallery tab If empty, first 12 + last 6 chars of DID (did:key:...) are shown Changes do not propagate to previously published posts (latest nickname applies from next publish)",
+        }
+    }
+    pub fn settings_lora_share_checkbox(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "LoRA 学習データ提供に協力する",
+            Lang::En => "Contribute to LoRA training data",
+        }
+    }
+    pub fn settings_lora_share_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "オンにすると生成した LOL DSL + 品質シグナル (prompt / LOL 原文 / mesh SHA-256 / retry_count / safety_violations 等) が ALICE-LOL LoRA 学習セットに送信対象化されます Free tier default オン、Paid tier は完全 offline\n\n送信されないもの: Apple/Google/Microsoft アカウント ID / machine ID / file path / license key / crash report / P2P share pending キュー\n\n詳細: docs/SHARE.md",
+            Lang::En => "When on, generated LOL DSL + quality signals (prompt / LOL source / mesh SHA-256 / retry_count / safety_violations, etc.) become upload candidates for the ALICE-LOL LoRA training set Free tier default on, Paid tier is fully offline\n\nNever sent: Apple/Google/Microsoft account ID / machine ID / file path / license key / crash report / P2P share pending queue\n\nDetails: docs/SHARE.md",
+        }
+    }
+    pub fn settings_share_status_active(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在: 共有中 (LoRA 品質向上に貢献)",
+            Lang::En => "Status: sharing (contributing to LoRA quality)",
+        }
+    }
+    pub fn settings_share_status_paid(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在: 有料 tier のため自動 opt-out (アップロードしません)",
+            Lang::En => "Status: auto opt-out (Paid tier, no uploads)",
+        }
+    }
+    pub fn settings_share_status_off(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在: opt-out (アップロードしません)",
+            Lang::En => "Status: opt-out (no uploads)",
+        }
+    }
+    pub fn settings_upload_queue(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "アップロード待ち: 実キュー",
+            Lang::En => "Upload queue: pending",
+        }
+    }
+    pub fn settings_upload_queue_dryrun(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "件 / dry-run",
+            Lang::En => "items / dry-run",
+        }
+    }
+    pub fn settings_upload_queue_items(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "件",
+            Lang::En => "items",
+        }
+    }
+    pub fn settings_auto_publish_checkbox(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "毎回自動公開 (公開確認 dialog を表示しない)",
+            Lang::En => "Auto-publish always (no confirm dialog)",
+        }
+    }
+    pub fn settings_auto_publish_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "オフ (default) だと生成完了ごとに Gallery 公開確認 dialog が出ます オンにすると dialog なしで自動公開されます (Free tier で share on の時のみ、Paid tier は常時 upload しない)",
+            Lang::En => "Off (default): Gallery confirm dialog appears after each generation On: auto-publish without dialog (Free tier with share on only; Paid tier never uploads)",
+        }
+    }
+    pub fn settings_share_details_link(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "詳細な送信内容と opt-out 手順 (docs/SHARE.md)",
+            Lang::En => "Detailed data flow and opt-out procedure (docs/SHARE.md)",
+        }
+    }
+
+    // ─── settings.rs: crash reports ──────────────────────────────
+    pub fn settings_crash_checkbox(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "クラッシュ発生時にローカル report を保存する",
+            Lang::En => "Save local crash reports on crash",
+        }
+    }
+    pub fn settings_crash_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "オンにするとクラッシュ発生時に crash_reports/{uuid}.json が data_dir に保存されます (現状 upload なし、backend #36 実装後に opt-in で送信予定) オフにするとログのみ",
+            Lang::En => "When on, crash_reports/{uuid}.json is saved to data_dir on crash (no upload yet; opt-in send planned after backend #36) Off: log only",
+        }
+    }
+    pub fn settings_crash_saved(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "保存済 report:",
+            Lang::En => "Saved reports:",
+        }
+    }
+    pub fn settings_crash_open_folder(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "フォルダを開く",
+            Lang::En => "Open folder",
+        }
+    }
+
+    // ─── settings.rs: usage / limits ─────────────────────────────
+    pub fn settings_today_usage(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "本日の使用量:",
+            Lang::En => "Today's usage:",
+        }
+    }
+    pub fn settings_times_unit(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "回",
+            Lang::En => "times",
+        }
+    }
+    pub fn settings_limit_unlimited(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "生成上限: 無制限",
+            Lang::En => "Generation limit: unlimited",
+        }
+    }
+    pub fn settings_limit_daily_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "生成上限:",
+            Lang::En => "Generation limit:",
+        }
+    }
+    pub fn settings_limit_per_day(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "回/日",
+            Lang::En => "times/day",
+        }
+    }
+
+    // ─── settings.rs: advanced / network ─────────────────────────
+    pub fn settings_advanced_section(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Advanced (次回起動時に反映)",
+            Lang::En => "Advanced (applied on next launch)",
+        }
+    }
+    pub fn settings_endpoint_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "空 = 既定 (Cloudflare)",
+            Lang::En => "Empty = default (Cloudflare)",
+        }
+    }
+    pub fn settings_endpoint_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "空欄なら https://text-to-print.alicelaw.net/api/presets を使用",
+            Lang::En => "Empty uses https://text-to-print.alicelaw.net/api/presets",
+        }
+    }
+    pub fn settings_preset_sync_checkbox(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "起動時に preset library を同期する",
+            Lang::En => "Sync preset library at startup",
+        }
+    }
+    pub fn settings_port_default_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "(既定 8000、使用中なら +1 で自動 fallback)",
+            Lang::En => "(default 8000, auto-fallback +1 if in use)",
+        }
+    }
+    pub fn settings_port_save_error(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "port save 失敗",
+            Lang::En => "Port save failed",
+        }
+    }
+    pub fn settings_port_range_error(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "port は 1024-65535 の整数",
+            Lang::En => "Port must be an integer 1024-65535",
+        }
+    }
+    pub fn settings_endpoint_save_error(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "endpoint save 失敗",
+            Lang::En => "Endpoint save failed",
+        }
+    }
+    pub fn settings_save_next_launch(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "保存完了 次回起動時に反映",
+            Lang::En => "Saved (takes effect on next launch)",
+        }
+    }
+
+    // ─── settings.rs: BYO LLM ────────────────────────────────────
+    pub fn settings_byo_intro(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "リモート LLM API 設定 (OpenAI / Anthropic / Google / Ollama 等)",
+            Lang::En => "Remote LLM API configuration (OpenAI / Anthropic / Google / Ollama, etc.)",
+        }
+    }
+    pub fn settings_byo_not_selected(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "現在の Inference backend は BYO LLM ではありません 上の picker で 'BYO LLM' を選択すると有効",
+            Lang::En => "Current inference backend is not BYO LLM Select 'BYO LLM' in the picker above to enable",
+        }
+    }
+    pub fn settings_byo_legend(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "★ = アクティブ (生成に使用中) / ● = 保存済 (未アクティブ)",
+            Lang::En => "★ = active (used for generation) / ● = saved (not active)",
+        }
+    }
+    pub fn settings_byo_free_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "💡 無料で試すなら Google (Gemini 2.5 Flash) 推奨",
+            Lang::En => "💡 For free testing, Google (Gemini 2.5 Flash) is recommended",
+        }
+    }
+    pub fn settings_byo_select_provider(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "上のボタンで provider を選択",
+            Lang::En => "Select a provider using the buttons above",
+        }
+    }
+    pub fn settings_byo_model_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "例: OpenAI: gpt-5 / o1 / gpt-4o-mini",
+            Lang::En => "e.g. OpenAI: gpt-5 / o1 / gpt-4o-mini",
+        }
+    }
+    pub fn settings_byo_max_tokens_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "(既定 256、大きくすると 1 生成コスト増)",
+            Lang::En => "(default 256, larger = higher cost per generation)",
+        }
+    }
+    pub fn settings_byo_temperature_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "(0.0-2.0、既定 0.7)",
+            Lang::En => "(0.0-2.0, default 0.7)",
+        }
+    }
+    pub fn settings_byo_reasoning_unset(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "(未指定)",
+            Lang::En => "(unset)",
+        }
+    }
+    pub fn settings_byo_reasoning_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "OpenAI GPT-5/o-series は 'minimal' 推奨 (silent thinking 課金抑制)",
+            Lang::En => "OpenAI GPT-5/o-series: 'minimal' recommended (limits silent-thinking billing)",
+        }
+    }
+    pub fn settings_byo_api_key_hint(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "保存済でも空欄表示 新規入力で上書き",
+            Lang::En => "Shown blank even if saved New input overwrites",
+        }
+    }
+    pub fn settings_byo_keychain_saved(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "✅ Keychain に保存済 (起動毎に empty 表示は正常動作)",
+            Lang::En => "✅ Saved to Keychain (empty display at each launch is normal)",
+        }
+    }
+    pub fn settings_byo_keychain_unset(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "⚠️ 未保存 API key を入力して「保存」を押してください",
+            Lang::En => "⚠️ Not saved Enter API key and press Save",
+        }
+    }
+    pub fn settings_byo_keychain_error(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "❌ Keychain 読出エラー",
+            Lang::En => "❌ Keychain read error",
+        }
+    }
+    pub fn settings_save_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "保存",
+            Lang::En => "Save",
+        }
+    }
+    pub fn settings_byo_test_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "テスト送信 (~16 tokens)",
+            Lang::En => "Test send (~16 tokens)",
+        }
+    }
+    pub fn settings_byo_test_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "フォーム内容で 1 回だけ生成 (最大 30 秒 UI ブロック)",
+            Lang::En => "Generate once with the form's contents (may block UI up to 30s)",
+        }
+    }
+    pub fn settings_delete_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "削除",
+            Lang::En => "Delete",
+        }
+    }
+    pub fn settings_byo_activate_button(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "この provider をアクティブ化",
+            Lang::En => "Activate this provider",
+        }
+    }
+    pub fn settings_byo_activate_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "生成時にこの provider を使うよう切替",
+            Lang::En => "Switch to use this provider for generation",
+        }
+    }
+    pub fn settings_byo_cost_estimate_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "予想コスト: 約",
+            Lang::En => "Estimated cost: ~",
+        }
+    }
+    pub fn settings_byo_cost_estimate_suffix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "/ 生成 (system_prompt ~4K in + ~500 out トークン想定、rate は 2026-08-23 時点、実際は provider の pricing page で確認)",
+            Lang::En => "/ generation (assumes ~4K in + ~500 out tokens, rate as of 2026-08-23, verify on provider's pricing page)",
+        }
+    }
+    pub fn settings_byo_cost_unknown(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "予想コスト: rate table に model なし (Custom / 独自 model 使用時)",
+            Lang::En => "Estimated cost: model not in rate table (Custom / user-provided model)",
+        }
+    }
+
+    // ─── settings.rs: form error / success messages ──────────────
+    pub fn settings_max_tokens_positive_int(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "max_tokens は正の整数",
+            Lang::En => "max_tokens must be a positive integer",
+        }
+    }
+    pub fn settings_temperature_range(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "temperature は 0.0-2.0 の実数",
+            Lang::En => "temperature must be a real number 0.0-2.0",
+        }
+    }
+    pub fn settings_endpoint_empty(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "endpoint が空",
+            Lang::En => "endpoint is empty",
+        }
+    }
+    pub fn settings_model_empty(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "model が空",
+            Lang::En => "model is empty",
+        }
+    }
+    pub fn settings_keychain_save_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Keychain 保存失敗",
+            Lang::En => "Keychain save failed",
+        }
+    }
+    pub fn settings_api_key_missing(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "API key が未入力 (Keychain にも保存なし)",
+            Lang::En => "API key not entered (nor saved in Keychain)",
+        }
+    }
+    pub fn settings_keychain_read_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Keychain 読出失敗",
+            Lang::En => "Keychain read failed",
+        }
+    }
+    pub fn settings_db_save_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "DB 保存失敗",
+            Lang::En => "DB save failed",
+        }
+    }
+    pub fn settings_saved_ok(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "保存完了",
+            Lang::En => "Saved",
+        }
+    }
+    pub fn settings_db_delete_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "DB 削除失敗",
+            Lang::En => "DB delete failed",
+        }
+    }
+    pub fn settings_keychain_delete_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Keychain 削除失敗",
+            Lang::En => "Keychain delete failed",
+        }
+    }
+    pub fn settings_deleted_ok(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "削除完了",
+            Lang::En => "Deleted",
+        }
+    }
+    pub fn settings_active_save_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "active provider 保存失敗",
+            Lang::En => "Failed to save active provider",
+        }
+    }
+    pub fn settings_provider_not_saved(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "この provider は未保存 まず '保存' して下さい",
+            Lang::En => "This provider is not saved; press 'Save' first",
+        }
+    }
+    pub fn settings_no_api_key_saved(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Keychain に API key なし まず '保存' して下さい",
+            Lang::En => "No API key in Keychain; press 'Save' first",
+        }
+    }
+    pub fn settings_activated_ok_suffix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "をアクティブ化しました",
+            Lang::En => "activated",
+        }
+    }
+    pub fn settings_api_key_both_missing(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "API key が form / Keychain のどちらにもなし",
+            Lang::En => "API key is missing from both form and Keychain",
+        }
+    }
+    pub fn settings_test_success_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "成功:",
+            Lang::En => "Success:",
+        }
+    }
+    pub fn settings_test_fail_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "失敗:",
+            Lang::En => "Failure:",
+        }
+    }
+    pub fn settings_test_timeout(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "失敗: 30 秒でタイムアウト",
+            Lang::En => "Failure: timed out after 30s",
+        }
+    }
+    pub fn settings_license_invalid(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "無効なキー",
+            Lang::En => "Invalid key",
+        }
+    }
+    pub fn settings_license_system_missing(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "ライセンスシステム未設定",
+            Lang::En => "License system not configured",
+        }
+    }
+    pub fn settings_license_verify_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "検証失敗",
+            Lang::En => "Verification failed",
+        }
+    }
+    pub fn settings_license_reverted_free(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "Free に戻しました",
+            Lang::En => "Reverted to Free",
+        }
+    }
+    pub fn settings_db_update_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "DB 更新失敗",
+            Lang::En => "DB update failed",
+        }
+    }
+    pub fn settings_plan_updated_prefix(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "プランに更新しました (有効期限",
+            Lang::En => "Plan updated (expires",
+        }
+    }
+    pub fn settings_email_invalid_short(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "email が未入力または不正です",
+            Lang::En => "Email is missing or invalid",
+        }
+    }
+    pub fn settings_checkout_fetching(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "の checkout URL を取得中...",
+            Lang::En => "fetching checkout URL...",
+        }
+    }
+    pub fn settings_response_parse_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "レスポンス parse 失敗",
+            Lang::En => "Response parse failed",
+        }
+    }
+    pub fn settings_browser_launch_fail(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "browser 起動失敗",
+            Lang::En => "Browser launch failed",
+        }
+    }
 }
 
 #[cfg(test)]

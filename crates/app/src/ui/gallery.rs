@@ -38,6 +38,7 @@ pub struct GalleryState {
     pub edit_lol_pending: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn show(
     ui: &mut Ui,
     state: &mut AppState,
@@ -147,6 +148,7 @@ fn show_list_row(ui: &mut Ui, sdf: &GalleryItem, gallery: &mut GalleryState) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show_detail(
     ui: &mut Ui,
     sdf: &GalleryItem,
