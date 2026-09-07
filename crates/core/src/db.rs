@@ -251,6 +251,13 @@ impl Database {
             "ALTER TABLE profiles ADD COLUMN gallery_auto_share INTEGER NOT NULL DEFAULT 0",
             [],
         );
+        // P1-11 Phase 6 (2026-09-07): user Lang preference for the UI
+        // Values: `auto` (system locale, default) / `ja` / `en` Runtime
+        // resolution priority: env `APP_LANG` > this column > system locale
+        let _ = self.conn.execute(
+            "ALTER TABLE profiles ADD COLUMN lang_pref TEXT NOT NULL DEFAULT 'auto'",
+            [],
+        );
         Ok(())
     }
 
@@ -405,6 +412,36 @@ impl Database {
         self.conn.execute(
             "UPDATE profiles SET nickname = ?2, updated_at = datetime('now') WHERE id = ?1",
             rusqlite::params![profile_id, nickname],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch the user Lang preference `auto` / `ja` / `en` Missing row or
+    /// SQLite error returns `auto` for graceful fallback to system locale
+    ///
+    /// # Errors
+    /// - Never (defaults to `auto` on any read failure)
+    pub fn get_lang_pref(&self, profile_id: &str) -> Result<String> {
+        let value: String = self
+            .conn
+            .query_row(
+                "SELECT lang_pref FROM profiles WHERE id = ?1",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "auto".to_string());
+        Ok(value)
+    }
+
+    /// Persist the user Lang preference Caller must pass exactly one of
+    /// `auto` / `ja` / `en` (Settings UI enforces via ComboBox)
+    ///
+    /// # Errors
+    /// - SQLite error from `UPDATE`
+    pub fn set_lang_pref(&self, profile_id: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profiles SET lang_pref = ?2, updated_at = datetime('now') WHERE id = ?1",
+            rusqlite::params![profile_id, value],
         )?;
         Ok(())
     }
@@ -952,6 +989,31 @@ mod tests {
         assert!(db.get_gallery_auto_share("user1").unwrap());
         db.set_gallery_auto_share("user1", false).unwrap();
         assert!(!db.get_gallery_auto_share("user1").unwrap());
+    }
+
+    #[test]
+    fn lang_pref_defaults_to_auto() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        assert_eq!(db.get_lang_pref("user1").unwrap(), "auto");
+    }
+
+    #[test]
+    fn lang_pref_roundtrip() {
+        let db = test_db();
+        db.get_or_create_profile("user1").unwrap();
+        db.set_lang_pref("user1", "en").unwrap();
+        assert_eq!(db.get_lang_pref("user1").unwrap(), "en");
+        db.set_lang_pref("user1", "ja").unwrap();
+        assert_eq!(db.get_lang_pref("user1").unwrap(), "ja");
+        db.set_lang_pref("user1", "auto").unwrap();
+        assert_eq!(db.get_lang_pref("user1").unwrap(), "auto");
+    }
+
+    #[test]
+    fn lang_pref_unknown_profile_returns_auto() {
+        let db = test_db();
+        assert_eq!(db.get_lang_pref("nonexistent").unwrap(), "auto");
     }
 
     #[test]

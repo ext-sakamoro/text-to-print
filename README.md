@@ -52,11 +52,12 @@ CPU/GPU DeltaNet+Attention and wgpu compute shaders
 
 <!--
   Assets are stored under `docs/images/` and referenced from this section
-  撮影 guide (何を撮るか、file 名、推奨 size、ffmpeg 変換 command) は
-  `docs/images/CAPTURE_GUIDE.md` にまとめている
+  撮影 guide (Ja/En 両版の file 名、推奨 size、ffmpeg 変換 command、
+  英語 UI mode の起動方法) は `docs/images/CAPTURE_GUIDE.md` にまとめている
+  UI language switch: Settings tab → Language → "English" or env `APP_LANG=en`
 -->
 
-### Stills
+### 日本語 UI / Japanese UI
 
 | | |
 |--|--|
@@ -66,10 +67,28 @@ CPU/GPU DeltaNet+Attention and wgpu compute shaders
 | **Customizer** — slider で寸法 tune → 即生成 | **LLM 経路** — 自然言語 prompt → LOL DSL 生成 |
 | ![Bambu Studio import (出力 3MF)](docs/images/bambu-import.png) | ![Gallery share modal (公開確認 dialog)](docs/images/gallery-share.png) |
 | **Bambu Studio** で開いた view | **Gallery** — 生成物を DID + ed25519 で他 user 公開 (Cloudflare Relay 経由) |
-| ![実プリント結果 (Bambu H2D 出力品)](docs/images/print-result.jpg) | |
-| **実プリント結果** (SKADIS panel 等、post-β) | |
 
-撮影 / GIF 変換 guide: [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
+### English UI
+
+Switch UI language in **Settings > Language** (live, no restart) or launch with `APP_LANG=en`
+
+| | |
+|--|--|
+| ![App startup (Generate tab + 3D mesh preview)](docs/images/hero-en.png) | ![Templates section (curated presets + cache/Cloud label)](docs/images/template-section-en.png) |
+| **App hero** — Generate UI + 3D mesh preview | **Templates** — one-click presets + Cloudflare sync source |
+| ![Customizer (slider in use)](docs/images/customizer-en.png) | ![LLM generation (phase progress bar + mesh preview)](docs/images/llm-generation-en.png) |
+| **Customizer** — tune dimensions with sliders → instant generate | **LLM path** — natural-language prompt → LOL DSL |
+| ![Bambu Studio import (exported 3MF)](docs/images/bambu-import-en.png) | ![Gallery share modal (publish confirm dialog)](docs/images/gallery-share-en.png) |
+| **Bambu Studio** import view | **Gallery** — publish output to other users via DID + ed25519 (Cloudflare Relay) |
+
+### Print result (language-neutral)
+
+| |
+|--|
+| ![実プリント結果 / Actual print (Bambu H2D output)](docs/images/print-result.jpg) |
+| **実プリント結果 / Actual print** (SKADIS panel etc., post-β) |
+
+撮影 / GIF 変換 guide (Ja/En 両版含む): [`docs/images/CAPTURE_GUIDE.md`](docs/images/CAPTURE_GUIDE.md)
 
 ## Pricing
 

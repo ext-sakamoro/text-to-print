@@ -26,6 +26,40 @@ impl Lang {
     }
 }
 
+/// Resolve the runtime UI [`Lang`] from an override string ("auto" / "ja"
+/// / "en" — case-insensitive)
+///
+/// Priority: env `APP_LANG` (or `TEXT_TO_PRINT_LANG`) > `pref` argument >
+/// system locale ([`Lang::detect`])
+///
+/// Called each frame in the app top-level so a Settings UI Lang change
+/// applies without restart Env lookup goes through [`std::sync::OnceLock`]
+/// so subsequent frames skip the syscall
+pub fn resolve_lang(pref: &str) -> Lang {
+    use std::sync::OnceLock;
+    static ENV_LANG: OnceLock<Option<Lang>> = OnceLock::new();
+    let env = ENV_LANG.get_or_init(|| {
+        std::env::var("APP_LANG")
+            .ok()
+            .or_else(|| std::env::var("TEXT_TO_PRINT_LANG").ok())
+            .and_then(|v| parse_lang_string(&v))
+    });
+    if let Some(l) = *env {
+        return l;
+    }
+    parse_lang_string(pref).unwrap_or_else(Lang::detect)
+}
+
+/// Case-insensitive parse of a Lang tag Returns `None` for "auto" or any
+/// unknown value (caller decides fallback)
+fn parse_lang_string(s: &str) -> Option<Lang> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "ja" | "jp" | "japanese" | "日本語" => Some(Lang::Ja),
+        "en" | "english" => Some(Lang::En),
+        _ => None,
+    }
+}
+
 /// UI テキスト
 pub struct T;
 
@@ -762,6 +796,42 @@ impl T {
     }
 
     // ─── settings.rs: profile / share ────────────────────────────
+    // ─── settings.rs: Language / UI Lang switcher (P1-11 Phase 6) ─
+    pub fn settings_language_section(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "言語 (Language)",
+            Lang::En => "Language (言語)",
+        }
+    }
+    pub fn settings_language_label(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "UI 言語:",
+            Lang::En => "UI language:",
+        }
+    }
+    pub fn settings_language_auto(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "自動 (システム設定)",
+            Lang::En => "Auto (system locale)",
+        }
+    }
+    pub fn settings_language_hover(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => {
+                "UI 表示言語を切替 変更は即時反映 (再起動不要) 起動時 env `APP_LANG=ja|en` があれば env が優先"
+            }
+            Lang::En => {
+                "Switch the UI language Applies live (no restart) At startup the env `APP_LANG=ja|en` takes precedence"
+            }
+        }
+    }
+    pub fn settings_language_env_note(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "env override: `APP_LANG=en` / `TEXT_TO_PRINT_LANG=en`",
+            Lang::En => "env override: `APP_LANG=en` / `TEXT_TO_PRINT_LANG=en`",
+        }
+    }
+
     pub fn settings_profile_section(l: Lang) -> &'static str {
         match l {
             Lang::Ja => "プロフィール (Gallery 表示名)",

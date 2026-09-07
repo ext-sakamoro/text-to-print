@@ -2,16 +2,31 @@
 
 このディレクトリは README hero + GitHub Release page + 将来の Zenn / Twitter 記事で使う画像・動画素材を格納する user 側で macOS 標準の screen capture ツールで撮影し、以下 file 名で置く
 
-## 撮影 checklist (6 screenshot + 1 GIF)
+## Ja / En 2 版撮影ルール (P1-11 対応、2026-09-07)
 
-| # | file name | 内容 | 推奨サイズ | 撮影ツール |
+英語 UI が landing 済 (Phase 2-5) なので、README §Screenshots は Ja/En 2 grid で見せる 各 shot を **日本語 UI + 英語 UI の 2 版** で撮る:
+
+- 日本語 UI 版: file 名は下表の canonical (`hero.png` 等)
+- 英語 UI 版: 同名に `-en` suffix (`hero-en.png` / `template-section-en.png` / `customizer-en.png` / `llm-generation-en.png` / `bambu-import-en.png` / `gallery-share-en.png`) `print-result.jpg` (実プリント) は言語共通で 1 shot のみ
+
+### 英語 UI mode での起動方法 (どちらか)
+
+- **Settings UI 経由**: Settings tab → Language 展開 → 「English」選択 (即時切替、DB profile.lang_pref に永続化)
+- **env 変数**: 起動時に `APP_LANG=en cargo run --release --package text-to-print` (or `TEXT_TO_PRINT_LANG=en`) Ja user が macOS system locale ja のまま英語 UI を撮影する時に便利
+
+env 経由は起動時 1 回のみ評価 (`OnceLock` cache)、Settings UI 経由は毎 frame 再評価で live 反映
+
+## 撮影 checklist (12 screenshot = 6 shot × Ja/En + 1 optional GIF + 1 print result)
+
+| # | file name (Ja / En) | 内容 | 推奨サイズ | 撮影ツール |
 |--|--|--|--|--|
-| 1 | `hero.png` | App 起動画面の全景 (左 pane に生成 UI、右 pane に 3D preview mesh、window 全体) | 2400×1500 or Retina 撮影 | Command+Shift+4 → Space → window click |
-| 2 | `template-section.png` | 生成 tab の「テンプレート」collapsing 展開状態 preset button 群 + 上部 small text `presets: cache / version 2026-08-...` が写ってる | 1400×900 | Command+Shift+4 → 領域選択 |
-| 3 | `customizer.png` | 「カスタマイザー」collapsing 展開、Gridfinity or SKADIS panel の slider 操作中 (「作成: ...mm」ラベル + 「生成」button 見える) | 1400×900 | 同上 |
-| 4 | `llm-generation.png` | 自然言語 prompt 入力 → LLM 生成中 (LLM/parse/mesh/safety/export の phase progress bar が動いてる瞬間 or 100% 到達直後、生成 mesh preview あり) | 2400×1500 | 生成 button 押した直後に Command+Shift+4 |
-| 5 | `bambu-import.png` | 出力した 3MF を Bambu Studio で開いた view (mesh の色付き、AMS filament assignment 見える) | 1600×1000 | Bambu Studio window scoped capture |
-| 6 | `print-result.jpg` (optional) | 実際の 3D 印刷物の写真 (SKADIS panel or Gridfinity bin、Bambu H2D 出力品) | 実物撮影 4:3 | iPhone 等 |
+| 1 | `hero.png` / `hero-en.png` | App 起動画面の全景 (左 pane に生成 UI、右 pane に 3D preview mesh、window 全体) | 2400×1500 or Retina 撮影 | Command+Shift+4 → Space → window click |
+| 2 | `template-section.png` / `template-section-en.png` | 生成 tab の「テンプレート / Templates」collapsing 展開状態 preset button 群 + 上部 small text `presets: cache / version 2026-08-...` が写ってる | 1400×900 | Command+Shift+4 → 領域選択 |
+| 3 | `customizer.png` / `customizer-en.png` | 「カスタマイザー / Customizer」collapsing 展開、Gridfinity or SKADIS panel の slider 操作中 (「作成 / Create: ...mm」ラベル + 「生成 / Generate」button 見える) | 1400×900 | 同上 |
+| 4 | `llm-generation.png` / `llm-generation-en.png` | 自然言語 prompt 入力 → LLM 生成中 (LLM/parse/mesh/safety/export の phase progress bar が動いてる瞬間 or 100% 到達直後、生成 mesh preview あり) | 2400×1500 | 生成 button 押した直後に Command+Shift+4 |
+| 5 | `bambu-import.png` / `bambu-import-en.png` | 出力した 3MF を Bambu Studio で開いた view (mesh の色付き、AMS filament assignment 見える) | 1600×1000 | Bambu Studio window scoped capture |
+| 6 | `gallery-share.png` / `gallery-share-en.png` | Gallery share confirm dialog (公開確認 modal 表示中、Free tier 生成完了直後) | 1400×900 | Command+Shift+4 |
+| 7 | `print-result.jpg` (optional、言語共通) | 実際の 3D 印刷物の写真 (SKADIS panel or Gridfinity bin、Bambu H2D 出力品) | 実物撮影 4:3 | iPhone 等 |
 
 ## GIF (Level 2、~20s workflow) — **2026-09-07 skip 決定、post-β 検討候補**
 
@@ -59,10 +74,10 @@ gifsicle -O3 --lossy=80 -o docs/images/hero-optimized.gif docs/images/hero.gif
 
 ## 私 (Claude) 側の作業 (user 撮影後)
 
-1. `docs/images/*.png` / `docs/images/hero.mov` を confirm
+1. `docs/images/*.png` (Ja + En 12 shot) / `docs/images/hero.mov` を confirm
 2. mov → gif 変換 (`ffmpeg` command 上記)
-3. README の hero + Screenshots section の image embed を verify
+3. README の hero + Screenshots section の Ja/En 2 grid image embed を verify
 4. GitHub Release page body update (`gh release edit v0.1.0 --notes "..."` で hero.png + hero.gif 埋込)
 5. commit + push
 
-現時点 scaffold は README 側 image embed spot 用意済 撮影完了 & filename 通り置いたら私が最終仕上げ実行
+現時点 scaffold は README 側 image embed spot 用意済 撮影完了 & filename 通り置いたら私が最終仕上げ実行 英語版 file が未着でも README の En section の image は broken link 表示になるだけ (Ja section は即機能)

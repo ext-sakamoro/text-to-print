@@ -2628,6 +2628,10 @@ pub struct AppState {
     /// `true` the generation auto-publishes without dialog Only relevant
     /// while `share_lol_dsl` is on and the tier is Free
     pub gallery_auto_share: bool,
+    /// P1-11 Phase 6 (2026-09-07): user Lang preference `auto` / `ja` /
+    /// `en` Runtime UI Lang resolution priority (main.rs `resolve_lang`):
+    /// env `APP_LANG` > this field > system locale (`sys_locale`)
+    pub lang_pref: String,
     /// Stage 3-C.14: when `true` (default), every generation forwards
     /// [`text_to_print_llm::grammar_lol::LOL_GBNF`] to the backend so
     /// output is guaranteed to be parseable by
@@ -2783,6 +2787,9 @@ impl AppState {
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
         let nickname = db.get_nickname(&profile_id).unwrap_or_default();
         let gallery_auto_share = db.get_gallery_auto_share(&profile_id).unwrap_or(false);
+        let lang_pref = db
+            .get_lang_pref(&profile_id)
+            .unwrap_or_else(|_| "auto".to_string());
         // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
         // sidecar は alice-llm-server binary の別途 install を必要とする
         // (release.yml は bundle 済だが local `cargo run` では欠落) →
@@ -3073,6 +3080,7 @@ impl AppState {
             share_lol_dsl,
             nickname,
             gallery_auto_share,
+            lang_pref,
             enforce_lol_grammar,
             pending_share_dry_run: None,
             pending_share_confirm: None,

@@ -132,6 +132,44 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState, lan
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
+            // P1-11 Phase 6 (2026-09-07): UI Lang switcher Persists to
+            // profiles.lang_pref ("auto" / "ja" / "en") main.rs
+            // re-resolves App.lang every frame so the change is live
+            ui.collapsing(T::settings_language_section(lang), |ui| {
+                let current = state.lang_pref.clone();
+                let mut selected = current.clone();
+                ui.horizontal(|ui| {
+                    ui.label(T::settings_language_label(lang));
+                    egui::ComboBox::from_id_salt("settings_lang_pref")
+                        .selected_text(match selected.as_str() {
+                            "ja" => "日本語",
+                            "en" => "English",
+                            _ => T::settings_language_auto(lang),
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut selected,
+                                "auto".to_string(),
+                                T::settings_language_auto(lang),
+                            );
+                            ui.selectable_value(&mut selected, "ja".to_string(), "日本語");
+                            ui.selectable_value(&mut selected, "en".to_string(), "English");
+                        })
+                        .response
+                        .on_hover_text(T::settings_language_hover(lang));
+                });
+                if selected != current {
+                    state.lang_pref = selected.clone();
+                    if let Err(e) = state.db.set_lang_pref(&state.profile_id, &selected) {
+                        tracing::warn!(error = %e, "failed to persist lang_pref");
+                    }
+                }
+                ui.add_space(4.0);
+                ui.label(T::settings_language_env_note(lang));
+            });
+
+            ui.add_space(8.0);
+
             // ライセンス / サブスクリプション
             ui.collapsing(T::settings_section_license(lang), |ui| {
                 // 現在の tier 表示 (Free / Pro / Enterprise / General)

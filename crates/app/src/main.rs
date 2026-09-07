@@ -6,7 +6,7 @@ mod updater;
 
 use anyhow::Result;
 use eframe::egui;
-use i18n::Lang;
+use i18n::{Lang, resolve_lang};
 use state::AppState;
 use ui::gallery::GalleryState;
 use ui::prompt::PromptUiState;
@@ -127,6 +127,7 @@ impl App {
     ) -> Self {
         let state = AppState::new(data_dir);
         let update_checker = updater::UpdateChecker::start(&state.runtime);
+        let lang = resolve_lang(&state.lang_pref);
         Self {
             state,
             viewer: SdfViewer::default(),
@@ -134,7 +135,7 @@ impl App {
             gallery: GalleryState::default(),
             prompt_ui: PromptUiState::default(),
             node,
-            lang: Lang::detect(),
+            lang,
             update_checker,
             current_tab: Tab::Generate,
             render_state,
@@ -145,6 +146,11 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_checker.poll();
+
+        // Re-resolve every frame so a Settings UI Lang change applies live
+        // Env `APP_LANG` lookup is cached via OnceLock; per-frame cost is
+        // one string match + one enum copy (negligible at 60 FPS)
+        self.lang = resolve_lang(&self.state.lang_pref);
 
         if matches!(
             self.state.generation_status,
