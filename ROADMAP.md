@@ -209,6 +209,29 @@ P1-1〜P1-7 完了後:
 
 **受入基準**: 「G-code (Bambu H2D)」export で `.gcode` file が生成される、Bambu H2D で印刷成功
 
+### P1-11: 完全 English i18n 対応 (Ja/En parity)
+
+現状 i18n infra (`crates/app/src/i18n.rs`、298 行、36 pub fn) 存在するが tab labels
+(Generate / Gallery / History / Settings / About) の 5 個 + prompt.rs 4 個 = 9 個のみ
+`T::` 経由、UI 本体 300 文字列は日本語 hardcoded (prompt.rs 244 + settings.rs 38 +
+gallery/history/share_confirm/viewer 18)
+
+β 期間は Japanese-first として ship、README で明示 post-β で demand 確認して
+完全 English i18n に着手
+
+**Milestone**:
+- [ ] `crates/app/src/i18n.rs` に UI 本体 300 文字列の Ja/En 対訳追加
+- [ ] prompt.rs / settings.rs / gallery.rs / history.rs / share_confirm.rs / viewer.rs の
+  hardcoded Japanese を `T::xxx(lang)` 経由に refactor
+- [ ] 翻訳品質確認 (native English speaker review or LLM 校正 + user 確認)
+- [ ] 英語 UI screenshot 追加 (`docs/images/hero-en.png` 等)
+- [ ] README §Screenshots に Ja/En 両版 image embed
+
+**受入基準**: `Lang::En` で全 UI が natural English で操作可能、grep で `"[あ-ん一-龯]` hardcoded 検出 zero (i18n.rs 内除く)
+
+**着手 trigger**: 英語 user から issue / SNS reaction が 3+ 上がった時点 (currently 0、
+X post 2026-09-07 発信直後、demand data 収集中)
+
 ---
 
 ## P2 — v1.0.0 商用 (Paid tier + LoRA flywheel、数週〜数ヶ月想定)
@@ -402,3 +425,4 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-10 | **CI green 化** — ALICE-LOL fmt fail (trailing comment 位置ずれ) + text-to-print rustdoc fail (wikilink → intra-doc link 誤解釈) 両方修正、両 CI success (ALICE-LOL 1m24s / text-to-print 5m45s) |
 | 2026-08-11 | **README / ROADMAP 更新** — Release スケジュール section (β 公開 / 本番公開 GA / 商用公開 v1.0.0 の 3 段区切り + 判断基準明示) 新設 + 2026-08-09 完了項目 6 個追加 + P2-8 Phase T1 チェックボックス更新 (14→9 items canonical) |
 | 2026-09-07 | **ALICE-* 活用度精査 + P1 拡張** — text-to-print × ALICE-* crate utilization audit (core value chain 100% 活用済、`alice-view` dead dep 撤去 `cf6c08a`) + P1-9 (`alice-physics::structural_solver` 応力可視化統合、差別化価値高) + P1-10 (`alice-print` G-code 直接生成 UI 露出、上級 user 向け) を ROADMAP に landing worker crate (2.6k LOC wasm32) の ALICE-Auth/Billing/API wrapping は wasm32 制約で意義薄いと判断 (native 実装が最適) |
+| 2026-09-07 | **v0.1.0-beta.2 β release + public 化** — 78 commit 累積後 tag 打ち直し (libdbus-1-dev release.yml sync fix 1 hotfix 含む) 全 4 platform build success + Publish 完了 GitHub repo visibility public 化、CI 完全無料化 (Actions billing 制限消失) X + Facebook で告知投稿 (案 A、hero.png 添付、public-comm-style skill 準拠 句点なし / 誇張禁止) 副次: i18n gap 発覚 (UI 本体 300 文字列日本語 hardcoded、i18n infra は tab labels 5 + prompt 4 = 9 個のみ)、P1-11 (完全 English i18n) を ROADMAP に landing (英語 demand 3+ で着手 trigger) |

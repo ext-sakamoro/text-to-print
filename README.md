@@ -164,6 +164,7 @@ Stripe subscription 統合 backend + app UI 完成 (Test mode)
 - **CI**: ALICE-LOL / text-to-print 両 repo GitHub Actions **success** (2026-09-04 CI run `33828102104` 18m49s success)
 - **Preset library**: **25 category / 161 preset** (Sprint 1-22 + Multi-domain 4 domain 展開完了、ALICE-Bamboo canonical + 機械要素 + 家具 + 建築 + 電子工作)
 - **Customizer**: **75 archetype** slider tuning 対応 (Sprint 1-20 61 + Sprint 21-22 + Multi-domain 16 追加、2026-08-31)
+- **UI 言語**: **Japanese-first** (β 期間) tab labels は English 切替対応、UI 本体 300 文字列は日本語 hardcoded 完全 English i18n (Ja/En parity) は post-β [ROADMAP P1-11](ROADMAP.md) で対応予定 英語 user は README + Google Translate 経由で操作、demand 上がった時点で優先着手
 
 Milestone breakdown and remaining tasks to v0.1.0 β / v0.1.0 GA / v1.0.0
 commercial release are in [`ROADMAP.md`](ROADMAP.md)
