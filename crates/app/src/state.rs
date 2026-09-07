@@ -3040,6 +3040,10 @@ impl AppState {
             spawn_gallery_fetch(&runtime, endpoint, result_tx.clone());
         }
 
+        // BYO LLM restore は struct 構築前に実行 (db + profile_id の
+        // borrow を解決してから struct field に move する順序を保つ)
+        let openai_compat = try_restore_openai_compat_slot(&db, &profile_id, backend_kind);
+
         Self {
             data_dir,
             tier,
@@ -3065,12 +3069,7 @@ impl AppState {
             execution_mode,
             embedded,
             embedded_status_cell,
-            // BYO LLM (2026-08-23): slot stays empty at startup until
-            // the user configures a provider + API key in Settings The
-            // Settings UI (step 3) populates it via a helper that reads
-            // llm_provider_configs + Keychain and constructs
-            // OpenAiCompatBackend
-            openai_compat: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            openai_compat,
             custom_gguf_path,
             share_lol_dsl,
             nickname,
@@ -3355,6 +3354,95 @@ fn default_sidecar_port(endpoint: &str) -> u16 {
         .and_then(|host_port| host_port.rsplit(':').next())
         .and_then(|p| p.parse().ok())
         .unwrap_or(8000)
+}
+
+/// Startup path で BYO LLM (OpenAiCompat) slot を DB + Keychain から restore
+///
+/// `backend_kind == OpenAiCompat` の場合のみ実行、それ以外の kind では slot
+/// None のまま返す (`active_backend()` で slot check 済み、None なら Sidecar
+/// fallback で動く)
+///
+/// **2026-09-07 追加の背景**: Settings UI で user が provider を activate
+/// して API key を保存しても、rebuild / app 再起動で in-memory slot が消失し
+/// silent に Sidecar (local Qwen 3B、~5-10 分 / 生成) に fallback していた
+/// DB (`profiles.openai_compat_active_provider` + `llm_provider_configs`) と
+/// Keychain は永続化済みなので、起動時 auto-restore で UX 復旧
+///
+/// Restore 失敗時 (DB row 無し / Keychain unlock 拒否 / config parse fail 等)
+/// は warn log 出して slot None のまま、user が Settings で再度 save すれば
+/// 復旧する fallback path として `active_backend()` が Sidecar に落ちる
+fn try_restore_openai_compat_slot(
+    db: &text_to_print_core::db::Database,
+    profile_id: &str,
+    backend_kind: BackendKind,
+) -> std::sync::Arc<
+    std::sync::Mutex<Option<text_to_print_llm::openai_compat_backend::OpenAiCompatBackend>>,
+> {
+    use text_to_print_core::keychain;
+    use text_to_print_llm::openai_compat_backend::{
+        OpenAiCompatBackend, OpenAiCompatConfig, OpenAiCompatProvider,
+    };
+
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+
+    if backend_kind != BackendKind::OpenAiCompat {
+        return slot;
+    }
+
+    let active_slug = match db.get_openai_compat_active_provider(profile_id) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "BYO LLM restore: active_provider DB read failed");
+            return slot;
+        }
+    };
+    let provider = OpenAiCompatProvider::from_db_str(&active_slug);
+    let row = match db.get_llm_provider_config(profile_id, &active_slug) {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            tracing::warn!(
+                provider = %active_slug,
+                "BYO LLM restore: no DB row for active provider — falling back to Sidecar until user re-saves in Settings"
+            );
+            return slot;
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "BYO LLM restore: DB config read failed");
+            return slot;
+        }
+    };
+    let api_key = match keychain::get_api_key(provider.keychain_account()) {
+        Ok(Some(k)) => k,
+        Ok(None) => {
+            tracing::warn!(
+                provider = %active_slug,
+                "BYO LLM restore: no Keychain API key — falling back to Sidecar until user re-enters in Settings"
+            );
+            return slot;
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "BYO LLM restore: Keychain read failed (unlock denied?)");
+            return slot;
+        }
+    };
+    let cfg = OpenAiCompatConfig {
+        provider,
+        endpoint: row.endpoint.clone(),
+        api_key,
+        model: row.model.clone(),
+        reasoning_effort: row.reasoning_effort.clone(),
+    };
+    let backend = OpenAiCompatBackend::new(cfg);
+    if let Ok(mut guard) = slot.lock() {
+        *guard = Some(backend);
+    }
+    tracing::info!(
+        provider = %active_slug,
+        endpoint = %row.endpoint,
+        model = %row.model,
+        "BYO LLM backend restored from DB + Keychain (startup auto-restore)"
+    );
+    slot
 }
 
 fn load_or_create_profile_id(data_dir: &std::path::Path) -> String {
