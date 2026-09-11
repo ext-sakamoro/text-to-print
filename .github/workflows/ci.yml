@@ -91,6 +91,13 @@ jobs:
         with:
           repository: ext-sakamoro/ALICE-Physics
           path: ALICE-Physics
+      # ALICE-LOL/alice-lol-robot が `../../ALICE-Kinematics` を default-on
+      # path dep で参照するため、ALICE-LOL 側 workspace 解決に必須
+      - name: Checkout ALICE-Kinematics
+        uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
 
       # Private repos (Bamboo / Print) — requires `ALICE_ECO_TOKEN` secret
       # ALICE-Bamboo は alice-print を path dep で参照するので、両方
