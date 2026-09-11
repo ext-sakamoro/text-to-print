@@ -35,13 +35,49 @@ pub enum ModelChoice {
     /// existing load path will pick it up (Stage 3-C.9 model_exists
     /// check short-circuits the DL wait)
     Bonsai27B,
+    /// MiniCPM5-2B Q4_K_M (~1.5 GB) — OpenBMB, Apache-2.0 (2026-09-07 release)
+    ///
+    /// 2.6B dense reasoning model、42 layer LlamaForCausalLM base + ChatML
+    /// tokenizer + GQA (16:2 = 8x KV compression)、131K context iGPU /
+    /// low-VRAM 環境の最軽量選択肢 (Qwen35_4B ~2GB より小さく iGPU prefill
+    /// latency も更に軽減)
+    ///
+    /// ALICE-LLM 側は GGUF metadata の `general.architecture = "llama"` +
+    /// `tokenizer.chat_template` に `<|im_start|>` を含むため既存 Llama
+    /// arch + Qwen2 chat template auto-detect で無変更動作
+    ///
+    /// 命名: HF filename `MiniCPM5-2B-Q4_K_M.gguf` を素直に反映 rustc は
+    /// `MiniCpm5_2bQ4Km` を提案するが、既存 [`Self::Qwen35_4B`] /
+    /// [`Self::Gemma2_27B`] と揃えて全部 uppercase-with-underscore を採用
+    #[allow(non_camel_case_types)]
+    MiniCPM5_2B_Q4KM,
+    /// MiniCPM5-2B Q6_K (~2.0 GB) — bartowski quant (imatrix quality boost)
+    ///
+    /// 品質/速度バランス OpenBMB 公式は Q4_K_M / Q8_0 のみ提供のため
+    /// 中間 quant は `bartowski/MiniCPM5-2B-GGUF` 由来 (imatrix quant で
+    /// 低 bit 品質向上効果)
+    #[allow(non_camel_case_types)]
+    MiniCPM5_2B_Q6K,
+    /// MiniCPM5-2B Q8_0 (~2.5 GB) — OpenBMB, Apache-2.0
+    ///
+    /// 最高精度 (near-fp16)、精度 sensitive な検証用 iGPU で許容できる
+    /// max quant (F16 は ~4.7GB で iGPU prefill が過負荷になる想定)
+    #[allow(non_camel_case_types)]
+    MiniCPM5_2B_Q8_0,
 }
 
 impl ModelChoice {
     /// 全 variant を UI dropdown 用に列挙
     #[must_use]
     pub const fn all() -> &'static [Self] {
-        &[Self::Qwen35_4B, Self::Gemma2_27B, Self::Bonsai27B]
+        &[
+            Self::Qwen35_4B,
+            Self::Gemma2_27B,
+            Self::Bonsai27B,
+            Self::MiniCPM5_2B_Q4KM,
+            Self::MiniCPM5_2B_Q6K,
+            Self::MiniCPM5_2B_Q8_0,
+        ]
     }
 
     /// OpenAI 互換 API の `model` field に載せる ID (sidecar は無視するが log に出る)
@@ -51,6 +87,9 @@ impl ModelChoice {
             Self::Qwen35_4B => "qwen3.5-4b-q4_k_m",
             Self::Gemma2_27B => "gemma-2-27b-it-q3_k_l",
             Self::Bonsai27B => "bonsai-27b-q1_0",
+            Self::MiniCPM5_2B_Q4KM => "minicpm5-2b-q4_k_m",
+            Self::MiniCPM5_2B_Q6K => "minicpm5-2b-q6_k",
+            Self::MiniCPM5_2B_Q8_0 => "minicpm5-2b-q8_0",
         }
     }
 
@@ -63,6 +102,9 @@ impl ModelChoice {
             Self::Qwen35_4B => "Qwen 2.5-3B-Instruct (Q4_K_M, ~2 GB)",
             Self::Gemma2_27B => "Gemma 2 27B (Q3_K_L, ~14GB)",
             Self::Bonsai27B => "Bonsai 27B (Q1_0, ~7GB, manual)",
+            Self::MiniCPM5_2B_Q4KM => "MiniCPM 5-2B (Q4_K_M, ~1.5 GB, iGPU 推奨)",
+            Self::MiniCPM5_2B_Q6K => "MiniCPM 5-2B (Q6_K, ~2.0 GB, balanced)",
+            Self::MiniCPM5_2B_Q8_0 => "MiniCPM 5-2B (Q8_0, ~2.5 GB, 高精度)",
         }
     }
 
@@ -76,6 +118,9 @@ impl ModelChoice {
             Self::Qwen35_4B => "qwen2.5-3b-instruct-q4_k_m.gguf",
             Self::Gemma2_27B => "gemma-2-27b-it-q3_k_l.gguf",
             Self::Bonsai27B => "bonsai-27b-q1_0.gguf",
+            Self::MiniCPM5_2B_Q4KM => "MiniCPM5-2B-Q4_K_M.gguf",
+            Self::MiniCPM5_2B_Q6K => "MiniCPM5-2B-Q6_K.gguf",
+            Self::MiniCPM5_2B_Q8_0 => "MiniCPM5-2B-Q8_0.gguf",
         }
     }
 
@@ -110,6 +155,11 @@ impl ModelChoice {
                 "gemma-2-27b-it-Q3_K_L.gguf",
             ),
             Self::Bonsai27B => ("Project-ALICE/Bonsai-27B-Q1_0-GGUF", "bonsai-27b-q1_0.gguf"),
+            // 公式 Q4_K_M / Q8_0 は OpenBMB (Apache-2.0)、Q6_K は公式に無い
+            // ため bartowski quant を採用 (imatrix quality boost あり)
+            Self::MiniCPM5_2B_Q4KM => ("openbmb/MiniCPM5-2B-GGUF", "MiniCPM5-2B-Q4_K_M.gguf"),
+            Self::MiniCPM5_2B_Q6K => ("bartowski/MiniCPM5-2B-GGUF", "MiniCPM5-2B-Q6_K.gguf"),
+            Self::MiniCPM5_2B_Q8_0 => ("openbmb/MiniCPM5-2B-GGUF", "MiniCPM5-2B-Q8_0.gguf"),
         }
     }
 
@@ -127,6 +177,7 @@ impl ModelChoice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn default_is_qwen() {
@@ -134,11 +185,14 @@ mod tests {
     }
 
     #[test]
-    fn all_contains_three() {
-        assert_eq!(ModelChoice::all().len(), 3);
+    fn all_contains_six() {
+        assert_eq!(ModelChoice::all().len(), 6);
         assert!(ModelChoice::all().contains(&ModelChoice::Qwen35_4B));
         assert!(ModelChoice::all().contains(&ModelChoice::Gemma2_27B));
         assert!(ModelChoice::all().contains(&ModelChoice::Bonsai27B));
+        assert!(ModelChoice::all().contains(&ModelChoice::MiniCPM5_2B_Q4KM));
+        assert!(ModelChoice::all().contains(&ModelChoice::MiniCPM5_2B_Q6K));
+        assert!(ModelChoice::all().contains(&ModelChoice::MiniCPM5_2B_Q8_0));
     }
 
     #[test]
@@ -146,13 +200,33 @@ mod tests {
         assert!(!ModelChoice::Qwen35_4B.requires_manual_placement());
         assert!(!ModelChoice::Gemma2_27B.requires_manual_placement());
         assert!(ModelChoice::Bonsai27B.requires_manual_placement());
+        // MiniCPM5 3 quant は openbmb / bartowski の public HF repo からの
+        // 自動 DL が可能で、manual placement は不要
+        assert!(!ModelChoice::MiniCPM5_2B_Q4KM.requires_manual_placement());
+        assert!(!ModelChoice::MiniCPM5_2B_Q6K.requires_manual_placement());
+        assert!(!ModelChoice::MiniCPM5_2B_Q8_0.requires_manual_placement());
     }
 
     #[test]
     fn model_ids_are_distinct() {
-        assert_ne!(
-            ModelChoice::Qwen35_4B.model_id(),
-            ModelChoice::Gemma2_27B.model_id()
+        let ids: HashSet<&'static str> = ModelChoice::all().iter().map(|m| m.model_id()).collect();
+        assert_eq!(
+            ids.len(),
+            ModelChoice::all().len(),
+            "全 variant の model_id が unique"
+        );
+    }
+
+    #[test]
+    fn default_filenames_are_distinct() {
+        let names: HashSet<&'static str> = ModelChoice::all()
+            .iter()
+            .map(|m| m.default_filename())
+            .collect();
+        assert_eq!(
+            names.len(),
+            ModelChoice::all().len(),
+            "全 variant の default_filename が unique"
         );
     }
 
@@ -172,5 +246,22 @@ mod tests {
             let back: ModelChoice = serde_json::from_str(&json).unwrap();
             assert_eq!(*m, back);
         }
+    }
+
+    #[test]
+    fn minicpm5_hf_refs_point_to_public_repos() {
+        // Q4_K_M / Q8_0 は OpenBMB 公式、Q6_K は bartowski 公式提供に無い
+        // Q6_K の代替として採用
+        let (repo, file) = ModelChoice::MiniCPM5_2B_Q4KM.default_hf_ref();
+        assert_eq!(repo, "openbmb/MiniCPM5-2B-GGUF");
+        assert!(file.ends_with("Q4_K_M.gguf"));
+
+        let (repo, file) = ModelChoice::MiniCPM5_2B_Q6K.default_hf_ref();
+        assert_eq!(repo, "bartowski/MiniCPM5-2B-GGUF");
+        assert!(file.ends_with("Q6_K.gguf"));
+
+        let (repo, file) = ModelChoice::MiniCPM5_2B_Q8_0.default_hf_ref();
+        assert_eq!(repo, "openbmb/MiniCPM5-2B-GGUF");
+        assert!(file.ends_with("Q8_0.gguf"));
     }
 }
