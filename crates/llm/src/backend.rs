@@ -111,7 +111,21 @@ pub async fn generate_with_retry<F>(
 where
     F: FnMut(&str) -> Vec<String>,
 {
-    let mut current_prompt = user_prompt.to_string();
+    // 2026-09-12: unit normalization pre-process
+    //
+    // LOL DSL は mm 単位固定だが user は「5cm」「1インチ」等の可読単位で prompt を書く
+    // ため、LLM に unit conversion を任せると 2-3B iGPU model 帯で誤解釈が発生する
+    // (MiniCPM5-2B-Q4KM で「直径5cm、高さ10cm」→ `pen_cup(5, 10)` 5mm 玩具化事案)
+    // deterministic に mm 変換して LLM の unit reasoning 依存を排除
+    let normalized_user = crate::prompt::normalize_units(user_prompt);
+    if normalized_user != user_prompt {
+        info!(
+            original_len = user_prompt.len(),
+            normalized_len = normalized_user.len(),
+            "user prompt unit-normalised (cm/m/inch → mm) before LLM dispatch"
+        );
+    }
+    let mut current_prompt = normalized_user.clone();
     let mut retry_count = 0_u32;
     let mut last_content = String::new();
 
@@ -176,7 +190,7 @@ where
             );
             break;
         }
-        current_prompt = format!("{user_prompt}{suffix}");
+        current_prompt = format!("{normalized_user}{suffix}");
         info!(
             retry = retry_count,
             violations = violations.len(),

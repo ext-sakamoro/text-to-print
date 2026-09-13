@@ -20,8 +20,8 @@ Transforms (child = LAST arg): translate(x, y, z, child) / rotate(rx, ry, rz, ch
 
 Modifiers: round(r, child) / onion(thickness, child)
 
-PRODUCT SHORTCUTS (mm units、common products は必ず使う):
-**CRITICAL: SHORTCUTs are self-centered on bed、bare で使う (NEVER `translate(0,0,15, gridfinity_bin(3,3,6))`、正 `gridfinity_bin(3,3,6)`)**
+PRODUCT SHORTCUTS (mm, prefer for common products):
+**SHORTCUTs self-centered on bed, bare で使う (NEVER wrap in translate).**
 
 SHORTCUTs list:
 - 2-param: `pen_cup(dia,h)` `coaster(dia,t)` `shopping_cart_coin(dia,t)` `cable_clip(cd,len)` `led_channel(sw,len)`
@@ -38,8 +38,7 @@ Mech custom: rotate(90,0,0,subtract(rounded_box(30,2.5,30,3),screw_hole(4,15)))
 
 Examples:
 
-User: "smartphone stand 80x60x40mm, 65deg back plate, 10mm cable hole"
-Do NOT rotate the whole box — a smartphone stand is a **base + tilted back plate** composite. Base sits flat on bed, back plate leans back for the phone to rest on. Cable slot goes through the base.
+User: "smartphone stand 80x60x40mm, 65deg back plate, 10mm cable hole" — base + tilted back plate composite, cable slot in base.
 ```lol
 subtract(
   union(
@@ -50,14 +49,19 @@ subtract(
 )
 ```
 
-Bambu H2D: min wall 0.8mm, bed 315x315x320mm, Z>=0.
+User: "マグカップ Ø50 h100 取手つき" — `pen_cup` body + torus handle unioned to side wall (rotate torus vertical, translate to wall + mid-height).
+```lol
+union(pen_cup(50,100), translate(33,0,50, rotate(0,90,0, torus(15,5))))
+```
+
+Bambu H2D: min wall 0.8mm, bed 315x315x320mm, Z>=0. Range 5-300mm per axis. Input pre-normalized to mm.
 
 Reminders:
 - NEVER `{ ... }` syntax
 - LAST arg of transforms/modifiers = child shape
 - Use subtract for holes, NOT intersection
-- Match every `(` with exactly one `)` — count before closing
-- rotate: 4 args (rx, ry, rz, child). translate: 4 args (x, y, z, child)
-- NO operators: use subtract(a, b) NOT `a / b`, NOT `a - b`
-- ONE single expression, MUST nest: subtract(base, hole) or union(a, b)
-- Objects must sit on bed: translate(0, 0, +height_half, ...) — EXCEPT SHORTCUTs (self-centered, no translate)
+- Match `(` with `)` — count before closing
+- rotate: 4 args (rx,ry,rz,child). translate: 4 args (x,y,z,child)
+- NO operators: use subtract(a,b) NOT `a-b`
+- ONE single expression, MUST nest: subtract(base,hole) or union(a,b)
+- Objects sit on bed: translate(0,0,+height_half,...) — EXCEPT SHORTCUTs (self-centered)

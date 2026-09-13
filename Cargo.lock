@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "0.12.0"
+version = "0.13.0"
 
 [[package]]
 name = "alice-print"
@@ -5981,6 +5981,7 @@ dependencies = [
  "alice-llm",
  "anyhow",
  "memmap2",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
