@@ -198,14 +198,16 @@ P1-1〜P1-7 完了後:
 
 ### P1-10: `alice-print` G-code 直接生成 UI 露出
 
-現状 `ExportFormat::Gcode` library で対応済、UI picker で表示なし (3MF / FBX / STL / STEP のみ)
+UI 配線は landing 済 (`crates/app/src/ui/prompt.rs` の export picker に G-code、`crates/core/src/pipeline.rs::export_gcode_via_alice_print` → `alice_bamboo::slice_sdf`) 2026-09-14 実測で ROADMAP 記載が実態より古かったため同期
 
 **Milestone**:
-- [ ] Settings or Export section に G-code 直接生成 option 追加
-- [ ] `alice_print::slice_sdf` 呼びで G-code output (Bambu Lab preset)
+- [x] Settings or Export section に G-code 直接生成 option 追加 (prompt.rs `ExportFormatUi::Gcode`)
+- [x] `alice_print::slice_sdf` 呼びで G-code output (Bambu Lab preset、alice-bamboo re-export 経由)
 - [ ] 上級 user 向け UX: Bambu Studio bypass、SD 直挿し / OctoPrint 系連携可
+- [x] **ベッド配置変換** (ALICE-Print `8b95624`、2026-09-14) — `alice_print::slice_sdf` がモデル空間座標をそのまま出力し、原点中心の SDF で X / Y / Z に負値が出ていた (`alice_print::validate` 初回 e2e で検出) XY ベッド中央配置 + Z 底面着地 + purge/park 位置を `SlicerConfig::bed` 由来に修正、H2D / A1 mini 両方で `validate().ok` を e2e 保証
+- [ ] G-code 静的検証を export 経路に組込 (`SliceResult::validate(&config.bed)`、ALICE-Print 側 landing 済) 検証 fail 時は `GenerationMessage::Failure` で UI に surface (anti-pattern C 準拠、silent 破棄禁止)
 
-**受入基準**: 「G-code (Bambu H2D)」export で `.gcode` file が生成される、Bambu H2D で印刷成功
+**受入基準**: 「G-code (Bambu H2D)」export で `.gcode` file が生成され、`validate` が `ok` を返し、Bambu H2D で印刷成功
 
 ### P1-11: 完全 English i18n 対応 (Ja/En parity)
 
