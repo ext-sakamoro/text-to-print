@@ -1,6 +1,9 @@
 use alice_bamboo::bambu_3mf::export_bambu_3mf;
 use alice_bamboo::color4::{Color4Config, quantize_to_4color};
-use alice_bamboo::dfam::{DfamConfig, DfamReport, Process, Verdict};
+use alice_bamboo::dfam::{
+    DfamConfig, DfamReport, OrientationConfig, OrientationReport, Process, Verdict,
+    evaluate_orientations,
+};
 use alice_bamboo::overhang::{OverhangConfig, OverhangReport, analyze_overhang};
 use alice_bamboo::print_export::{ExportStats, PrintConfig};
 use alice_bamboo::safety::{SafetyReport, safety_validate};
@@ -127,10 +130,30 @@ pub struct DfamSummary {
     pub findings: Vec<(String, String)>,
     /// `Fail` の finding メッセージのみ (retry / share 用)
     pub fail_messages: Vec<String>,
+    /// 向き探索で現在より有意 (20 %+) にサポートが減る候補があれば
+    /// `"rotate: -Z up → support 312 → 0 mm² (-100%), height 10.0 mm"` 形式のヒント
+    pub orientation_hint: Option<String>,
 }
 
 impl DfamSummary {
-    fn from_report(report: &DfamReport) -> Self {
+    fn orientation_hint(report: &OrientationReport) -> Option<String> {
+        if !report.materially_better {
+            return None;
+        }
+        let cur = report.current.support_area_mm2;
+        let best = &report.best;
+        let pct = if cur > 0.0 {
+            (1.0 - best.support_area_mm2 / cur) * 100.0
+        } else {
+            0.0
+        };
+        Some(format!(
+            "rotate: {} → support {:.0} → {:.0} mm² (-{:.0}%), height {:.1} mm",
+            best.label, cur, best.support_area_mm2, pct, best.build_height_mm
+        ))
+    }
+
+    fn from_report(report: &DfamReport, orientation: &OrientationReport) -> Self {
         let findings: Vec<(String, String)> = report
             .findings
             .iter()
@@ -156,6 +179,7 @@ impl DfamSummary {
             support_ratio: report.facts.support.ratio,
             findings,
             fail_messages,
+            orientation_hint: Self::orientation_hint(orientation),
         }
     }
 }
@@ -551,7 +575,18 @@ fn export_3mf_via_bamboo(
             "DfAM report flagged failures (informational, export continues)"
         );
     }
-    let dfam_summary = DfamSummary::from_report(&dfam_report);
+    // 向き探索: 軸整列 6 + 球面 32 (mesh は回さない、軸射影のみ)
+    let orientation =
+        evaluate_orientations(&mesh, &OrientationConfig::from_dfam(&dfam_config(), 32));
+    if orientation.materially_better {
+        info!(
+            best = %orientation.best.label,
+            current_support_mm2 = orientation.current.support_area_mm2,
+            best_support_mm2 = orientation.best.support_area_mm2,
+            "orientation search found a materially better build direction"
+        );
+    }
+    let dfam_summary = DfamSummary::from_report(&dfam_report, &orientation);
 
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
@@ -1088,6 +1123,20 @@ mod tests {
     }
 
     #[test]
+    fn export_3mf_orientation_hint_for_table_shape() {
+        // テーブル (脚 2 本 + 天板) は上下反転でサポートが消える → hint あり
+        // LOL の box3d は half_extents 指定 (ALICE-Bamboo CLAUDE.md § half_extents ルール)
+        let dir = tempfile::tempdir().unwrap();
+        let lol = "union(union(translate(0, 0, 8.5, box3d(20, 10, 1.5)), translate(-18, 0, 5, box3d(2, 10, 5))), translate(18, 0, 5, box3d(2, 10, 5)))";
+        let stats =
+            export_mesh(lol, dir.path(), ExportFormat::ThreeMf, Quality::Preview).expect("export");
+        let dfam = stats.dfam_summary.as_ref().expect("dfam_summary");
+        let hint = dfam.orientation_hint.as_deref().expect("orientation hint");
+        assert!(hint.starts_with("rotate: -Z up"), "{hint}");
+        assert!(dfam.max_bridge_mm > 20.0, "{}", dfam.max_bridge_mm);
+    }
+
+    #[test]
     fn retryable_dfam_checks_exclude_bridge_and_advisories() {
         use alice_bamboo::dfam::Check;
         assert!(!is_retryable_dfam_check(Check::Watertight));
@@ -1114,6 +1163,7 @@ mod tests {
                 "DfAM wall thickness: p05 wall 0.90 mm".to_string(),
                 "llm_retry_over_65deg".to_string(), // 重複は追加しない
             ],
+            orientation_hint: None,
         };
         let merged = merge_safety_violations(caller, None, Some(&dfam));
         assert_eq!(
@@ -1376,6 +1426,16 @@ mod tests {
         );
         let safety = stats.safety_summary.as_ref().unwrap();
         assert_eq!(safety.material_name, "PLA");
+        // DfAM summary は 3MF 経路で必ず populate、findings は重大度順で先頭 watertight
+        let dfam = stats.dfam_summary.as_ref().expect("dfam_summary");
+        assert!(!dfam.findings.is_empty());
+        assert!(
+            dfam.findings[0].1.starts_with("DfAM watertight:"),
+            "{:?}",
+            dfam.findings[0]
+        );
+        assert!(dfam.wall_p05_mm.is_some());
+        assert!(!dfam.units_suspect);
     }
 
     #[test]

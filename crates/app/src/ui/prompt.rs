@@ -350,6 +350,9 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
                             dfam.support_ratio * 100.0,
                         ),
                     );
+                    if let Some(hint) = &dfam.orientation_hint {
+                        ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {hint}"));
+                    }
                     // pass は畳んで、fail / need more info / advisory だけ展開表示
                     for (verdict, msg) in &dfam.findings {
                         if verdict == "pass" {

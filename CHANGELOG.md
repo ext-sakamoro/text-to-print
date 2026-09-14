@@ -9,6 +9,7 @@
 - **DfAM 測定 + 判定を 3MF export 経路に統合** (`alice_bamboo::dfam`、text-to-cad `dfam-check` 吸収) `MeshStats.dfam_summary` に壁厚 p05 / 最小穴径 / 最大ブリッジ span / サポート面積比 / 単位疑義 / watertight の findings (FDM 限界、ISO/ASTM 52910 準拠の保守値) Generate 画面に「DfAM (FDM): OK/NG …」行 + pass 以外の finding を表示
 - **LLM retry loop に DfAM 違反を接続** `safety_check_lol` が Preview 解像度 mesh で DfAM を測り、`DfAM wall thickness / positive feature / hole diameter` の Fail を `fix_prompt` に流す (`SafetyViolationKind::{WallTooThin, FeatureTooSmall, HoleTooSmall, BridgeTooLong, NotWatertight}` 追加) bridge / watertight は retry trigger にしない (曲面形状で常時発火 / mesher の性質で LOL 設計の問題でないため)、UI + manifest 表示のみ
 - manifest `safety_violations` に DfAM Fail メッセージを merge (LoRA 学習データの品質シグナル)
+- **造形向き探索** (`alice_bamboo::dfam::evaluate_orientations`、軸整列 6 + 球面 32 候補、mesh を回さず造形軸を回す) 現在よりサポート面積が 20 %+ 減る向きがあれば `DfamSummary.orientation_hint` に `"rotate: -Z up → support 312 → 0 mm² (-100%), height 10.0 mm"` を格納し Generate 画面に表示
 
 ### Changed
 - `ROADMAP.md` P1-10 を実態に同期 (G-code export 配線済、ベッド配置変換 fix 反映)
