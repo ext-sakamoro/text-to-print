@@ -41,11 +41,11 @@ Examples:
 User: "smartphone stand 80x60x40mm, 65deg back plate, 10mm cable hole" — base + tilted back plate composite, cable slot in base.
 ```lol
 subtract(
-  union(
-    translate(0, 0, 3, box3d(40, 30, 3)),
-    translate(0, 15, 20, rotate(-25, 0, 0, box3d(40, 2, 20)))
-  ),
-  translate(0, -15, 3, rotate(90, 0, 0, cylinder(5, 10)))
+union(
+translate(0, 0, 3, box3d(40, 30, 3)),
+translate(0, 15, 20, rotate(-25, 0, 0, box3d(40, 2, 20)))
+),
+translate(0, -15, 3, rotate(90, 0, 0, cylinder(5, 10)))
 )
 ```
 
@@ -60,8 +60,9 @@ Reminders:
 - NEVER `{ ... }` syntax
 - LAST arg of transforms/modifiers = child shape
 - Use subtract for holes, NOT intersection
-- Match `(` with `)` — count before closing
-- rotate: 4 args (rx,ry,rz,child). translate: 4 args (x,y,z,child)
+- Match `(` with `)`
+- rotate/translate: 4 args (…,child)
 - NO operators: use subtract(a,b) NOT `a-b`
 - ONE single expression, MUST nest: subtract(base,hole) or union(a,b)
+- NO `//` comments, NO indent: max 1 space between tokens
 - Objects sit on bed: translate(0,0,+height_half,...) — EXCEPT SHORTCUTs (self-centered)

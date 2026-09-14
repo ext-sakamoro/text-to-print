@@ -1,11 +1,15 @@
-//! LOL DSL GBNF grammar embedded for constrained decoding (Stage 3-C.11)
+//! LOL DSL GBNF grammar for constrained decoding (Stage 3-C.11)
 //!
-//! `LOL_GBNF` is a verbatim copy of the authoritative grammar shipped with
-//! [ALICE-LOL] It covers the 124
-//! constructs recognised by `alice_lol::runtime_parser::parse_lol` and
-//! enforces (a) known construct names (b) argument shape (number vs child
-//! count, comma placement, balanced parens) (c) permitted whitespace and
-//! `//` line comments
+//! `LOL_GBNF` is the authoritative grammar shipped with [ALICE-LOL],
+//! reached through `alice_bamboo::LOL_GBNF` (a re-export of
+//! `alice_lol::LOL_GBNF`, feature-free `include_str!`) There is no local
+//! copy any more: until 2026-09-14 this crate embedded its own
+//! `lol.gbnf`, which drifted 199 lines behind ALICE-LOL (comment rule,
+//! whitespace rule, `program(...)` Intent wrapper) The grammar covers the
+//! 124 SDF constructs recognised by `alice_lol::runtime_parser::parse_lol`
+//! plus the Phase 3 Intent wrapper, and enforces (a) known construct
+//! names (b) argument shape (c) at most one whitespace char between
+//! tokens, no `//` comments (stricter than the runtime parser on purpose)
 //!
 //! What the grammar does *not* enforce:
 //! - Exact per-construct arity (bucketed by category)
@@ -20,9 +24,8 @@
 
 use anyhow::{Context, Result};
 
-/// Verbatim GBNF grammar for the LOL DSL Copy of the ALICE-LOL canonical
-/// grammar (kept in sync manually; check `git log` on the source when updating)
-pub const LOL_GBNF: &str = include_str!("lol.gbnf");
+/// The ALICE-LOL canonical GBNF grammar (same bytes as `alice_lol::LOL_GBNF`)
+pub use alice_bamboo::LOL_GBNF;
 
 /// Parse [`LOL_GBNF`] into a runtime-usable `Grammar` Cheap enough
 /// (~microseconds) that callers can invoke it per request

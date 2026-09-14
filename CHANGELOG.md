@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed
+- **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU 速度都合、[feedback_text_to_print_grammar_off_intentional]) `crates/llm` に `alice-bamboo` 依存追加
+- **`system_prompt.md`**: 「NO `//` comments, NO indent: max 1 space between tokens」を追記 (canonical grammar が comment / 連続 whitespace を拒否するため)、example の indent 除去、reminder 2 行を短縮して 4488 chars (4500 予算内)
+
 ### Added
 - **DfAM 測定 + 判定を 3MF export 経路に統合** (`alice_bamboo::dfam`、text-to-cad `dfam-check` 吸収) `MeshStats.dfam_summary` に壁厚 p05 / 最小穴径 / 最大ブリッジ span / サポート面積比 / 単位疑義 / watertight の findings (FDM 限界、ISO/ASTM 52910 準拠の保守値) Generate 画面に「DfAM (FDM): OK/NG …」行 + pass 以外の finding を表示
 - **LLM retry loop に DfAM 違反を接続** `safety_check_lol` が Preview 解像度 mesh で DfAM を測り、`DfAM wall thickness / positive feature / hole diameter` の Fail を `fix_prompt` に流す (`SafetyViolationKind::{WallTooThin, FeatureTooSmall, HoleTooSmall, BridgeTooLong, NotWatertight}` 追加) bridge / watertight は retry trigger にしない (曲面形状で常時発火 / mesher の性質で LOL 設計の問題でないため)、UI + manifest 表示のみ

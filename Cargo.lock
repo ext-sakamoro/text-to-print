@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "1.9.1"
+version = "1.9.2"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -5978,6 +5978,7 @@ dependencies = [
 name = "text-to-print-llm"
 version = "0.1.0-beta.4"
 dependencies = [
+ "alice-bamboo",
  "alice-llm",
  "anyhow",
  "memmap2",

@@ -12,6 +12,9 @@ license.workspace = true
 # `gpu` (Stage 3-C.12) pulls in wgpu + GpuEngine + GpuModel for hardware-
 # accelerated inference (Metal on macOS, Vulkan / DX12 elsewhere)
 alice-llm = { workspace = true, features = ["gguf", "parallel", "grammar", "gpu"] }
+# 2026-09-14: LOL grammar は alice-bamboo 経由の re-export (alice_lol::LOL_GBNF)
+# を参照 (以前は crates/llm/src/lol.gbnf の手動 copy で 199 行 drift した)
+alice-bamboo = { workspace = true }
 # Stage 3-C.7: mmap the GGUF file into the process address space so the
 # ~2.4 GB Qwen 3.5-4B / ~7 GB Bonsai payload doesn't inflate the resident
 # working set at load time Kernel pages in on demand during inference
