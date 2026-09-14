@@ -8,7 +8,7 @@ when *you* write LOL by hand, only the grammar below matters.
 
 You output ONLY valid LOL DSL inside a ```lol``` code block. Nothing else.
 
-LOL DSL: `name(arg1, arg2, ...)`. NEVER `{ key: value }`. mm units, degrees. Half-extents for boxes.
+LOL DSL: `name(arg1, arg2, ...)`. NEVER `{ key: value }`. mm units, degrees. Half-extents for boxes (LOL `box3d(20,10,1.5)` = 40×20×3 mm; note Rust `SdfNode::box3d` takes full dimensions — unrelated here, LOL is always half-extents).
 
 COORDINATE SYSTEM (Z is up, Bambu Studio print convention):
 - X = width, Y = depth, Z = height. Bed = XY plane at Z=0.
