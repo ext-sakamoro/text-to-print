@@ -1,5 +1,6 @@
 use alice_bamboo::bambu_3mf::export_bambu_3mf;
 use alice_bamboo::color4::{Color4Config, quantize_to_4color};
+use alice_bamboo::dfam::{DfamConfig, DfamReport, Process, Verdict};
 use alice_bamboo::overhang::{OverhangConfig, OverhangReport, analyze_overhang};
 use alice_bamboo::print_export::{ExportStats, PrintConfig};
 use alice_bamboo::safety::{SafetyReport, safety_validate};
@@ -34,6 +35,11 @@ pub struct MeshStats {
     /// Safety validation summary from `alice_bamboo::safety` (populated
     /// only for 3MF exports).
     pub safety_summary: Option<SafetySummary>,
+    /// DfAM 測定 + 判定 (`alice_bamboo::dfam`、3MF export のみ)
+    ///
+    /// 壁厚 p05 / 突起 / 穴径 / ブリッジ / サポート比 / 単位疑義 / watertight
+    /// FDM 限界 (ISO/ASTM 52910 準拠の保守値) と突き合わせた findings
+    pub dfam_summary: Option<DfamSummary>,
     /// G-code slicer summary (populated only for `ExportFormat::Gcode`
     /// exports via `alice_print::slice_sdf`)
     pub slice_summary: Option<SliceSummary>,
@@ -96,6 +102,67 @@ impl SafetySummary {
             messages: report.messages.clone(),
         }
     }
+}
+
+/// Compact DfAM report kept in `MeshStats` for UI display + LoRA share
+///
+/// findings は重大度順 (watertight → scale → 壁厚 → 突起 → 穴 → ブリッジ →
+/// サポート) 各行は `"DfAM {check}: {message}"` 形式で、`fix_prompt` の
+/// `from_message` がこの prefix で分類する
+#[derive(Debug, Clone)]
+pub struct DfamSummary {
+    /// `Fail` が 0 件
+    pub ok: bool,
+    /// 単位疑義 (true なら寸法系判定は保留されている)
+    pub units_suspect: bool,
+    /// 壁厚 p05 (mm)
+    pub wall_p05_mm: Option<f32>,
+    /// 最小囲われ空隙 (mm)
+    pub min_hole_mm: Option<f32>,
+    /// 最大下向き span (mm)
+    pub max_bridge_mm: f32,
+    /// サポート面積比 `[0,1]`
+    pub support_ratio: f32,
+    /// `(verdict label, "DfAM {check}: {message}")` 全 finding
+    pub findings: Vec<(String, String)>,
+    /// `Fail` の finding メッセージのみ (retry / share 用)
+    pub fail_messages: Vec<String>,
+}
+
+impl DfamSummary {
+    fn from_report(report: &DfamReport) -> Self {
+        let findings: Vec<(String, String)> = report
+            .findings
+            .iter()
+            .map(|f| {
+                (
+                    f.verdict.to_string(),
+                    format!("DfAM {}: {}", f.check, f.message),
+                )
+            })
+            .collect();
+        let fail_messages = report
+            .findings
+            .iter()
+            .filter(|f| f.verdict == Verdict::Fail)
+            .map(|f| format!("DfAM {}: {}", f.check, f.message))
+            .collect();
+        Self {
+            ok: report.ok,
+            units_suspect: report.facts.scale.units_suspect,
+            wall_p05_mm: report.facts.thickness.map(|t| t.p05_mm),
+            min_hole_mm: report.facts.hole.min_diameter_mm,
+            max_bridge_mm: report.facts.bridge.max_span_mm,
+            support_ratio: report.facts.support.ratio,
+            findings,
+            fail_messages,
+        }
+    }
+}
+
+/// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
+fn dfam_config() -> DfamConfig {
+    DfamConfig::for_process(Process::Fdm)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -472,6 +539,20 @@ fn export_3mf_via_bamboo(
     let overhang_report = analyze_overhang(&mesh, &OverhangConfig::default());
     let overhang_summary = OverhangSummary::from_report(&overhang_report);
 
+    // DfAM 測定 + 判定 (2026-09-14、text-to-cad dfam-check 吸収 + SDF 実測 3 項目)
+    let dfam_report = alice_bamboo::dfam::analyze(&sdf, &mesh, &dfam_config());
+    if !dfam_report.ok {
+        info!(
+            fails = dfam_report
+                .findings
+                .iter()
+                .filter(|f| f.verdict == Verdict::Fail)
+                .count(),
+            "DfAM report flagged failures (informational, export continues)"
+        );
+    }
+    let dfam_summary = DfamSummary::from_report(&dfam_report);
+
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
 
@@ -496,6 +577,7 @@ fn export_3mf_via_bamboo(
         path: output_path.to_string_lossy().into_owned(),
         overhang_summary: Some(overhang_summary),
         safety_summary: Some(safety_summary),
+        dfam_summary: Some(dfam_summary),
         slice_summary: None,
         preview_mesh: Some(preview_mesh),
     })
@@ -508,6 +590,7 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
         path: stats.path.clone(),
         overhang_summary: None,
         safety_summary: None,
+        dfam_summary: None,
         slice_summary: None,
         preview_mesh: None,
     }
@@ -559,6 +642,7 @@ fn export_step_via_alice_sdf(
         path: output_path.to_string_lossy().into_owned(),
         overhang_summary: None,
         safety_summary: None,
+        dfam_summary: None,
         slice_summary: None,
         preview_mesh: None,
     })
@@ -590,6 +674,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
         path: output_path.to_string_lossy().into_owned(),
         overhang_summary: None,
         safety_summary: None,
+        dfam_summary: None,
         slice_summary: Some(SliceSummary {
             layer_count: slice.layer_count,
             filament_meters: slice.filament_meters,
@@ -654,11 +739,73 @@ pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
         Err(e) => return vec![dedup_lol_parse_prefix(e)],
     };
     let report = alice_bamboo::safety::safety_validate(&sdf, "PLA", None);
-    if report.is_safe {
+    let mut violations = if report.is_safe {
         Vec::new()
     } else {
         report.messages
+    };
+
+    // DfAM: 薄壁 / 小穴 / 長ブリッジ / 非 watertight は LLM が LOL 側で直せる
+    // 種類の違反なので retry loop に流す 低解像度 mesh (Preview) で十分
+    // (LLM 1 回の推論が分単位なのに対し、この測定は秒未満)
+    violations.extend(dfam_fail_messages_for_retry(&sdf));
+    violations
+}
+
+/// retry loop 用の軽量 DfAM 判定 — Preview 解像度で mesh を作り `Fail` のみ返す
+fn dfam_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String> {
+    let aabb = compute_tight_aabb_with_config(sdf, &TightAabbConfig::preset_large());
+    let dims = (
+        aabb.max.x - aabb.min.x,
+        aabb.max.y - aabb.min.y,
+        aabb.max.z - aabb.min.z,
+    );
+    if !(dims.0.is_finite() && dims.1.is_finite() && dims.2.is_finite())
+        || dims.0 <= 0.0
+        || dims.1 <= 0.0
+        || dims.2 <= 0.0
+    {
+        return Vec::new();
     }
+    let padding = Vec3::splat(1.0);
+    let use_dc = should_use_dual_contouring(dims);
+    let mesh = generate_mesh(
+        sdf,
+        aabb.min - padding,
+        aabb.max + padding,
+        Quality::Preview,
+        use_dc,
+    );
+    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    let mut cfg = dfam_config();
+    cfg.grid_resolution = 48;
+    cfg.max_thickness_samples = 20_000;
+    let report = alice_bamboo::dfam::analyze(sdf, &mesh, &cfg);
+    report
+        .findings
+        .iter()
+        .filter(|f| f.verdict == Verdict::Fail && is_retryable_dfam_check(f.check))
+        .map(|f| format!("DfAM {}: {}", f.check, f.message))
+        .collect()
+}
+
+/// LLM retry に流す DfAM 項目
+///
+/// LOL 側で局所的に直せるもの (壁を厚く / 穴を大きく / 突起を太く) に限定する
+///
+/// - bridge: 丸い形状 (球 / ドーム) の下半分が常に >45° 下向き = span が出る
+///   ため、retry trigger にすると曲面を持つ形状すべてで再生成が走る
+/// - watertight: MC / DC / `repair_all` という **mesher の性質** であって LOL
+///   設計の問題ではない (`sphere(10)` を Preview 解像度 MC で mesh 化しても
+///   非多様体辺が残る実測あり) LLM に LOL を書き換えさせても解決しない
+///
+/// どちらも UI + manifest で示すに留める
+fn is_retryable_dfam_check(check: alice_bamboo::dfam::Check) -> bool {
+    use alice_bamboo::dfam::Check;
+    matches!(
+        check,
+        Check::WallThickness | Check::PositiveFeature | Check::HoleDiameter
+    )
 }
 
 /// caller 由来 violations に、pipeline 内 `safety_validate` の messages を
@@ -670,11 +817,19 @@ pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
 fn merge_safety_violations(
     mut caller: Vec<String>,
     summary: Option<&SafetySummary>,
+    dfam: Option<&DfamSummary>,
 ) -> Vec<String> {
     if let Some(sum) = summary
         && !sum.is_safe
     {
         for msg in &sum.messages {
+            if !caller.contains(msg) {
+                caller.push(msg.clone());
+            }
+        }
+    }
+    if let Some(d) = dfam {
+        for msg in &d.fail_messages {
             if !caller.contains(msg) {
                 caller.push(msg.clone());
             }
@@ -702,8 +857,11 @@ pub fn export_mesh_with_metadata(
 
     // GAP-2: 3MF path で計算された safety_summary の messages を
     // manifest.safety_violations に流し込む
-    let safety_violations =
-        merge_safety_violations(meta.safety_violations, stats.safety_summary.as_ref());
+    let safety_violations = merge_safety_violations(
+        meta.safety_violations,
+        stats.safety_summary.as_ref(),
+        stats.dfam_summary.as_ref(),
+    );
 
     let manifest = ManifestBuilder {
         prompt: meta.prompt,
@@ -906,10 +1064,64 @@ mod tests {
     #[test]
     fn safety_check_lol_returns_empty_for_small_pla_sphere() {
         // small sphere with PLA material → safety_validate.is_safe == true
+        // DfAM: 壁 20mm / 穴なし → retry 対象の Fail なし
+        // (bridge は下半球で、watertight は MC 非多様体辺で Fail するが
+        //  どちらも retry 対象外、is_retryable_dfam_check)
         let violations = safety_check_lol("sphere(10.0)");
         assert!(
             violations.is_empty(),
             "expected no violations for sphere(10), got {violations:?}"
+        );
+    }
+
+    #[test]
+    fn safety_check_lol_flags_thin_plate_via_dfam() {
+        // 0.8mm 板 → FDM min unsupported wall 1.6 を割る → DfAM wall thickness Fail
+        // が "DfAM wall thickness: ..." prefix で retry loop に流れる
+        let violations = safety_check_lol("box3d(15.0, 15.0, 0.4)");
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.starts_with("DfAM wall thickness:")),
+            "expected DfAM wall thickness violation, got {violations:?}"
+        );
+    }
+
+    #[test]
+    fn retryable_dfam_checks_exclude_bridge_and_advisories() {
+        use alice_bamboo::dfam::Check;
+        assert!(!is_retryable_dfam_check(Check::Watertight));
+        assert!(is_retryable_dfam_check(Check::WallThickness));
+        assert!(is_retryable_dfam_check(Check::PositiveFeature));
+        assert!(is_retryable_dfam_check(Check::HoleDiameter));
+        assert!(!is_retryable_dfam_check(Check::Bridge));
+        assert!(!is_retryable_dfam_check(Check::SupportRatio));
+        assert!(!is_retryable_dfam_check(Check::Scale));
+    }
+
+    #[test]
+    fn merge_safety_violations_appends_dfam_fails() {
+        let caller = vec!["llm_retry_over_65deg".to_string()];
+        let dfam = DfamSummary {
+            ok: false,
+            units_suspect: false,
+            wall_p05_mm: Some(0.9),
+            min_hole_mm: None,
+            max_bridge_mm: 0.0,
+            support_ratio: 0.0,
+            findings: vec![],
+            fail_messages: vec![
+                "DfAM wall thickness: p05 wall 0.90 mm".to_string(),
+                "llm_retry_over_65deg".to_string(), // 重複は追加しない
+            ],
+        };
+        let merged = merge_safety_violations(caller, None, Some(&dfam));
+        assert_eq!(
+            merged,
+            vec![
+                "llm_retry_over_65deg".to_string(),
+                "DfAM wall thickness: p05 wall 0.90 mm".to_string()
+            ]
         );
     }
 
@@ -1094,7 +1306,7 @@ mod tests {
     #[test]
     fn merge_safety_violations_none_summary_passthrough() {
         let caller = vec!["llm_retry_over_65deg".to_string()];
-        let merged = merge_safety_violations(caller.clone(), None);
+        let merged = merge_safety_violations(caller.clone(), None, None);
         assert_eq!(merged, caller);
     }
 
@@ -1102,7 +1314,7 @@ mod tests {
     fn merge_safety_violations_safe_summary_passthrough() {
         let caller = vec!["llm_retry_over_65deg".to_string()];
         let sum = safety_summary(true, vec!["ignored_because_safe".to_string()]);
-        let merged = merge_safety_violations(caller.clone(), Some(&sum));
+        let merged = merge_safety_violations(caller.clone(), Some(&sum), None);
         assert_eq!(merged, caller, "is_safe=true 時は messages を merge しない");
     }
 
@@ -1116,7 +1328,7 @@ mod tests {
                 "thin_wall_below_0.8mm".to_string(),
             ],
         );
-        let merged = merge_safety_violations(caller, Some(&sum));
+        let merged = merge_safety_violations(caller, Some(&sum), None);
         assert_eq!(merged.len(), 3);
         assert!(merged.contains(&"llm_retry_over_65deg".to_string()));
         assert!(merged.contains(&"warp_high_risk".to_string()));
@@ -1133,7 +1345,7 @@ mod tests {
                 "thin_wall_below_0.8mm".to_string(),
             ],
         );
-        let merged = merge_safety_violations(caller, Some(&sum));
+        let merged = merge_safety_violations(caller, Some(&sum), None);
         assert_eq!(
             merged.len(),
             2,

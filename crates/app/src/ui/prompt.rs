@@ -330,6 +330,39 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
                         ui.colored_label(warn_color, format!("  {msg}"));
                     }
                 }
+                if let Some(dfam) = &stats.dfam_summary {
+                    let warn_color = ui.style().visuals.warn_fg_color;
+                    let head_color = if dfam.ok {
+                        egui::Color32::GREEN
+                    } else {
+                        warn_color
+                    };
+                    ui.colored_label(
+                        head_color,
+                        format!(
+                            "DfAM (FDM): {}  wall p05 {}  hole {}  bridge {:.1}mm  support {:.0}%",
+                            if dfam.ok { "OK" } else { "NG" },
+                            dfam.wall_p05_mm
+                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                            dfam.min_hole_mm
+                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                            dfam.max_bridge_mm,
+                            dfam.support_ratio * 100.0,
+                        ),
+                    );
+                    // pass は畳んで、fail / need more info / advisory だけ展開表示
+                    for (verdict, msg) in &dfam.findings {
+                        if verdict == "pass" {
+                            continue;
+                        }
+                        let color = if verdict == "fail" {
+                            warn_color
+                        } else {
+                            ui.style().visuals.weak_text_color()
+                        };
+                        ui.colored_label(color, format!("  {msg}"));
+                    }
+                }
             }
 
             ui.collapsing(crate::i18n::T::prompt_p020(lang), |ui| {

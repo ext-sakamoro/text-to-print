@@ -35,6 +35,16 @@ pub enum SafetyViolationKind {
     BeamOverloaded,
     /// Overhang ratio exceeds the 30 % informal budget
     OverhangExcessive,
+    /// DfAM: mesh is not watertight (non-manifold / boundary edges)
+    NotWatertight,
+    /// DfAM: p05 wall thickness below the process minimum
+    WallTooThin,
+    /// DfAM: minimum positive feature (pin / rib) below the process minimum
+    FeatureTooSmall,
+    /// DfAM: narrowest enclosed gap (hole / slot) below the process minimum
+    HoleTooSmall,
+    /// DfAM: longest unsupported downward span exceeds the process maximum
+    BridgeTooLong,
     /// LOL DSL failed to parse (Stage 8 syntax-fix retry hook)
     ///
     /// `safety_check_lol` surfaces `"LOL parse error: ..."` when the
@@ -57,6 +67,11 @@ impl SafetyViolationKind {
             Self::ThermalNearGlassTransition => "operating temp near Tg",
             Self::BeamOverloaded => "beam bending overload",
             Self::OverhangExcessive => "overhang exceeds budget",
+            Self::NotWatertight => "mesh not watertight",
+            Self::WallTooThin => "wall too thin (DfAM)",
+            Self::FeatureTooSmall => "feature too small (DfAM)",
+            Self::HoleTooSmall => "hole too small (DfAM)",
+            Self::BridgeTooLong => "bridge too long (DfAM)",
             Self::LolParseError => "LOL DSL syntax error",
         }
     }
@@ -87,6 +102,28 @@ impl SafetyViolationKind {
                 "Reduce steep overhangs (>45°) or add chamfers / fillets so support material is \
                  minimised — target < 30 % overhang area"
             }
+            Self::NotWatertight => {
+                "The shape produced a non-watertight mesh Avoid zero-thickness walls, \
+                 coincident faces, and subtract() that leaves paper-thin slivers; overlap \
+                 solids by at least 1 mm in union() and make cutouts punch fully through"
+            }
+            Self::WallTooThin => {
+                "Every wall must be at least 1.6 mm thick for FDM (2 mm is safer) Increase \
+                 wall / plate thickness and the shell of any onion() or hollow shape"
+            }
+            Self::FeatureTooSmall => {
+                "Pins, ribs, and text must be at least 0.8 mm wide for FDM Enlarge the \
+                 smallest feature or remove it"
+            }
+            Self::HoleTooSmall => {
+                "Holes and slots must be at least 2 mm in diameter for FDM (3 mm prints \
+                 cleaner) Enlarge the cylinder / box used for the cutout"
+            }
+            Self::BridgeTooLong => {
+                "Unsupported horizontal spans must be under 10 mm for FDM Add a chamfer / \
+                 arch under the span, split it with a rib, or thicken the supporting legs so \
+                 the span is shorter"
+            }
             Self::LolParseError => {
                 "The previous LOL DSL failed to parse Common mistakes to avoid:\n\
                  - Output ONE single expression only — NEVER two shapes on separate lines\n\
@@ -114,6 +151,24 @@ impl SafetyViolationKind {
         // error: ...` is the sole message when this fires)
         if lower.starts_with("lol parse error") {
             return Some(Self::LolParseError);
+        }
+        // DfAM findings are prefixed "DfAM {check}: ..." by
+        // `text_to_print_core::pipeline::DfamSummary` (only `Fail` verdicts
+        // reach the retry loop, so any DfAM prefix here is a violation)
+        if let Some(rest) = lower.strip_prefix("dfam ") {
+            return if rest.starts_with("watertight") {
+                Some(Self::NotWatertight)
+            } else if rest.starts_with("wall thickness") {
+                Some(Self::WallTooThin)
+            } else if rest.starts_with("positive feature") {
+                Some(Self::FeatureTooSmall)
+            } else if rest.starts_with("hole diameter") {
+                Some(Self::HoleTooSmall)
+            } else if rest.starts_with("bridge") {
+                Some(Self::BridgeTooLong)
+            } else {
+                None
+            };
         }
         if lower.contains("critical") && lower.contains("warp") {
             Some(Self::WarpCritical)
@@ -274,5 +329,54 @@ mod tests {
         assert!(out.contains("translate takes THREE coords"));
         assert!(out.contains("NO operators"));
         assert!(out.contains("subtract(a, b)"));
+    }
+
+    #[test]
+    fn dfam_messages_classify_by_check_prefix() {
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "DfAM wall thickness: p05 wall 0.90 mm (min 0.85 mm at [1.0, 2.0, 3.0]) is below 1.60 mm"
+            ),
+            Some(SafetyViolationKind::WallTooThin)
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message("DfAM hole diameter: narrowest enclosed gap 1.20 mm"),
+            Some(SafetyViolationKind::HoleTooSmall)
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "DfAM bridge: longest unsupported downward span 32.0 mm"
+            ),
+            Some(SafetyViolationKind::BridgeTooLong)
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message("DfAM positive feature: min feature 0.50 mm"),
+            Some(SafetyViolationKind::FeatureTooSmall)
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "DfAM watertight: mesh is not watertight (3 non-manifold edges)"
+            ),
+            Some(SafetyViolationKind::NotWatertight)
+        );
+        // advisory / scale は retry 対象外 (Fail のみが流れてくる前提だが、来ても None)
+        assert_eq!(
+            SafetyViolationKind::from_message("DfAM support ratio: support area 10 mm²"),
+            None
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message("DfAM scale: bbox diagonal"),
+            None
+        );
+    }
+
+    #[test]
+    fn dfam_fix_prompt_carries_concrete_numbers() {
+        let out = fix_prompt_from_messages(&[
+            "DfAM wall thickness: p05 wall 0.9 mm below 1.60 mm".to_string(),
+            "DfAM bridge: longest unsupported downward span 32.0 mm exceeds 10.0 mm".to_string(),
+        ]);
+        assert!(out.contains("1.6 mm"), "{out}");
+        assert!(out.contains("under 10 mm"), "{out}");
     }
 }
