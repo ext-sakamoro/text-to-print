@@ -31,6 +31,11 @@ keyring = { workspace = true }
 name = "gen-license-key"
 path = "src/bin/gen_license_key.rs"
 
+# headless CLI (Agent Skill 入口、JSON on stdout)
+[[bin]]
+name = "ttp"
+path = "src/bin/ttp.rs"
+
 [dev-dependencies]
 tempfile = "3"
 

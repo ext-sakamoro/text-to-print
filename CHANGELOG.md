@@ -11,6 +11,9 @@
 - manifest `safety_violations` に DfAM Fail メッセージを merge (LoRA 学習データの品質シグナル)
 - **造形向き探索** (`alice_bamboo::dfam::evaluate_orientations`、軸整列 6 + 球面 32 候補、mesh を回さず造形軸を回す) 現在よりサポート面積が 20 %+ 減る向きがあれば `DfamSummary.orientation_hint` に `"rotate: -Z up → support 312 → 0 mm² (-100%), height 10.0 mm"` を格納し Generate 画面に表示
 
+- **`ttp` headless CLI** (`crates/core/src/bin/ttp.rs`、clap 不使用) `ttp check --lol` (parse + safety + DfAM、JSON) / `ttp export --lol --out --format 3mf|stl|fbx|step|gcode --quality` / `ttp validate --gcode --bed h2d|h2d-dual|x1c|a1-mini` (alice_print 静的検証)、exit 0 / 1 / 3 (findings fail)
+- **Agent Skill** `skills/text-to-print/SKILL.md` (+ `references/lol-dsl-quickref.md` = system_prompt mirror、`references/dfam-findings.md`) + `.claude-plugin/plugin.json` / `marketplace.json` — Claude Code / Codex から `ttp` 経由で LOL 作成 → DfAM check → export → validate を回せる (text-to-cad の配布形態を吸収、Free tier の入口)
+
 ### Changed
 - `ROADMAP.md` P1-10 を実態に同期 (G-code export 配線済、ベッド配置変換 fix 反映)
 

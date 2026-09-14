@@ -145,6 +145,20 @@ email delivery via Resend All Rust
 | **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | Direct-to-printer | Skip Bambu Studio |
 | **3MF (4-color)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
 
+## Agent skill / headless CLI
+
+`ttp` (crate `text-to-print-core`) exposes the pipeline without the GUI, JSON on stdout,
+and `skills/text-to-print/SKILL.md` teaches Claude Code / Codex to drive it:
+
+```bash
+cargo build --release -p text-to-print-core --bin ttp
+ttp check    --lol part.lol                                  # safety + DfAM findings + orientation hint
+ttp export   --lol part.lol --out ./out --format 3mf         # 3mf | stl | fbx | step | gcode
+ttp validate --gcode ./out/<id>.gcode --bed h2d              # static G-code check vs machine bounds
+```
+
+Install the skill into an agent with the repo's `.claude-plugin/` manifest (Claude Code plugin marketplace format).
+
 ## Repository layout
 
 ```
