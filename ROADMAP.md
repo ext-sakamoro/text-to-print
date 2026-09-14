@@ -19,6 +19,14 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
 ---
 
+### 2026-09-14 完了項目 (text-to-cad 吸収、[[reference-text-to-cad-absorption]])
+
+- ✅ **G-code 静的バリデータ + ベッド配置変換** (ALICE-Print `8b95624`) — `alice_print::validate` (移動 / 押出 / 温度 / 絶対 XYZ bounds、G90/G91 + M82/M83 + G92 E 追跡) を作った初回 e2e で **`slice_sdf` がモデル空間座標をそのまま出力していた** (Z 負値 = ベッド衝突) 事実を検出 → XY ベッド中央配置 + Z 底面着地 + purge/park を `SlicerConfig::bed` 由来に修正 H2D / A1 mini 両方で e2e `validate().ok`
+- ✅ **DfAM 測定 + 判定** (ALICE-Bamboo `57464cf` → text-to-print `c87c5dc`) — `alice_bamboo::dfam`: プロセス別限界表 5 種 / `measure`↔`compare` 分離 / p05 壁厚 (SDF sphere tracing) / **SDF 実測** 最小穴径 (囲われた外部距離場局所最大) ・ 突起 ・ 最大ブリッジ (板 anchored でない下向き面の連結成分 span) / `units_suspect` 3MF export で `MeshStats.dfam_summary`、Generate 画面に表示、`safety_check_lol` → LLM retry に wall / feature / hole の Fail を接続 (bridge / watertight は retry 対象外: 曲面で常時発火 / mesher の性質)
+- ✅ **造形向き探索** (ALICE-Bamboo `2ff37d8` → text-to-print `6c986ad`) — mesh を回さず造形軸を回す `evaluate_orientations` (軸整列 6 + 球面 32)、20 %+ 削減で `orientation_hint`
+- ✅ **Bambu LAN 直接印刷** (ALICE-Print `45e99a0`、**実機未検証**) — `lan` (protocol 層、mock 13 test) + `lan-net` (rustls custom verifier、FTPS 990 + MQTT 8883、証明書 CN = serial) + CLI `lan-serial` / `lan-send` (検証 → dry-run → `--execute` → `--confirm-start-print`) text-to-print UI への配線は未 (P1-10 継続項目)
+- ✅ **`ttp` headless CLI + Agent Skill** (`ee26a20`) — `skills/text-to-print/SKILL.md` + `.claude-plugin/`、Claude Code / Codex から check → export → validate
+
 ### 2026-08-09 完了項目
 
 - ✅ **SKADIS panel canonical 化 (Phase T1.1)** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix: (1) Y 板厚 17mm bug (RoundedBox 6 面 inflate) を `Intersection { RoundedBox, Box3d Y-cutter }` で解消、Y=5mm 正確、X/Z corner fillet 保持 (2) Stadium peg 穴 (Box3d rectangle → 中央 Box + Y 軸 Cylinder × 2 半円 ends の Union、SKADIS_SPEC.md §1 準拠 5×15mm round 2.5) (3) connector 穴 44 個 + mount 穴 6 個追加 (production `models/wall-organizer/skadis-300x300/generate.py::get_conn_positions` / `_mount_positions` を Rust に port、Python 板 origin=左下 → Rust 板 origin=中央 座標変換) 実測 148 hole 全 visible (peg 98 + conn 44 + mount 6)、mesh gen 5292ms/238700 tri/overhang 2.1%/PLA 安全性 OK、Bambu production 3MF `skadis_panel_300x300.3mf` と shape 一致 alice-lol lib test 226 pass (skadis 12 tests all pass)
@@ -204,6 +212,7 @@ UI 配線は landing 済 (`crates/app/src/ui/prompt.rs` の export picker に G-
 - [x] Settings or Export section に G-code 直接生成 option 追加 (prompt.rs `ExportFormatUi::Gcode`)
 - [x] `alice_print::slice_sdf` 呼びで G-code output (Bambu Lab preset、alice-bamboo re-export 経由)
 - [ ] 上級 user 向け UX: Bambu Studio bypass、SD 直挿し / OctoPrint 系連携可
+- [ ] **Bambu LAN 直接送信を UI に配線** — ALICE-Print `lan` / `lan-net` (2026-09-14 landing、実機未検証) を Settings → Printer (host / access code / serial cache) + Export 後の「プリンタへ送る (dry-run → upload → start 二段確認)」に接続 先に H2D 実機で `alice-print lan-serial` / `lan-send --execute` を通す
 - [x] **ベッド配置変換** (ALICE-Print `8b95624`、2026-09-14) — `alice_print::slice_sdf` がモデル空間座標をそのまま出力し、原点中心の SDF で X / Y / Z に負値が出ていた (`alice_print::validate` 初回 e2e で検出) XY ベッド中央配置 + Z 底面着地 + purge/park 位置を `SlicerConfig::bed` 由来に修正、H2D / A1 mini 両方で `validate().ok` を e2e 保証
 - [ ] G-code 静的検証を export 経路に組込 (`SliceResult::validate(&config.bed)`、ALICE-Print 側 landing 済) 検証 fail 時は `GenerationMessage::Failure` で UI に surface (anti-pattern C 準拠、silent 破棄禁止)
 

@@ -141,6 +141,20 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 | **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | 直接印刷 | Bambu Studio 不要 |
 | **3MF (4色)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
 
+## Agent skill / headless CLI
+
+`ttp` (crate `text-to-print-core`) は GUI なしでパイプラインを叩ける headless CLI (stdout に JSON)
+`skills/text-to-print/SKILL.md` が Claude Code / Codex に使い方を教える:
+
+```bash
+cargo build --release -p text-to-print-core --bin ttp
+ttp check    --lol part.lol                                  # safety + DfAM findings + 向きヒント
+ttp export   --lol part.lol --out ./out --format 3mf         # 3mf | stl | fbx | step | gcode
+ttp validate --gcode ./out/<id>.gcode --bed h2d              # 機械の移動限界に対する G-code 静的検証
+```
+
+エージェントへの導入は repo の `.claude-plugin/` manifest (Claude Code plugin marketplace 形式) を使う
+
 ## リポジトリ構成
 
 ```
