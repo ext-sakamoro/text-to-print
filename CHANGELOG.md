@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Security
+- rustls 0.23.43 → 0.23.45 (RUSTSEC-2026-0285、TLS 1.3 handshake message encryption level 境界) `cargo update -p rustls`
+- `deny.toml` を real sibling 依存木で green に: ALICE-* sibling 4 crate (alice-physics / alice-llm AGPL、alice-bamboo AGPL-3.0-only、alice-print proprietary) を `licenses.exceptions` で限定許可、bincode 1.3 unmaintained (RUSTSEC-2025-0141、`.cargo/audit.toml` と同期) を ignore
+- `scripts/preflight.sh` 追加 (CI gate の local 逐語再現、pre-push hook が `--quick` で block)
+
 ### Changed
 - **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU 速度都合、[feedback_text_to_print_grammar_off_intentional]) `crates/llm` に `alice-bamboo` 依存追加
 - **`system_prompt.md`**: 「NO `//` comments, NO indent: max 1 space between tokens」を追記 (canonical grammar が comment / 連続 whitespace を拒否するため)、example の indent 除去、reminder 2 行を短縮して 4488 chars (4500 予算内)
