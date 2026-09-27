@@ -194,10 +194,13 @@ pub enum ExportFormat {
     ThreeMf,
     Fbx,
     Stl,
-    /// STEP AP203 (ISO 10303-21) — CAD kernel neutral format used by
-    /// Fusion 360 / FreeCAD / SolidWorks for import Backed by
-    /// `alice_sdf::io::step::export_step` which tessellates the SDF
-    /// then writes a valid STEP faceted BREP
+    /// STEP AP214 (ISO 10303-21) — CAD kernel neutral format Backed by
+    /// `alice_sdf::io::step::export_step`, which writes a faceted BREP
+    /// (`CLOSED_SHELL` → `MANIFOLD_SOLID_BREP` → shape representation,
+    /// mm units) — a box goes out as 6 exact planar faces, everything
+    /// else is tessellated 三角形 1 枚が平面なので、球は
+    /// `SPHERICAL_SURFACE` ではなく分割として届く 構造は ALICE-SDF 側の
+    /// 読み戻し oracle で検証済、**実 CAD での import は未検証**
     Step,
     /// G-code direct output — bypasses Bambu Studio Backed by
     /// `alice_print::slice_sdf` with Bambu Lab preset The output is
@@ -631,10 +634,10 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
     }
 }
 
-/// LOL → STEP (ISO 10303-21 AP203) via `alice_sdf::io::step::export_step`
+/// LOL → STEP (ISO 10303-21 AP214) via `alice_sdf::io::step::export_step`
 ///
 /// The SDF is tessellated internally by `export_step` using its own
-/// marching-cubes pass then written as a Faceted BREP entity We rebuild
+/// marching-cubes pass then written as a faceted BREP solid We rebuild
 /// the mesh separately to surface a vertex / triangle count in
 /// `MeshStats` for the UI That path is small (order of megabytes) so
 /// the duplicate work is acceptable
