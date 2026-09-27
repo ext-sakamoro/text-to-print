@@ -111,7 +111,7 @@ fi
 step "ci.yml / audit: cargo audit (honours .cargo/audit.toml ignore list)"
 ( export CARGO_TERM_COLOR="always"; cargo audit )
 
-step "ci.yml / clippy-test-doc: cargo test (workspace lib)"
-( export CARGO_TERM_COLOR="always"; cargo test --workspace --lib )
+step "ci.yml / clippy-test-doc: cargo test (workspace, all targets)"
+( export CARGO_TERM_COLOR="always"; cargo test --workspace --all-targets )
 
 echo; echo "preflight OK"

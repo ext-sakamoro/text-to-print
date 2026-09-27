@@ -36,12 +36,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "alice-lol"
+name = "alice-det-math"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dd4269e9085b09f6218cc8d1aa0d729466d5d7e2e4fba958e32ec7dd6785f03"
+dependencies = [
+ "bytemuck",
+ "wide",
+]
+
+[[package]]
+name = "alice-lol"
+version = "0.4.0"
 dependencies = [
  "alice-lol-macro",
  "alice-sdf",
  "glam",
+ "stacker",
 ]
 
 [[package]]
@@ -55,7 +66,10 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "0.12.0"
+version = "1.4.0"
+dependencies = [
+ "alice-det-math",
+]
 
 [[package]]
 name = "alice-print"
@@ -71,8 +85,9 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "1.7.7"
+version = "3.1.0"
 dependencies = [
+ "alice-det-math",
  "bincode",
  "bytemuck",
  "clap",
@@ -153,6 +168,15 @@ name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
+name = "ar_archive_writer"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73cd58deff2140a0a8eae87e417bd01db68a33e148aa93d1e8cd837e55e312b6"
+dependencies = [
+ "object",
+]
 
 [[package]]
 name = "arbitrary"
@@ -1221,6 +1245,7 @@ dependencies = [
  "hexf-parse",
  "indexmap",
  "log",
+ "pp-rs",
  "rustc-hash",
  "spirv",
  "strum",
@@ -1254,6 +1279,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
 dependencies = [
  "malloc_buf",
+]
+
+[[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -1354,6 +1388,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
 
 [[package]]
+name = "pp-rs"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb458bb7f6e250e6eb79d5026badc10a3ebb8f9a15d1fff0f13d17c71f4d6dee"
+dependencies = [
+ "unicode-xid",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1382,6 +1425,16 @@ name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
+
+[[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
+]
 
 [[package]]
 name = "pxfm"
@@ -1700,6 +1753,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1772,7 +1838,7 @@ dependencies = [
 
 [[package]]
 name = "text-to-print-core"
-version = "0.1.0"
+version = "0.1.0-beta.4"
 dependencies = [
  "alice-bamboo",
  "alice-physics",

@@ -140,8 +140,11 @@ jobs:
       - name: cargo clippy (workspace, all targets)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: cargo test (workspace lib)
-        run: cargo test --workspace --lib
+      # `--lib` だけだと crates/core/tests/e2e_pipeline.rs (text → LOL → mesh
+      # → 3MF の e2e) と crates/network/tests/share_schema.rs が compile され
+      # るだけで一度も走らない (2026-09-27 発覚)
+      - name: cargo test (workspace, all targets)
+        run: cargo test --workspace --all-targets
 
       - name: cargo doc (no deps)
         env:
