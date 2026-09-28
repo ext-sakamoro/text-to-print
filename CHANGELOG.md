@@ -5,10 +5,21 @@
 
 ## [Unreleased]
 
-### Fixed
-- **連結性の判定が実際には走っていなかった** (`printability_summary` の端点選び、2026-09-28 実測) 内部点を「bound 全体のセル**対角**より深い格子点」という等方の距離基準で選んでいたため、Z 厚 0.8mm の板でも**肉厚 5mm の球殻でも**端点が 0 個になり `not_run` で素通りしていた t2p の主力形状は薄物 (DC 経路 = 5mm 以下、SKADIS panel / coin) なので、2 つに分かれた造形物の検出が主力形状で機能していない状態だった 端点を判定器と同じ基準 (`alice_sdf::interval::eval_interval` でセル全体が内部と確定したセルの中心、非等方セルでもそのまま効く) で選ぶよう変更し、薄板 2 枚の分離が `violated`、1 枚板と 5mm 殻が `proved` に決着することを oracle で固定 判定時間も短縮 (該当 test 3.55s → 1.77s)
-- **STEP export が STEP として成立していなかった** (sibling `alice-sdf` `762b04c` で修正、本 repo は path dep なので追従のみ) 未定義の `#0` を参照する file を書いていたため、**v0.1.0-beta.4 まで `ttp export --format step` / UI の STEP 出力はどの CAD でも開けなかった** 併せて `crates/core/tests/e2e_pipeline.rs` に t2p 側の回帰 test を追加 (1 回の export に 3 つの oracle: 未定義参照 0 件 / AP214 の必須 root 4 つ / **頂点が半径 10mm の球面に乗る** — 独立実装 (python 再パース) の実測 max |r − 10| = 0.0006mm に対し許容 0.05mm) detector が vacuous でないことを確かめる注入 test も別に置いた
-- **`Cargo.lock` が sibling の現状から遅れていた** — `alice-physics` が `alice-det-math` 0.3.1 に上がっているのを取り込み (`alice-sdf` は 0.2.0 のままなので 2 version 併存、`bans.multiple-versions = "warn"`) `fuzz/Cargo.lock` も同期
+## [v0.1.0-beta.4.1] - 2026-09-28
+
+肉厚と連結性の判定を証明ベースに移した hardening release (STEP export / 連結性判定 / integration test 未実行 の 3 件を修正)
+
+### Added
+- **証明の三値を share payload に載せた** (`quality.printability`、schema v1 に optional 追加) `erosion` / `connectivity` / `thin_triangles` / `min_local_thickness_mm` / `notes` を上げる `safety_violations` は未決定を表現できない (未決定は violation message を出さない) ので、受け手の LoRA 学習が「検証していない形状」を「合格した形状」として扱わないよう三値のまま渡す `quality.required` には入れないため、proof pass を通らない export 経路と 2026-09-28 より前の client が書いた payload も従来通り受ける (`ok` は送らない — bool 1 個に畳むと未決定と違反の区別が失われる)
+- **判定の oracle 7 本** (`pipeline.rs` / `network/src/share.rs` / `network/tests/share_schema.rs`) — 薄板 2 枚の分離検出 / 1 枚板と 5mm 殻の決着 / **fail が 1 件も出ない形状 (肉厚 2.0mm の殻) で `ok` が false になること** / 三値のうち `proved` だけが合格であること / 三値が wire を往復して畳まれないこと / 未知の verdict を schema が弾くこと / printability 無しでも schema conform すること 実測した境界は 2.5mm → `proved` / 2.0mm → `undecided` で fail 0 件 / 1.6mm → 薄い三角形 59,024 枚で `violated`
+- **`actionlint` job** (`ci.yml`) — 上記 node20 逸脱を push 時点で検知できていなかったので追加 (canonical: ALICE-LOL / ALICE-SDF)
+- **`quality-deep.yml`** (`cargo-mutants`、canonical: ALICE-Physics / ALICE-LOL) — 判定の核 (`printability_summary` / `connectivity_verdict` / `should_use_dual_contouring` / `from_message` 等) の**検出力**を測り、生存変異 0 を gate にする 週次 + 該当 file を触った PR + 手動 測定結果 file が無い / 形式が想定外なら fail (「見つからない」を「問題なし」に読み替えない)
+- **DfAM 測定 + 判定を 3MF export 経路に統合** (`alice_bamboo::dfam`、text-to-cad `dfam-check` 吸収) `MeshStats.dfam_summary` に壁厚 p05 / 最小穴径 / 最大ブリッジ span / サポート面積比 / 単位疑義 / watertight の findings (FDM 限界、ISO/ASTM 52910 準拠の保守値) Generate 画面に「DfAM (FDM): OK/NG …」行 + pass 以外の finding を表示
+- **LLM retry loop に DfAM 違反を接続** `safety_check_lol` が Preview 解像度 mesh で DfAM を測り、`DfAM wall thickness / positive feature / hole diameter` の Fail を `fix_prompt` に流す (`SafetyViolationKind::{WallTooThin, FeatureTooSmall, HoleTooSmall, BridgeTooLong, NotWatertight}` 追加) bridge / watertight は retry trigger にしない (曲面形状で常時発火 / mesher の性質で LOL 設計の問題でないため)、UI + manifest 表示のみ
+- manifest `safety_violations` に DfAM Fail メッセージを merge (LoRA 学習データの品質シグナル)
+- **造形向き探索** (`alice_bamboo::dfam::evaluate_orientations`、軸整列 6 + 球面 32 候補、mesh を回さず造形軸を回す) 現在よりサポート面積が 20 %+ 減る向きがあれば `DfamSummary.orientation_hint` に `"rotate: -Z up → support 312 → 0 mm² (-100%), height 10.0 mm"` を格納し Generate 画面に表示
+- **`ttp` headless CLI** (`crates/core/src/bin/ttp.rs`、clap 不使用) `ttp check --lol` (parse + safety + DfAM、JSON) / `ttp export --lol --out --format 3mf|stl|fbx|step|gcode --quality` / `ttp validate --gcode --bed h2d|h2d-dual|x1c|a1-mini` (alice_print 静的検証)、exit 0 / 1 / 3 (findings fail)
+- **Agent Skill** `skills/text-to-print/SKILL.md` (+ `references/lol-dsl-quickref.md` = system_prompt mirror、`references/dfam-findings.md`) + `.claude-plugin/plugin.json` / `marketplace.json` — Claude Code / Codex から `ttp` 経由で LOL 作成 → DfAM check → export → validate を回せる (text-to-cad の配布形態を吸収、Free tier の入口)
 
 ### Changed
 - **肉厚と連結性の判定を証明ベースに移した** (`alice_sdf::validity` + `alice_bamboo::law`、新 `PrintabilitySummary`) DfAM (`alice_bamboo::dfam`) の壁厚は mesh 頂点からのレイキャスト標本 p05 なので、標本の隙間にある薄壁を「見つからなかった = 合格」にできる 同じ量を 2 つの source で判定すると緩い側に倒れるため canonical source を 1 つに寄せた
@@ -18,37 +29,21 @@
   - UI (Generate 画面) / `ttp check` / `ttp export` JSON / manifest `safety_violations` に `printability` を追加 overhang 角は閉形式で記録するが判定には使わない (曲面形状で常時発火するため)
 - **CI: `alice-stubs` (manifest-only stub) を廃止して実 sibling checkout に統一** (`security-audit.yml` 4 job / `fuzz.yml`) stub は AGPL の `alice-bamboo` / `alice-physics` / `alice-llm` を `license = "MIT OR Apache-2.0"` の空 crate として申告していたので、`deny.toml` の `licenses.exceptions` 4 件が **CI では一度も評価されず**、`alice-print` / `alice-lol` とその transitive 依存も dep 木から消えていた (ALICE-LOL `a6ba9f7` / Physics `3472768` と同じ置換)
 - **CI: node20 runtime の action を更新** — `actions/upload-artifact@v4` → v6 (6 箇所) / `download-artifact@v4` → v7 / `softprops/action-gh-release@v2` → v3 GitHub の node20 削除 (2026-09-23) で release workflow が落ちる前に追従 sibling は既に対応済 (SDF `ea09e88` / LOL `fbcc63a` / Bamboo `433ff59`)
+- **e2e_pipeline の assert を解析解 oracle に格上げ** 「ZIP として開ける / `<model` を含む」だけでなく、Bambu production extension の `p:path` 参照を辿って `3D/Objects/*.model` の mesh を読み戻し、(1) 頂点・三角形数が `MeshStats` と一致 (2) 符号付き体積が `sphere(10)` の 4/3πr³ と ±5% 一致 (3) 全無向エッジが 2 枚共有 = 水密 を検証 参照先 part の不在も検出する (Bambu Studio が開けない 3MF の早期検出)
+- **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU 速度都合、[feedback_text_to_print_grammar_off_intentional]) `crates/llm` に `alice-bamboo` 依存追加
+- **`system_prompt.md`**: 「NO `//` comments, NO indent: max 1 space between tokens」を追記 (canonical grammar が comment / 連続 whitespace を拒否するため)、example の indent 除去、reminder 2 行を短縮して 4488 chars (4500 予算内)
+- `ROADMAP.md` P1-10 を実態に同期 (G-code export 配線済、ベッド配置変換 fix 反映)
 
-### Added
-- **証明の三値を share payload に載せた** (`quality.printability`、schema v1 に optional 追加) `erosion` / `connectivity` / `thin_triangles` / `min_local_thickness_mm` / `notes` を上げる `safety_violations` は未決定を表現できない (未決定は violation message を出さない) ので、受け手の LoRA 学習が「検証していない形状」を「合格した形状」として扱わないよう三値のまま渡す `quality.required` には入れないため、proof pass を通らない export 経路と 2026-09-28 より前の client が書いた payload も従来通り受ける (`ok` は送らない — bool 1 個に畳むと未決定と違反の区別が失われる)
-- **判定の oracle 7 本** (`pipeline.rs` / `network/src/share.rs` / `network/tests/share_schema.rs`) — 薄板 2 枚の分離検出 / 1 枚板と 5mm 殻の決着 / **fail が 1 件も出ない形状 (肉厚 2.0mm の殻) で `ok` が false になること** / 三値のうち `proved` だけが合格であること / 三値が wire を往復して畳まれないこと / 未知の verdict を schema が弾くこと / printability 無しでも schema conform すること 実測した境界は 2.5mm → `proved` / 2.0mm → `undecided` で fail 0 件 / 1.6mm → 薄い三角形 59,024 枚で `violated`
-- **`actionlint` job** (`ci.yml`) — 上記 node20 逸脱を push 時点で検知できていなかったので追加 (canonical: ALICE-LOL / ALICE-SDF)
-- **`quality-deep.yml`** (`cargo-mutants`、canonical: ALICE-Physics / ALICE-LOL) — 判定の核 (`printability_summary` / `connectivity_verdict` / `should_use_dual_contouring` / `from_message` 等) の**検出力**を測り、生存変異 0 を gate にする 週次 + 該当 file を触った PR + 手動 測定結果 file が無い / 形式が想定外なら fail (「見つからない」を「問題なし」に読み替えない)
+### Fixed
+- **連結性の判定が実際には走っていなかった** (`printability_summary` の端点選び、2026-09-28 実測) 内部点を「bound 全体のセル**対角**より深い格子点」という等方の距離基準で選んでいたため、Z 厚 0.8mm の板でも**肉厚 5mm の球殻でも**端点が 0 個になり `not_run` で素通りしていた t2p の主力形状は薄物 (DC 経路 = 5mm 以下、SKADIS panel / coin) なので、2 つに分かれた造形物の検出が主力形状で機能していない状態だった 端点を判定器と同じ基準 (`alice_sdf::interval::eval_interval` でセル全体が内部と確定したセルの中心、非等方セルでもそのまま効く) で選ぶよう変更し、薄板 2 枚の分離が `violated`、1 枚板と 5mm 殻が `proved` に決着することを oracle で固定 判定時間も短縮 (該当 test 3.55s → 1.77s)
+- **STEP export が STEP として成立していなかった** (sibling `alice-sdf` `762b04c` で修正、本 repo は path dep なので追従のみ) 未定義の `#0` を参照する file を書いていたため、**v0.1.0-beta.4 まで `ttp export --format step` / UI の STEP 出力はどの CAD でも開けなかった** 併せて `crates/core/tests/e2e_pipeline.rs` に t2p 側の回帰 test を追加 (1 回の export に 3 つの oracle: 未定義参照 0 件 / AP214 の必須 root 4 つ / **頂点が半径 10mm の球面に乗る** — 独立実装 (python 再パース) の実測 max |r − 10| = 0.0006mm に対し許容 0.05mm) detector が vacuous でないことを確かめる注入 test も別に置いた
+- **`Cargo.lock` が sibling の現状から遅れていた** — `alice-physics` が `alice-det-math` 0.3.1 に上がっているのを取り込み (`alice-sdf` は 0.2.0 のままなので 2 version 併存、`bans.multiple-versions = "warn"`) `fuzz/Cargo.lock` も同期
+- **CI / preflight が integration test を一度も走らせていなかった** test step が `cargo test --workspace --lib` だったため `crates/core/tests/e2e_pipeline.rs` (text → LOL → mesh → 3MF の唯一の e2e) と `crates/network/tests/share_schema.rs` は compile されるだけで実行されていなかった `--workspace --all-targets` に変更し、`scripts/preflight.sh` も再生成して local gate に含めた
 
 ### Security
 - rustls 0.23.43 → 0.23.45 (RUSTSEC-2026-0285、TLS 1.3 handshake message encryption level 境界) `cargo update -p rustls`
 - `deny.toml` を real sibling 依存木で green に: ALICE-* sibling 4 crate (alice-physics / alice-llm AGPL、alice-bamboo AGPL-3.0-only、alice-print proprietary) を `licenses.exceptions` で限定許可、bincode 1.3 unmaintained (RUSTSEC-2025-0141、`.cargo/audit.toml` と同期) を ignore
 - `scripts/preflight.sh` 追加 (CI gate の local 逐語再現、pre-push hook が `--quick` で block)
-
-### Fixed
-- **CI / preflight が integration test を一度も走らせていなかった** test step が `cargo test --workspace --lib` だったため `crates/core/tests/e2e_pipeline.rs` (text → LOL → mesh → 3MF の唯一の e2e) と `crates/network/tests/share_schema.rs` は compile されるだけで実行されていなかった `--workspace --all-targets` に変更し、`scripts/preflight.sh` も再生成して local gate に含めた
-
-### Changed
-- **e2e_pipeline の assert を解析解 oracle に格上げ** 「ZIP として開ける / `<model` を含む」だけでなく、Bambu production extension の `p:path` 参照を辿って `3D/Objects/*.model` の mesh を読み戻し、(1) 頂点・三角形数が `MeshStats` と一致 (2) 符号付き体積が `sphere(10)` の 4/3πr³ と ±5% 一致 (3) 全無向エッジが 2 枚共有 = 水密 を検証 参照先 part の不在も検出する (Bambu Studio が開けない 3MF の早期検出)
-- **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU 速度都合、[feedback_text_to_print_grammar_off_intentional]) `crates/llm` に `alice-bamboo` 依存追加
-- **`system_prompt.md`**: 「NO `//` comments, NO indent: max 1 space between tokens」を追記 (canonical grammar が comment / 連続 whitespace を拒否するため)、example の indent 除去、reminder 2 行を短縮して 4488 chars (4500 予算内)
-
-### Added
-- **DfAM 測定 + 判定を 3MF export 経路に統合** (`alice_bamboo::dfam`、text-to-cad `dfam-check` 吸収) `MeshStats.dfam_summary` に壁厚 p05 / 最小穴径 / 最大ブリッジ span / サポート面積比 / 単位疑義 / watertight の findings (FDM 限界、ISO/ASTM 52910 準拠の保守値) Generate 画面に「DfAM (FDM): OK/NG …」行 + pass 以外の finding を表示
-- **LLM retry loop に DfAM 違反を接続** `safety_check_lol` が Preview 解像度 mesh で DfAM を測り、`DfAM wall thickness / positive feature / hole diameter` の Fail を `fix_prompt` に流す (`SafetyViolationKind::{WallTooThin, FeatureTooSmall, HoleTooSmall, BridgeTooLong, NotWatertight}` 追加) bridge / watertight は retry trigger にしない (曲面形状で常時発火 / mesher の性質で LOL 設計の問題でないため)、UI + manifest 表示のみ
-- manifest `safety_violations` に DfAM Fail メッセージを merge (LoRA 学習データの品質シグナル)
-- **造形向き探索** (`alice_bamboo::dfam::evaluate_orientations`、軸整列 6 + 球面 32 候補、mesh を回さず造形軸を回す) 現在よりサポート面積が 20 %+ 減る向きがあれば `DfamSummary.orientation_hint` に `"rotate: -Z up → support 312 → 0 mm² (-100%), height 10.0 mm"` を格納し Generate 画面に表示
-
-- **`ttp` headless CLI** (`crates/core/src/bin/ttp.rs`、clap 不使用) `ttp check --lol` (parse + safety + DfAM、JSON) / `ttp export --lol --out --format 3mf|stl|fbx|step|gcode --quality` / `ttp validate --gcode --bed h2d|h2d-dual|x1c|a1-mini` (alice_print 静的検証)、exit 0 / 1 / 3 (findings fail)
-- **Agent Skill** `skills/text-to-print/SKILL.md` (+ `references/lol-dsl-quickref.md` = system_prompt mirror、`references/dfam-findings.md`) + `.claude-plugin/plugin.json` / `marketplace.json` — Claude Code / Codex から `ttp` 経由で LOL 作成 → DfAM check → export → validate を回せる (text-to-cad の配布形態を吸収、Free tier の入口)
-
-### Changed
-- `ROADMAP.md` P1-10 を実態に同期 (G-code export 配線済、ベッド配置変換 fix 反映)
 
 ## [v0.1.0-beta.4] - 2026-09-08
 
