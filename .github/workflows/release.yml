@@ -254,11 +254,68 @@ jobs:
           # github.ref_name は tag ref (例 "v0.1.0")、cargo-wix は SemVer `0.1.0`
           # (v prefix 無し) を期待 v 付きで渡すと `unexpected character 'v'` で
           # parse fail し target/wix 未生成 → 後段の Get-ChildItem が例外化
-          $version = "${{ github.ref_name }}".TrimStart('v')
-          if ([string]::IsNullOrEmpty($version) -or -not ($version -match '^\d+\.\d+\.\d+')) {
-            $version = "0.0.0"
+          #
+          # MSI の ProductVersion は数値 4 field (major.minor.build.revision) しか
+          # 受けないため、cargo-wix は pre-release を 4 field 目に map する ただし
+          # その map は数値成分 1 個 (`-beta.4` → `0.1.0.4`) しか扱えず、
+          # `-beta.4.1` のように 2 個ある tag は cargo-wix 側で
+          #   "The app's version 0.1.0-beta.4.1 is a prerelease, but we couldn't
+          #    convert the prerelease components to an integer"
+          # になって target/wix が生成されない (2026-09-28 実測、run 36418654823)
+          # → tag 文字列をそのまま渡さず、ここで 4 field に明示 map して渡す
+          #
+          # map 規則 (pre-release 付きの時のみ 4 field 目を付ける):
+          #   数値成分を上位から base-100 で詰める (n1*100 + n2、n2 既定 0)
+          #   `-beta.4` → 400 / `-beta.4.1` → 401 / `-beta.5` → 500 で単調
+          #   成分は 2 個まで・各 99 以下 (revision の上限 65535 に収める)
+          # GA tag (pre-release なし) は従来通り core をそのまま渡す
+          #
+          # 注: Windows Installer は ProductVersion の 4 field 目を upgrade 比較で
+          # 無視する ので beta 間の自動 upgrade 判定は元々効いていない (beta.4 の
+          # `0.1.0.4` も同様) 本 map はその既知制約を変えない
+          # source は tag push なら tag ref、workflow_dispatch (dry run) なら
+          # workspace の実 version tag 以外で固定の仮版数に落とすと、dry run が
+          # 本番と違う ProductVersion を検証することになるので Cargo.toml を読む
+          # (この時点の cwd は repo root、Push-Location は後段)
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $source = "${{ github.ref_name }}"
+            $origin = "tag ${{ github.ref_name }}"
+          } else {
+            $m = Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1
+            if ($null -eq $m) {
+              Write-Host "ERROR: could not read workspace.package.version from Cargo.toml"
+              exit 1
+            }
+            $source = $m.Matches[0].Groups[1].Value
+            $origin = "Cargo.toml (ref_type=${{ github.ref_type }})"
           }
-          Write-Host "Using MSI version: $version (from ref_name: ${{ github.ref_name }})"
+          $semver = $source -replace '^v', ''
+          $parsed = [regex]::Match($semver, '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.\-]+))?(?:\+[0-9A-Za-z.\-]+)?$')
+          if (-not $parsed.Success) {
+            Write-Host "ERROR: '$source' is not SemVer — cannot derive an MSI ProductVersion"
+            exit 1
+          }
+          $core = "$($parsed.Groups[1].Value).$($parsed.Groups[2].Value).$($parsed.Groups[3].Value)"
+          $pre = $parsed.Groups[4].Value
+          if ([string]::IsNullOrEmpty($pre)) {
+            $version = $core
+          } else {
+            $nums = @([regex]::Matches($pre, '\d+') | ForEach-Object { [int]$_.Value })
+            if ($nums.Count -lt 1 -or $nums.Count -gt 2) {
+              Write-Host "ERROR: pre-release '$pre' has $($nums.Count) numeric components — expected 1 or 2 (e.g. beta.4 / beta.4.1)"
+              exit 1
+            }
+            foreach ($n in $nums) {
+              if ($n -gt 99) {
+                Write-Host "ERROR: pre-release '$pre' has a numeric component over 99 — cannot fit the MSI revision field"
+                exit 1
+              }
+            }
+            $revision = $nums[0] * 100
+            if ($nums.Count -eq 2) { $revision += $nums[1] }
+            $version = "$core.$revision"
+          }
+          Write-Host "Using MSI version: $version (from $origin)"
           # cargo wix の WiX light.exe は cwd を base directory として wxs 内の
           # `Source='wix\License.rtf'` や `WixUILicenseRtf` value を解決する
           # workflow default working-directory は text-to-print (parent) なので
