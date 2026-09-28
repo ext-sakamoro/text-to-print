@@ -256,18 +256,25 @@ jobs:
           # parse fail し target/wix 未生成 → 後段の Get-ChildItem が例外化
           #
           # MSI の ProductVersion は数値 4 field (major.minor.build.revision) しか
-          # 受けないため、cargo-wix は pre-release を 4 field 目に map する ただし
-          # その map は数値成分 1 個 (`-beta.4` → `0.1.0.4`) しか扱えず、
-          # `-beta.4.1` のように 2 個ある tag は cargo-wix 側で
-          #   "The app's version 0.1.0-beta.4.1 is a prerelease, but we couldn't
-          #    convert the prerelease components to an integer"
-          # になって target/wix が生成されない (2026-09-28 実測、run 36418654823)
-          # → tag 文字列をそのまま渡さず、ここで 4 field に明示 map して渡す
+          # 受けない cargo-wix はその 4 field 目への変換を自分で行うので、渡す値は
+          # **SemVer のまま**かつ **pre-release の数値成分が 1 個**でなければならない
+          # (2026-09-28 に 2 段で実測):
+          #   `0.1.0-beta.4.1` → Error "couldn't convert the prerelease components
+          #                      to an integer" (数値が 4 と 1 の 2 個、run 36418654823)
+          #   `0.1.0.401`      → Error[7] (Version) "unexpected character '.' after
+          #                      patch version number" (--install-version は semver
+          #                      crate で parse されるので 4 field は SemVer でない、
+          #                      run 36422468210)
+          # → 4 field を自分で作ってはいけない 数値成分を 1 個に畳んだ **SemVer** を
+          #   渡し、4 field 化は cargo-wix に任せる (cargo-wix 自身の推奨形
+          #   `1.2.3-prerelease.4` と一致)
           #
-          # map 規則 (pre-release 付きの時のみ 4 field 目を付ける):
-          #   数値成分を上位から base-100 で詰める (n1*100 + n2、n2 既定 0)
-          #   `-beta.4` → 400 / `-beta.4.1` → 401 / `-beta.5` → 500 で単調
-          #   成分は 2 個まで・各 99 以下 (revision の上限 65535 に収める)
+          # map 規則 (pre-release 付きの時のみ):
+          #   数値成分を上位から base-100 で畳む (n1*100 + n2、n2 既定 0)
+          #   非数値成分 (label) は順序を保って残す
+          #   `-beta.4` → `-beta.400` / `-beta.4.1` → `-beta.401` /
+          #   `-beta.5` → `-beta.500` / `-rc.1.2` → `-rc.102` で単調
+          #   成分は 2 個まで・各 99 以下 (cargo-wix が置く revision の上限 65535)
           # GA tag (pre-release なし) は従来通り core をそのまま渡す
           #
           # 注: Windows Installer は ProductVersion の 4 field 目を upgrade 比較で
@@ -300,7 +307,11 @@ jobs:
           if ([string]::IsNullOrEmpty($pre)) {
             $version = $core
           } else {
-            $nums = @([regex]::Matches($pre, '\d+') | ForEach-Object { [int]$_.Value })
+            # SemVer の pre-release は dot 区切り識別子列 数値成分は「純粋に数字だけの
+            # 識別子」に限る (`beta4` は非数値成分、cargo-wix も同じ見方をする)
+            $parts = $pre -split '\.'
+            $nums = @($parts | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+            $labels = @($parts | Where-Object { $_ -notmatch '^\d+$' })
             if ($nums.Count -lt 1 -or $nums.Count -gt 2) {
               Write-Host "ERROR: pre-release '$pre' has $($nums.Count) numeric components — expected 1 or 2 (e.g. beta.4 / beta.4.1)"
               exit 1
@@ -313,7 +324,12 @@ jobs:
             }
             $revision = $nums[0] * 100
             if ($nums.Count -eq 2) { $revision += $nums[1] }
-            $version = "$core.$revision"
+            # 4 field は作らない SemVer のまま渡して cargo-wix に変換させる
+            if ($labels.Count -gt 0) {
+              $version = "$core-$($labels -join '.').$revision"
+            } else {
+              $version = "$core-$revision"
+            }
           }
           Write-Host "Using MSI version: $version (from $origin)"
           # cargo wix の WiX light.exe は cwd を base directory として wxs 内の
