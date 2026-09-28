@@ -63,6 +63,26 @@ pub struct QualitySignals {
     pub export_format: String,
     pub user_kept: bool,
     pub user_edited: bool,
+    /// Proof-based printability verdicts — absent from older clients, so
+    /// `default` rather than required (mirrors
+    /// `text_to_print_network::share::QualitySignals::printability`)
+    #[serde(default)]
+    pub printability: Option<PrintabilitySignals>,
+}
+
+/// Proof-based printability verdicts (mirrors
+/// `text_to_print_network::share::PrintabilitySignals`)
+///
+/// Verdict slugs are `proved` / `violated` / `undecided` / `not_run` A sample
+/// that is neither proved nor violated is unverified, not passing — training
+/// sets built from these uploads must not fold `undecided` into `proved`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrintabilitySignals {
+    pub erosion: String,
+    pub connectivity: String,
+    pub thin_triangles: usize,
+    pub min_local_thickness_mm: Option<f32>,
+    pub notes: Vec<String>,
 }
 
 /// Successful accept response returned to the client

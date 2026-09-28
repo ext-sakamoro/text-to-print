@@ -19,6 +19,14 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
 ---
 
+### 2026-09-28 完了項目 (sibling 追従 + 判定の canonical source 整理)
+
+- ✅ **肉厚 / 連結性の判定を証明ベースに移した** (`alice_sdf::validity` + `alice_bamboo::law` → `PrintabilitySummary`) DfAM の壁厚 p05 は標本なので「隙間の薄壁を見逃す」= 緩い側に倒れる 同じ量の canonical source を 1 つにし、肉厚は erosion の区間演算による証明 + 三角形ごとの厳密 march、連結性は `Reachable` で「2 つに分かれた造形物」(印刷すると分解する) を検出 三値の `undecided` は合格に繰り上げず UI / JSON / manifest に注記として出す
+- ✅ **連結性の判定が主力形状 (薄物) で走っていなかったのを修正** — 端点を等方の距離基準で選んでいたため Z 厚 0.8mm の板でも肉厚 5mm の殻でも `not_run` で素通りしていた 端点選びを判定器と同じ区間演算基準に揃え、分離した造形物を薄物でも検出できる状態にした 併せて「fail が 1 件も出ない形状で `ok` が false になる」(= 未決定を合格に繰り上げない) を oracle で固定し、証明の三値を share payload (`quality.printability`、schema v1 optional) に載せて LoRA 学習側が未検証と合格を混同しないようにした
+- ✅ **STEP export の回帰 test** (`e2e_pipeline.rs`) — sibling `alice-sdf` `762b04c` で「STEP として成立していない (未定義 `#0` 参照)」が直ったので、t2p 側からも未定義参照 0 件 / AP214 必須 root / 頂点が解析解の球面に乗ることを検査 **beta.4 までの STEP 出力はどの CAD でも開けなかった**
+- ✅ **CI: `alice-stubs` 廃止 → 実 sibling checkout** (`security-audit.yml` / `fuzz.yml`) stub が AGPL sibling を MIT と申告していたので `deny.toml` の exception が CI で一度も評価されていなかった (ALICE-* 横断 Backlog の t2p 分)
+- ✅ **CI: node20 action 8 箇所を更新 + `actionlint` job 追加 + `quality-deep.yml` (cargo-mutants) 追加** — 逸脱を push 時点で検知できる状態にし、判定の核の検出力 (生存変異 0) を gate にした
+
 ### 2026-09-14 完了項目 (text-to-cad 吸収、[[reference-text-to-cad-absorption]])
 
 - ✅ **G-code 静的バリデータ + ベッド配置変換** (ALICE-Print `8b95624`) — `alice_print::validate` (移動 / 押出 / 温度 / 絶対 XYZ bounds、G90/G91 + M82/M83 + G92 E 追跡) を作った初回 e2e で **`slice_sdf` がモデル空間座標をそのまま出力していた** (Z 負値 = ベッド衝突) 事実を検出 → XY ベッド中央配置 + Z 底面着地 + purge/park を `SlicerConfig::bed` 由来に修正 H2D / A1 mini 両方で e2e `validate().ok`

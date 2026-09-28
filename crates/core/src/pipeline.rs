@@ -43,6 +43,12 @@ pub struct MeshStats {
     /// 壁厚 p05 / 突起 / 穴径 / ブリッジ / サポート比 / 単位疑義 / watertight
     /// FDM 限界 (ISO/ASTM 52910 準拠の保守値) と突き合わせた findings
     pub dfam_summary: Option<DfamSummary>,
+    /// 印刷可能性の **証明ベース** 判定 (`alice_sdf::validity` +
+    /// `alice_bamboo::law`、3MF export のみ)
+    ///
+    /// 肉厚と連結性は「標本で見つからなかった」を合格にしない judgement が
+    /// 要るので、[`DfamSummary`] (標本測定) ではなくこちらが canonical
+    pub printability_summary: Option<PrintabilitySummary>,
     /// G-code slicer summary (populated only for `ExportFormat::Gcode`
     /// exports via `alice_print::slice_sdf`)
     pub slice_summary: Option<SliceSummary>,
@@ -187,6 +193,280 @@ impl DfamSummary {
 /// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
 fn dfam_config() -> DfamConfig {
     DfamConfig::for_process(Process::Fdm)
+}
+
+/// 三値判定の結果ラベル (合格 / 違反 / 未決定)
+///
+/// 「標本で見つからなかった」を合格に繰り上げないために、証明が取れた合格と
+/// 判定できなかった状態を別のラベルにする ([`alice_sdf::validity`] /
+/// `alice_bamboo::law` の三値をそのまま持ち上げる)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProofVerdict {
+    /// 証明付きで合格
+    Proved,
+    /// 反例付きで違反
+    Violated,
+    /// 検証器の解像度 / 区間演算の精度が足りず決まらなかった (合格ではない)
+    Undecided,
+    /// 前提が揃わず実施していない (内部点が 2 個未満 等)
+    NotRun,
+}
+
+impl ProofVerdict {
+    /// **証明付きで合格した時だけ** true
+    ///
+    /// 未決定 / 未実施は合格ではない ここを `!matches!(self, Violated)` に
+    /// 緩めると「検証器が決められなかった」が「問題なし」に化けるので、この
+    /// 関数が本 judge の要点 (`tests::only_proved_verdicts_are_acceptable`)
+    #[must_use]
+    pub const fn is_proved(self) -> bool {
+        matches!(self, Self::Proved)
+    }
+
+    /// UI / JSON 用の安定した slug
+    #[must_use]
+    pub const fn slug(self) -> &'static str {
+        match self {
+            Self::Proved => "proved",
+            Self::Violated => "violated",
+            Self::Undecided => "undecided",
+            Self::NotRun => "not_run",
+        }
+    }
+}
+
+/// 印刷可能性の証明ベース判定 (`alice_sdf::validity` + `alice_bamboo::law`)
+///
+/// [`DfamSummary`] との役割分担 (canonical source を 1 つにする):
+///
+/// | 量 | canonical source | 理由 |
+/// |---|---|---|
+/// | 肉厚 | 本 struct (`erosion` + `min_local_thickness_mm`) | 区間演算の証明 + 三角形ごとの厳密 march、標本の隙間で薄壁を見逃さない |
+/// | 連結性 | 本 struct (`connectivity`) | 「2 つに分かれた造形物」= 印刷すると分解する |
+/// | 穴径 / 突起 / ブリッジ / サポート比 / 単位疑義 | [`DfamSummary`] | 証明版が無い量 (mesh 由来の統計) |
+/// | overhang 角 | 両方 (本 struct は閉形式、DfAM は面積比) | 閉形式は判定に使わない (曲面形状で常時発火するため記録のみ) |
+///
+/// 各 fail 行は `"Printability {check}: {message}"` 形式で、`fix_prompt` の
+/// `from_message` がこの prefix で分類する
+#[derive(Debug, Clone)]
+pub struct PrintabilitySummary {
+    /// 肉厚 / 連結性の判定が全て `Proved` かつ薄い三角形 0 枚
+    pub ok: bool,
+    /// 判定に使った最小肉厚 (mm、`ProcessLimits::min_unsupported_wall_mm`)
+    pub min_wall_mm: f32,
+    /// A — erosion による大域判定 (三値)
+    pub erosion: ProofVerdict,
+    /// B — 三角形ごとの厳密な局所肉厚の最小値 (mm)
+    pub min_local_thickness_mm: Option<f32>,
+    /// B — `min_wall_mm` を下回る三角形の枚数
+    pub thin_triangles: usize,
+    /// 2 点間到達性による連結性判定 (三値)
+    pub connectivity: ProofVerdict,
+    /// 最大 overhang 角 (deg、閉形式 `asin(-n·b)`) 記録のみ
+    pub max_overhang_deg: f32,
+    /// `max_overhang` を超える三角形の枚数 記録のみ
+    pub overhang_triangles: usize,
+    /// retry / share に流す fail メッセージ
+    pub fail_messages: Vec<String>,
+    /// 未決定 (証明できなかった) の注記 retry trigger にはしない
+    pub notes: Vec<String>,
+}
+
+/// 連結性判定の格子解像度 (`Reachable` のセル分類、軸あたり)
+///
+/// `Reachable` の三値は解像度に依存する: 通路がセル幅より細いと内部確定セルが
+/// 0 個になり「未定」が返る (合格でも違反でもない) 未定は検証器の解像度不足で
+/// あって繋がっている証拠ではないので、**粗い方から順に上げて未定が消えるかを
+/// 見る** (ALICE-LOL 実装者からの助言、2026-09-28) 最後まで未定なら未定を報告
+/// する
+const CONNECTIVITY_RESOLUTIONS: [usize; 2] = [16, 32];
+
+/// 「造形物が 1 つに繋がっているか」を 2 点間到達性で判定する
+///
+/// 内部点のうち最も離れた 2 点を取り、`alice_bamboo::law` の `Reachable` に
+/// 掛ける 内部と確定したセルだけの flood fill で届けば合格 (経路が証拠)、
+/// 外部と確定していないセル全部でも届かなければ違反 (= 2 つ以上に分かれて
+/// いる証明) その間は未決定
+///
+/// 全解像度で端点が取れなければ未実施 ([`ProofVerdict::NotRun`])
+/// 戻り値 = (三値, 未決定セル数, 決着した解像度)
+fn connectivity_verdict(
+    sdf: &alice_sdf::SdfNode,
+    bmin: Vec3,
+    bmax: Vec3,
+) -> (ProofVerdict, usize, usize) {
+    let mut last = (ProofVerdict::NotRun, 0, 0);
+    for resolution in CONNECTIVITY_RESOLUTIONS {
+        // 端点は判定と **同じ格子・同じ基準** で選ぶ 解像度を上げるとセルが
+        // 薄くなって内部確定セルが現れるので、粗い側で取れなくても次を試す
+        let Some((from, to)) = farthest_interior_pair(sdf, bmin, bmax, resolution) else {
+            continue;
+        };
+        let report = alice_bamboo::law::LawSet::new()
+            .reachable("connectivity", sdf.clone(), from, to)
+            .check(&alice_bamboo::law::CheckConfig {
+                aabb_min: bmin,
+                aabb_max: bmax,
+                resolution,
+            });
+        if !report.violations.is_empty() {
+            return (ProofVerdict::Violated, 0, resolution);
+        }
+        if !report.has_unresolved() {
+            return (ProofVerdict::Proved, 0, resolution);
+        }
+        last = (ProofVerdict::Undecided, report.unresolved.len(), resolution);
+    }
+    last
+}
+
+/// 区間演算で **セル全体が内部と確定した** セルの中心から、互いに最も離れた
+/// 2 点を近似で取る
+///
+/// 重心から最遠の点 → その点から最遠の点 の 2 pass (直径の標準近似) 2 つに
+/// 分かれた形なら別々の塊から 1 点ずつ選ばれるので、到達性判定の入力として
+/// 意味がある
+///
+/// 端点の選び方を判定器 (`law` の `Reachable`) と同じ基準に揃えるのが要点
+/// `Reachable` はセル単位で内外を確定させるので、端点は「内部確定セルの中」に
+/// なければ flood fill が始点にも終点にも到達できない 以前は「bound 全体の
+/// セル**対角**より深い格子点」という等方の距離ヒューリスティクスで代用して
+/// いたが、これは**薄い方向に薄いセル**を拾えず、Z 厚 0.8mm の板でも肉厚 5mm
+/// の球殻でも端点 0 個 = 判定を素通り (`NotRun`) していた (2026-09-28 実測)
+/// `eval_interval(cell).hi < 0` はセル全体が内部であることの厳密な十分条件
+/// なので、非等方セルでもそのまま効く
+fn farthest_interior_pair(
+    sdf: &alice_sdf::SdfNode,
+    bmin: Vec3,
+    bmax: Vec3,
+    resolution: usize,
+) -> Option<(Vec3, Vec3)> {
+    use alice_sdf::interval::{Vec3Interval, eval_interval};
+
+    #[allow(clippy::cast_precision_loss)]
+    let cell = (bmax - bmin) / resolution as f32;
+    let mut inside: Vec<Vec3> = Vec::new();
+    for ix in 0..resolution {
+        for iy in 0..resolution {
+            for iz in 0..resolution {
+                #[allow(clippy::cast_precision_loss)]
+                let lo = bmin + cell * Vec3::new(ix as f32, iy as f32, iz as f32);
+                let hi = lo + cell;
+                // セル全体が内部にあることの **厳密な十分条件** (区間の上限が負)
+                if eval_interval(sdf, Vec3Interval::from_bounds(lo, hi)).hi < 0.0 {
+                    inside.push((lo + hi) * 0.5);
+                }
+            }
+        }
+    }
+    if inside.len() < 2 {
+        return None;
+    }
+    let centroid = inside.iter().fold(Vec3::ZERO, |a, b| a + *b) / inside.len() as f32;
+    let far = |origin: Vec3| -> Vec3 {
+        inside
+            .iter()
+            .copied()
+            .fold((f32::NEG_INFINITY, inside[0]), |(best, bp), p| {
+                let d = origin.distance_squared(p);
+                if d > best { (d, p) } else { (best, bp) }
+            })
+            .1
+    };
+    let a = far(centroid);
+    let b = far(a);
+    if a.distance_squared(b) <= f32::EPSILON {
+        return None;
+    }
+    Some((a, b))
+}
+
+/// 印刷可能性を証明ベースで判定する ([`PrintabilitySummary`])
+///
+/// `bmin` / `bmax` は mesh 化に使った padding 済みの bound (形状を包む)
+fn printability_summary(
+    sdf: &alice_sdf::SdfNode,
+    mesh: &alice_sdf::mesh::Mesh,
+    bmin: Vec3,
+    bmax: Vec3,
+) -> PrintabilitySummary {
+    use alice_sdf::validity::{ErosionVerdict, PrintRequirements, validate_for_printing};
+
+    let limits = dfam_config().limits;
+    // 肉厚の閾値は DfAM と同じ値を使う (canonical source は 1 つ、
+    // `SafetyViolationKind::WallTooThin` の LLM 向け directive も 1.6mm)
+    let req = PrintRequirements {
+        min_wall: limits.min_unsupported_wall_mm,
+        max_overhang: limits
+            .self_supporting_angle_deg
+            .unwrap_or(45.0)
+            .to_radians(),
+        build_direction: Vec3::Z,
+        ..PrintRequirements::fdm_0_4_nozzle()
+    };
+    let report = validate_for_printing(sdf, mesh, bmin, bmax, req);
+
+    let erosion = match report.erosion {
+        ErosionVerdict::HasThickEnoughRegion { .. } => ProofVerdict::Proved,
+        ErosionVerdict::EntirelyTooThin => ProofVerdict::Violated,
+        ErosionVerdict::Undecided => ProofVerdict::Undecided,
+    };
+    let (connectivity, undecided_cells, decided_at) = connectivity_verdict(sdf, bmin, bmax);
+
+    let mut fail_messages = Vec::new();
+    let mut notes = Vec::new();
+    if erosion == ProofVerdict::Violated {
+        fail_messages.push(format!(
+            "Printability wall thickness: 造形物のどこも {:.1}mm 未満 (erosion で残る材料なしを証明)",
+            req.min_wall
+        ));
+    }
+    if report.thin_triangles > 0 {
+        let min = report
+            .min_local_thickness
+            .map_or_else(|| "計測不能".to_string(), |t| format!("{t:.2}mm"));
+        fail_messages.push(format!(
+            "Printability wall thickness: 最小局所肉厚 {min} < {:.1}mm (薄い三角形 {} 枚、三角形ごとの厳密 march)",
+            req.min_wall, report.thin_triangles
+        ));
+    }
+    if connectivity == ProofVerdict::Violated {
+        fail_messages.push(
+            "Printability connectivity: 造形物が 2 つ以上に分かれている (2 点間の到達不能を証明)"
+                .to_string(),
+        );
+    }
+    if erosion == ProofVerdict::Undecided {
+        notes.push(format!(
+            "肉厚の大域判定が未決定 (erosion octree 深さ {} で決着せず、合格ではない)",
+            req.erosion_depth
+        ));
+    }
+    match connectivity {
+        ProofVerdict::Undecided => notes.push(format!(
+            "連結性が未決定 (未決定セル {undecided_cells} 件を経由すれば繋がる、格子解像度 {decided_at} まで上げても決着せず) 未決定は「繋がっている証拠」ではない"
+        )),
+        ProofVerdict::NotRun => {
+            notes.push(format!(
+                "連結性は未実施 (解像度 {CONNECTIVITY_RESOLUTIONS:?} のどれでも内部と確定したセルが 2 個未満 = 形状が bound に対して細すぎる) 未実施は「繋がっている証拠」ではない"
+            ));
+        }
+        ProofVerdict::Proved | ProofVerdict::Violated => {}
+    }
+
+    PrintabilitySummary {
+        // fail の不在だけでは合格にしない (未決定 / 未実施は証明ではない)
+        ok: fail_messages.is_empty() && erosion.is_proved() && connectivity.is_proved(),
+        min_wall_mm: req.min_wall,
+        erosion,
+        min_local_thickness_mm: report.min_local_thickness,
+        thin_triangles: report.thin_triangles,
+        connectivity,
+        max_overhang_deg: report.max_overhang.to_degrees(),
+        overhang_triangles: report.overhang_triangles,
+        fail_messages,
+        notes,
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -533,7 +813,10 @@ fn export_3mf_via_bamboo(
     // Y/Z 軸を massive overestimate する既知欠点、生 mesh から empirical AABB を
     // 取って再判定する 2-pass 戦略)
     let mesh1 = generate_mesh(&sdf, min_bounds, max_bounds, quality, use_dc);
-    let mesh = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
+    // `mesh_bounds` = 最終 mesh を作った bound 証明ベースの印刷可能性判定
+    // (`printability_summary`) は「この bound の外は見ない」ので、mesh と同じ
+    // bound を渡さないと形状の一部を検査しないことになる
+    let (mesh, mesh_bounds) = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
         && aabb_significantly_inflated(aabb.min, aabb.max, emp_min, emp_max)
     {
         let emp_dims = (
@@ -551,15 +834,18 @@ fn export_3mf_via_bamboo(
             padding_2nd_mm = AABB_2ND_PASS_PADDING_MM,
             "tight_aabb inflated → 2nd-pass re-mesh at empirical bounds for proper cell size"
         );
-        generate_mesh(
-            &sdf,
-            emp_min - padding_2nd,
-            emp_max + padding_2nd,
-            quality,
-            use_dc2,
+        (
+            generate_mesh(
+                &sdf,
+                emp_min - padding_2nd,
+                emp_max + padding_2nd,
+                quality,
+                use_dc2,
+            ),
+            (emp_min - padding_2nd, emp_max + padding_2nd),
         )
     } else {
-        mesh1
+        (mesh1, (min_bounds, max_bounds))
     };
     let mesh = MeshRepair::repair_all(&mesh, 5e-3);
 
@@ -591,6 +877,19 @@ fn export_3mf_via_bamboo(
     }
     let dfam_summary = DfamSummary::from_report(&dfam_report, &orientation);
 
+    // 証明ベースの印刷可能性判定 (肉厚 = erosion 証明 + 厳密局所 march、連結性 =
+    // 2 点間到達性) mesh と同じ bound を渡す
+    let printability = printability_summary(&sdf, &mesh, mesh_bounds.0, mesh_bounds.1);
+    if !printability.ok {
+        info!(
+            erosion = printability.erosion.slug(),
+            connectivity = printability.connectivity.slug(),
+            thin_triangles = printability.thin_triangles,
+            notes = printability.notes.len(),
+            "printability proof did not pass (informational, export continues)"
+        );
+    }
+
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
 
@@ -616,6 +915,7 @@ fn export_3mf_via_bamboo(
         overhang_summary: Some(overhang_summary),
         safety_summary: Some(safety_summary),
         dfam_summary: Some(dfam_summary),
+        printability_summary: Some(printability),
         slice_summary: None,
         preview_mesh: Some(preview_mesh),
     })
@@ -629,6 +929,7 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
         overhang_summary: None,
         safety_summary: None,
         dfam_summary: None,
+        printability_summary: None,
         slice_summary: None,
         preview_mesh: None,
     }
@@ -681,6 +982,7 @@ fn export_step_via_alice_sdf(
         overhang_summary: None,
         safety_summary: None,
         dfam_summary: None,
+        printability_summary: None,
         slice_summary: None,
         preview_mesh: None,
     })
@@ -713,6 +1015,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
         overhang_summary: None,
         safety_summary: None,
         dfam_summary: None,
+        printability_summary: None,
         slice_summary: Some(SliceSummary {
             layer_count: slice.layer_count,
             filament_meters: slice.filament_meters,
@@ -783,15 +1086,16 @@ pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
         report.messages
     };
 
-    // DfAM: 薄壁 / 小穴 / 長ブリッジ / 非 watertight は LLM が LOL 側で直せる
-    // 種類の違反なので retry loop に流す 低解像度 mesh (Preview) で十分
+    // DfAM (標本測定) + Printability (証明) の fail を retry loop に流す
+    // LLM が LOL 側で直せる種類の違反に限定 低解像度 mesh (Preview) で十分
     // (LLM 1 回の推論が分単位なのに対し、この測定は秒未満)
-    violations.extend(dfam_fail_messages_for_retry(&sdf));
+    violations.extend(printability_fail_messages_for_retry(&sdf));
     violations
 }
 
-/// retry loop 用の軽量 DfAM 判定 — Preview 解像度で mesh を作り `Fail` のみ返す
-fn dfam_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String> {
+/// retry loop 用の軽量判定 — Preview 解像度で mesh を 1 回作り、DfAM の `Fail`
+/// (穴径 / 突起) と Printability の fail (肉厚 / 連結性) を返す
+fn printability_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String> {
     let aabb = compute_tight_aabb_with_config(sdf, &TightAabbConfig::preset_large());
     let dims = (
         aabb.max.x - aabb.min.x,
@@ -819,31 +1123,39 @@ fn dfam_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String> {
     cfg.grid_resolution = 48;
     cfg.max_thickness_samples = 20_000;
     let report = alice_bamboo::dfam::analyze(sdf, &mesh, &cfg);
-    report
+    let mut out: Vec<String> = report
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Fail && is_retryable_dfam_check(f.check))
         .map(|f| format!("DfAM {}: {}", f.check, f.message))
-        .collect()
+        .collect();
+
+    // 肉厚 / 連結性は証明ベース側が canonical (`PrintabilitySummary` の表参照)
+    out.extend(
+        printability_summary(sdf, &mesh, aabb.min - padding, aabb.max + padding).fail_messages,
+    );
+    out
 }
 
 /// LLM retry に流す DfAM 項目
 ///
-/// LOL 側で局所的に直せるもの (壁を厚く / 穴を大きく / 突起を太く) に限定する
+/// LOL 側で局所的に直せるもの (穴を大きく / 突起を太く) に限定する
 ///
+/// - **wall thickness**: 2026-09-28 に除外 肉厚の canonical source は
+///   `alice_sdf::validity` 側 (erosion の証明 + 三角形ごとの厳密 march) に
+///   移した DfAM の壁厚は mesh 頂点からのレイキャスト標本 p05 なので、
+///   標本の隙間にある薄壁を「見つからなかった = 合格」にできる 同じ量を
+///   2 つの source で判定すると片方が緩い方に倒れるため 1 つに寄せる
 /// - bridge: 丸い形状 (球 / ドーム) の下半分が常に >45° 下向き = span が出る
 ///   ため、retry trigger にすると曲面を持つ形状すべてで再生成が走る
 /// - watertight: MC / DC / `repair_all` という **mesher の性質** であって LOL
 ///   設計の問題ではない (`sphere(10)` を Preview 解像度 MC で mesh 化しても
 ///   非多様体辺が残る実測あり) LLM に LOL を書き換えさせても解決しない
 ///
-/// どちらも UI + manifest で示すに留める
+/// bridge / watertight は UI + manifest で示すに留める
 fn is_retryable_dfam_check(check: alice_bamboo::dfam::Check) -> bool {
     use alice_bamboo::dfam::Check;
-    matches!(
-        check,
-        Check::WallThickness | Check::PositiveFeature | Check::HoleDiameter
-    )
+    matches!(check, Check::PositiveFeature | Check::HoleDiameter)
 }
 
 /// caller 由来 violations に、pipeline 内 `safety_validate` の messages を
@@ -856,6 +1168,7 @@ fn merge_safety_violations(
     mut caller: Vec<String>,
     summary: Option<&SafetySummary>,
     dfam: Option<&DfamSummary>,
+    printability: Option<&PrintabilitySummary>,
 ) -> Vec<String> {
     if let Some(sum) = summary
         && !sum.is_safe
@@ -868,6 +1181,13 @@ fn merge_safety_violations(
     }
     if let Some(d) = dfam {
         for msg in &d.fail_messages {
+            if !caller.contains(msg) {
+                caller.push(msg.clone());
+            }
+        }
+    }
+    if let Some(p) = printability {
+        for msg in &p.fail_messages {
             if !caller.contains(msg) {
                 caller.push(msg.clone());
             }
@@ -899,6 +1219,7 @@ pub fn export_mesh_with_metadata(
         meta.safety_violations,
         stats.safety_summary.as_ref(),
         stats.dfam_summary.as_ref(),
+        stats.printability_summary.as_ref(),
     );
 
     let manifest = ManifestBuilder {
@@ -1113,15 +1434,207 @@ mod tests {
     }
 
     #[test]
-    fn safety_check_lol_flags_thin_plate_via_dfam() {
-        // 0.8mm 板 → FDM min unsupported wall 1.6 を割る → DfAM wall thickness Fail
-        // が "DfAM wall thickness: ..." prefix で retry loop に流れる
+    fn safety_check_lol_flags_thin_plate_via_printability_proof() {
+        // 0.8mm 板 (box3d は half extents なので厚さ 0.8mm) → FDM min unsupported
+        // wall 1.6mm を割る 2026-09-28 に肉厚の canonical source を
+        // `alice_sdf::validity` に移したので prefix は "Printability wall thickness:"
+        //
+        // oracle: erosion は `Round { radius: -0.8 }` = d(p) + 0.8 が全域で正
+        // (板の半厚 0.4mm < 0.8mm) なので残る材料なし = EntirelyTooThin を証明できる
         let violations = safety_check_lol("box3d(15.0, 15.0, 0.4)");
         assert!(
             violations
                 .iter()
+                .any(|v| v.starts_with("Printability wall thickness:")),
+            "expected Printability wall thickness violation, got {violations:?}"
+        );
+        assert!(
+            !violations
+                .iter()
                 .any(|v| v.starts_with("DfAM wall thickness:")),
-            "expected DfAM wall thickness violation, got {violations:?}"
+            "肉厚は証明側が canonical、DfAM 側は retry に流さない: {violations:?}"
+        );
+    }
+
+    /// 厚い球は肉厚も連結性も **証明付き** 合格になる (未決定に倒れない)
+    ///
+    /// oracle: `sphere(10)` を 1.6mm erode しても半径 9.2mm の球が残るので
+    /// 「1.6mm 以上の肉厚を持つ領域がある」は八分木で必ず証明できる
+    #[test]
+    fn printability_proves_a_thick_sphere() {
+        let sdf = alice_bamboo::lol_to_sdf("sphere(10.0)").expect("parse");
+        let b = Vec3::splat(12.0);
+        let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
+        let p = printability_summary(&sdf, &mesh, -b, b);
+        assert_eq!(p.erosion, ProofVerdict::Proved, "notes: {:?}", p.notes);
+        assert_eq!(p.connectivity, ProofVerdict::Proved, "notes: {:?}", p.notes);
+        assert_eq!(p.thin_triangles, 0);
+        assert!(p.fail_messages.is_empty(), "{:?}", p.fail_messages);
+        assert!(p.ok);
+    }
+
+    /// 離れた 2 球は「到達不能」を証明して retry に流れる (= 印刷すると分解する)
+    ///
+    /// oracle: 中心間 40mm / 半径 5mm なので間に 30mm の空隙があり、内部と
+    /// 確定したセルだけでは到達できず、外部と確定していないセルを全部使っても
+    /// 繋がらない
+    #[test]
+    fn printability_detects_two_disconnected_solids() {
+        let lol = "union(translate(-20, 0, 0, sphere(5.0)), translate(20, 0, 0, sphere(5.0)))";
+        let sdf = alice_bamboo::lol_to_sdf(lol).expect("parse");
+        let (bmin, bmax) = (Vec3::new(-27.0, -7.0, -7.0), Vec3::new(27.0, 7.0, 7.0));
+        let mesh = generate_mesh(&sdf, bmin, bmax, Quality::Preview, false);
+        let p = printability_summary(&sdf, &mesh, bmin, bmax);
+        assert_eq!(
+            p.connectivity,
+            ProofVerdict::Violated,
+            "notes: {:?}",
+            p.notes
+        );
+        assert!(
+            p.fail_messages
+                .iter()
+                .any(|m| m.starts_with("Printability connectivity:")),
+            "{:?}",
+            p.fail_messages
+        );
+        assert!(!p.ok);
+    }
+
+    /// 繋がった 2 球は連結性が合格 (上の test と同じ形で距離だけ変えた対照)
+    ///
+    /// 同じ `union` でも重なっていれば 1 つなので、検出が「union を見たら違反」
+    /// ではなく実際の到達性を見ていることを押さえる
+    #[test]
+    fn printability_accepts_two_overlapping_solids() {
+        let lol = "union(translate(-3, 0, 0, sphere(5.0)), translate(3, 0, 0, sphere(5.0)))";
+        let sdf = alice_bamboo::lol_to_sdf(lol).expect("parse");
+        let b = Vec3::new(11.0, 7.0, 7.0);
+        let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
+        let p = printability_summary(&sdf, &mesh, -b, b);
+        assert_eq!(p.connectivity, ProofVerdict::Proved, "notes: {:?}", p.notes);
+        assert!(
+            !p.fail_messages
+                .iter()
+                .any(|m| m.starts_with("Printability connectivity:")),
+            "{:?}",
+            p.fail_messages
+        );
+    }
+
+    /// 内部と確定したセルが 2 個未満なら連結性は `NotRun` (勝手に合格にしない)
+    ///
+    /// `NotRun` は「形状が bound の中に無い」ような退避経路で、**薄物では出ない**
+    /// (薄板 / 5mm 殻が決着することは上の 3 本が押さえている 2026-09-28 より
+    /// 前は薄物も細物も全部ここに落ちていた)
+    #[test]
+    fn connectivity_is_not_run_without_two_interior_cells() {
+        // bound の外にある球 = どのセルも内部と確定しない
+        let sdf = alice_bamboo::lol_to_sdf("translate(1000, 0, 0, sphere(1.0))").expect("parse");
+        let (verdict, _, _) = connectivity_verdict(&sdf, Vec3::splat(-5.0), Vec3::splat(5.0));
+        assert_eq!(verdict, ProofVerdict::NotRun);
+    }
+
+    /// 三値のうち **`Proved` だけ** が合格 (未決定 / 未実施を合格にしない)
+    ///
+    /// `ok` の組み立てが将来 `fail_messages.is_empty()` だけに単純化されると
+    /// 「検証器が決められなかった」が「問題なし」に化ける ここは型で守れない
+    /// ので 4 variant を列挙して固定する
+    #[test]
+    fn only_proved_verdicts_are_acceptable() {
+        assert!(ProofVerdict::Proved.is_proved());
+        assert!(!ProofVerdict::Violated.is_proved());
+        assert!(!ProofVerdict::Undecided.is_proved());
+        assert!(!ProofVerdict::NotRun.is_proved());
+    }
+
+    /// fail が 1 つも無くても、証明が揃わなければ合格にしない
+    ///
+    /// oracle: 肉厚 2.0mm の球殻 (`sphere(10) - sphere(8)`) は min_wall 1.6mm を
+    /// 上回るので薄い三角形は 0 枚、連結性も `Proved` それでも erosion の大域
+    /// 判定は octree 深さ 6 では決着せず `Undecided` で残る (2026-09-28 実測の
+    /// 境界: 2.5mm → `Proved` / 2.0mm → 未決定で fail 0 件 / 1.6mm → 薄い三角形
+    /// 59,024 枚で違反)
+    ///
+    /// 「探索で見つからなかった」を合格に繰り上げないことが本 judge の要点なので、
+    /// **fail が空 かつ `ok == false` かつ notes で理由が出る** をここで固定する
+    /// erosion の深さを上げてこの形状が `Proved` になったら本 test は red になる
+    /// (その時は境界となる別の肉厚に付け替える)
+    #[test]
+    fn undecided_proof_is_not_promoted_to_ok() {
+        let sdf = alice_bamboo::lol_to_sdf("subtract(sphere(10.0), sphere(8.0))").expect("parse");
+        let b = Vec3::splat(12.0);
+        let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
+        let p = printability_summary(&sdf, &mesh, -b, b);
+        assert_eq!(p.erosion, ProofVerdict::Undecided, "notes: {:?}", p.notes);
+        assert_eq!(p.thin_triangles, 0);
+        assert_eq!(p.connectivity, ProofVerdict::Proved, "notes: {:?}", p.notes);
+        assert!(
+            p.fail_messages.is_empty(),
+            "この形状は fail が出ない前提: {:?}",
+            p.fail_messages
+        );
+        assert!(!p.ok, "未決定を合格に繰り上げてはいけない");
+        assert!(
+            p.notes.iter().any(|n| n.contains("未決定")),
+            "未決定の理由が surface されていない: {:?}",
+            p.notes
+        );
+    }
+
+    /// 離れた 2 枚の**薄板**は「到達不能」を証明する (分離検出は薄物でこそ要る)
+    ///
+    /// oracle: 板は Z 厚 0.8mm (`box3d` の Z half extent 0.4)、X は
+    /// `[-30, -10]` と `[10, 30]` で間に 20mm の空隙 空隙のセルは外部と確定
+    /// するので内部確定セルだけでは届かず、外部と確定していないセルを全部
+    /// 使っても届かない
+    ///
+    /// 2026-09-28 の穴: 端点を「bound 全体のセル**対角**より深い格子点」から
+    /// 選んでいたため、薄物では内部点が 0 個 → `NotRun` で判定を素通りして
+    /// いた t2p の主力形状は薄物 (DC 経路 = 5mm 以下、SKADIS panel / coin)
+    /// なので、そこで judge が動かないと分離検出に意味がない
+    #[test]
+    fn printability_detects_two_separate_thin_plates() {
+        let lol = "union(translate(-20, 0, 0, box3d(10.0, 10.0, 0.4)), translate(20, 0, 0, box3d(10.0, 10.0, 0.4)))";
+        let sdf = alice_bamboo::lol_to_sdf(lol).expect("parse");
+        let (bmin, bmax) = (Vec3::new(-32.0, -12.0, -2.0), Vec3::new(32.0, 12.0, 2.0));
+        let (verdict, cells, res) = connectivity_verdict(&sdf, bmin, bmax);
+        assert_eq!(
+            verdict,
+            ProofVerdict::Violated,
+            "薄板 2 枚の分離が検出できていない (未決定セル {cells}, 解像度 {res})"
+        );
+    }
+
+    /// 1 枚の薄板は連結性が決着して合格 (上と同じ厚さ、離していないだけが差)
+    ///
+    /// 「薄いと必ず未実施」でも「union を見たら違反」でもないことを押さえる
+    #[test]
+    fn printability_proves_a_single_thin_plate_is_connected() {
+        let sdf = alice_bamboo::lol_to_sdf("box3d(15.0, 15.0, 0.4)").expect("parse");
+        let (bmin, bmax) = (Vec3::new(-17.0, -17.0, -2.0), Vec3::new(17.0, 17.0, 2.0));
+        let (verdict, cells, res) = connectivity_verdict(&sdf, bmin, bmax);
+        assert_eq!(
+            verdict,
+            ProofVerdict::Proved,
+            "1 枚板の連結性が決着していない (未決定セル {cells}, 解像度 {res})"
+        );
+    }
+
+    /// 肉厚 5mm の殻も連結性が決着する
+    ///
+    /// oracle: `sphere(12) - sphere(7)` は肉厚 5mm の球殻で、殻は 1 つに
+    /// 繋がっている 2026-09-28 実測ではここも `NotRun` だった (殻の内部深さ
+    /// 2.5mm < bound セル対角 3.0mm) = 判定不能は薄物だけの問題ではなかった
+    #[test]
+    fn printability_proves_a_5mm_shell_is_connected() {
+        let sdf = alice_bamboo::lol_to_sdf("subtract(sphere(12.0), sphere(7.0))").expect("parse");
+        let b = Vec3::splat(14.0);
+        let (verdict, cells, res) = connectivity_verdict(&sdf, -b, b);
+        assert_eq!(
+            verdict,
+            ProofVerdict::Proved,
+            "5mm 殻の連結性が決着していない (未決定セル {cells}, 解像度 {res})"
         );
     }
 
@@ -1143,7 +1656,8 @@ mod tests {
     fn retryable_dfam_checks_exclude_bridge_and_advisories() {
         use alice_bamboo::dfam::Check;
         assert!(!is_retryable_dfam_check(Check::Watertight));
-        assert!(is_retryable_dfam_check(Check::WallThickness));
+        // 肉厚は証明ベース側 (`printability_summary`) が canonical source
+        assert!(!is_retryable_dfam_check(Check::WallThickness));
         assert!(is_retryable_dfam_check(Check::PositiveFeature));
         assert!(is_retryable_dfam_check(Check::HoleDiameter));
         assert!(!is_retryable_dfam_check(Check::Bridge));
@@ -1168,7 +1682,7 @@ mod tests {
             ],
             orientation_hint: None,
         };
-        let merged = merge_safety_violations(caller, None, Some(&dfam));
+        let merged = merge_safety_violations(caller, None, Some(&dfam), None);
         assert_eq!(
             merged,
             vec![
@@ -1176,6 +1690,26 @@ mod tests {
                 "DfAM wall thickness: p05 wall 0.90 mm".to_string()
             ]
         );
+    }
+
+    /// 証明ベース側の fail も manifest の `safety_violations` に載る
+    /// (LoRA 共有の品質シグナルに「証明で落ちた」情報を残す)
+    #[test]
+    fn merge_safety_violations_appends_printability_fails() {
+        let p = PrintabilitySummary {
+            ok: false,
+            min_wall_mm: 1.6,
+            erosion: ProofVerdict::Violated,
+            min_local_thickness_mm: Some(0.8),
+            thin_triangles: 12,
+            connectivity: ProofVerdict::Proved,
+            max_overhang_deg: 90.0,
+            overhang_triangles: 4,
+            fail_messages: vec!["Printability wall thickness: ...".to_string()],
+            notes: vec!["ここは note なので merge しない".to_string()],
+        };
+        let merged = merge_safety_violations(vec![], None, None, Some(&p));
+        assert_eq!(merged, vec!["Printability wall thickness: ...".to_string()]);
     }
 
     #[test]
@@ -1359,7 +1893,7 @@ mod tests {
     #[test]
     fn merge_safety_violations_none_summary_passthrough() {
         let caller = vec!["llm_retry_over_65deg".to_string()];
-        let merged = merge_safety_violations(caller.clone(), None, None);
+        let merged = merge_safety_violations(caller.clone(), None, None, None);
         assert_eq!(merged, caller);
     }
 
@@ -1367,7 +1901,7 @@ mod tests {
     fn merge_safety_violations_safe_summary_passthrough() {
         let caller = vec!["llm_retry_over_65deg".to_string()];
         let sum = safety_summary(true, vec!["ignored_because_safe".to_string()]);
-        let merged = merge_safety_violations(caller.clone(), Some(&sum), None);
+        let merged = merge_safety_violations(caller.clone(), Some(&sum), None, None);
         assert_eq!(merged, caller, "is_safe=true 時は messages を merge しない");
     }
 
@@ -1381,7 +1915,7 @@ mod tests {
                 "thin_wall_below_0.8mm".to_string(),
             ],
         );
-        let merged = merge_safety_violations(caller, Some(&sum), None);
+        let merged = merge_safety_violations(caller, Some(&sum), None, None);
         assert_eq!(merged.len(), 3);
         assert!(merged.contains(&"llm_retry_over_65deg".to_string()));
         assert!(merged.contains(&"warp_high_risk".to_string()));
@@ -1398,7 +1932,7 @@ mod tests {
                 "thin_wall_below_0.8mm".to_string(),
             ],
         );
-        let merged = merge_safety_violations(caller, Some(&sum), None);
+        let merged = merge_safety_violations(caller, Some(&sum), None, None);
         assert_eq!(
             merged.len(),
             2,

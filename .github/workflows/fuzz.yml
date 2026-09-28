@@ -2,6 +2,10 @@ name: Fuzz
 
 # canonical CI template: [[reference_alice_ci_canonical_template]]
 # text-to-print 3 target: license base64 / manifest JSON / sha256 hex
+#
+# 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
+# ci.yml と同じ実 sibling checkout に統一 stub は空 lib だったので fuzz が
+# 実 dep 木を一度も build していなかった (ALICE-LOL a6ba9f7 と同じ置換)
 
 on:
   push:
@@ -10,14 +14,12 @@ on:
       - '**/src/**'
       - 'fuzz/**'
       - '.github/workflows/fuzz.yml'
-      - '.github/actions/**'
   pull_request:
     branches: [main]
     paths:
       - '**/src/**'
       - 'fuzz/**'
       - '.github/workflows/fuzz.yml'
-      - '.github/actions/**'
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -47,18 +49,60 @@ jobs:
           - fuzz_license_key_base64
           - fuzz_manifest_json
           - fuzz_sha256_hex
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
+      # Real siblings, same layout as ci.yml (8 repo: 6 public + Bamboo / Print
+      # private via ALICE_ECO_TOKEN)
       - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: fuzz
+          workspaces: text-to-print/fuzz
 
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
+      # fuzz target は text-to-print-core (keyring → libdbus-sys) を link する
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
@@ -80,9 +124,9 @@ jobs:
 
       - name: Upload crash artifacts (if any)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-crash-${{ matrix.target }}
-          path: fuzz/artifacts/${{ matrix.target }}
+          path: text-to-print/fuzz/artifacts/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 14

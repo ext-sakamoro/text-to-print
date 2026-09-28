@@ -137,7 +137,7 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 | **3MF (MakerWorld 対応)** | `alice_bamboo::bambu_3mf::export_bambu_3mf` (template embed、12-file zip、Phase 5.7) | Bambu Lab AMS / MakerWorld 直接 upload | 標準 FDM 印刷 |
 | **STL** | `alice_bamboo::print_export::lol_to_stl` (Stage 4 集約後) | 任意の slicer | Legacy pipelines |
 | **FBX** | `alice_bamboo::print_export::lol_to_fbx` (Stage 4 集約後) | 3D animation / game engines | 印刷以外の交換用途 |
-| **STEP** | `alice_sdf::io::step::export_step` | Fusion 360 / FreeCAD / SolidWorks | CAD 編集 round-trip |
+| **STEP** | `alice_sdf::io::step::export_step` (AP214 faceted BREP、構造は読み戻し oracle で検証済、**実 CAD での import は未検証**) | Fusion 360 / FreeCAD / SolidWorks | CAD 編集 round-trip |
 | **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | 直接印刷 | Bambu Studio 不要 |
 | **3MF (4色)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
 
@@ -148,7 +148,7 @@ period 経過で Free tier に自動 rollback Backend は Cloudflare Workers 無
 
 ```bash
 cargo build --release -p text-to-print-core --bin ttp
-ttp check    --lol part.lol                                  # safety + DfAM findings + 向きヒント
+ttp check    --lol part.lol                                  # 印刷可能性の証明 + safety + DfAM findings + 向きヒント
 ttp export   --lol part.lol --out ./out --format 3mf         # 3mf | stl | fbx | step | gcode
 ttp validate --gcode ./out/<id>.gcode --bed h2d              # 機械の移動限界に対する G-code 静的検証
 ```

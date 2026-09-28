@@ -18,7 +18,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use text_to_print_core::pipeline::{
-    DfamSummary, ExportFormat, MeshStats, Quality, export_mesh, safety_check_lol,
+    DfamSummary, ExportFormat, MeshStats, PrintabilitySummary, Quality, export_mesh,
+    safety_check_lol,
 };
 
 fn main() -> ExitCode {
@@ -128,11 +129,18 @@ fn cmd_check(args: &[String]) -> Result<ExitCode, String> {
     let stats = stats.map_err(|e| format!("{e:#}"))?;
 
     let dfam_ok = stats.dfam_summary.as_ref().is_none_or(|d| d.ok);
-    let ok = violations.is_empty() && dfam_ok;
+    // 証明ベース側は「未決定」も ok=false (合格に繰り上げない) ただし exit code を
+    // 落とすのは fail_messages があるときだけ — 未決定は notes で伝える
+    let printability_failed = stats
+        .printability_summary
+        .as_ref()
+        .is_some_and(|p| !p.fail_messages.is_empty());
+    let ok = violations.is_empty() && dfam_ok && !printability_failed;
     let json = serde_json::json!({
         "ok": ok,
         "safety_violations": violations,
         "dfam": stats.dfam_summary.as_ref().map(dfam_json),
+        "printability": stats.printability_summary.as_ref().map(printability_json),
         "overhang_ratio": stats.overhang_summary.as_ref().map(|o| o.overhang_ratio),
         "vertex_count": stats.vertex_count,
         "triangle_count": stats.triangle_count,
@@ -184,11 +192,28 @@ fn stats_json(stats: &MeshStats) -> serde_json::Value {
             "messages": s.messages,
         })),
         "dfam": stats.dfam_summary.as_ref().map(dfam_json),
+        "printability": stats.printability_summary.as_ref().map(printability_json),
         "slice": stats.slice_summary.map(|s| serde_json::json!({
             "layer_count": s.layer_count,
             "filament_meters": s.filament_meters,
             "print_time_seconds": s.print_time_seconds,
         })),
+    })
+}
+
+/// 証明ベースの印刷可能性判定 (三値なので合格 / 違反 / 未決定を潰さず出す)
+fn printability_json(p: &PrintabilitySummary) -> serde_json::Value {
+    serde_json::json!({
+        "ok": p.ok,
+        "min_wall_mm": p.min_wall_mm,
+        "erosion": p.erosion.slug(),
+        "min_local_thickness_mm": p.min_local_thickness_mm,
+        "thin_triangles": p.thin_triangles,
+        "connectivity": p.connectivity.slug(),
+        "max_overhang_deg": p.max_overhang_deg,
+        "overhang_triangles": p.overhang_triangles,
+        "fail_messages": p.fail_messages,
+        "notes": p.notes,
     })
 }
 

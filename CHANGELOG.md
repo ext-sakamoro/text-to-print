@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+### Fixed
+- **連結性の判定が実際には走っていなかった** (`printability_summary` の端点選び、2026-09-28 実測) 内部点を「bound 全体のセル**対角**より深い格子点」という等方の距離基準で選んでいたため、Z 厚 0.8mm の板でも**肉厚 5mm の球殻でも**端点が 0 個になり `not_run` で素通りしていた t2p の主力形状は薄物 (DC 経路 = 5mm 以下、SKADIS panel / coin) なので、2 つに分かれた造形物の検出が主力形状で機能していない状態だった 端点を判定器と同じ基準 (`alice_sdf::interval::eval_interval` でセル全体が内部と確定したセルの中心、非等方セルでもそのまま効く) で選ぶよう変更し、薄板 2 枚の分離が `violated`、1 枚板と 5mm 殻が `proved` に決着することを oracle で固定 判定時間も短縮 (該当 test 3.55s → 1.77s)
+- **STEP export が STEP として成立していなかった** (sibling `alice-sdf` `762b04c` で修正、本 repo は path dep なので追従のみ) 未定義の `#0` を参照する file を書いていたため、**v0.1.0-beta.4 まで `ttp export --format step` / UI の STEP 出力はどの CAD でも開けなかった** 併せて `crates/core/tests/e2e_pipeline.rs` に t2p 側の回帰 test を追加 (1 回の export に 3 つの oracle: 未定義参照 0 件 / AP214 の必須 root 4 つ / **頂点が半径 10mm の球面に乗る** — 独立実装 (python 再パース) の実測 max |r − 10| = 0.0006mm に対し許容 0.05mm) detector が vacuous でないことを確かめる注入 test も別に置いた
+- **`Cargo.lock` が sibling の現状から遅れていた** — `alice-physics` が `alice-det-math` 0.3.1 に上がっているのを取り込み (`alice-sdf` は 0.2.0 のままなので 2 version 併存、`bans.multiple-versions = "warn"`) `fuzz/Cargo.lock` も同期
+
+### Changed
+- **肉厚と連結性の判定を証明ベースに移した** (`alice_sdf::validity` + `alice_bamboo::law`、新 `PrintabilitySummary`) DfAM (`alice_bamboo::dfam`) の壁厚は mesh 頂点からのレイキャスト標本 p05 なので、標本の隙間にある薄壁を「見つからなかった = 合格」にできる 同じ量を 2 つの source で判定すると緩い側に倒れるため canonical source を 1 つに寄せた
+  - 肉厚: erosion (`Round { radius: -t/2 }` は SDF では厳密) の区間演算による**証明** + 三角形ごとの内向き march による**厳密な**局所肉厚 三値 (`proved` / `violated` / `undecided`) で、`undecided` を合格に繰り上げない
+  - 連結性: `Constraint::Reachable` で「最も離れた内部 2 点が繋がっているか」= **2 つに分かれた造形物の検出** (印刷すると分解する) 解像度依存なので 16 → 32 と上げて未決定が消えるかを見る (ALICE-LOL 実装者の助言、2026-09-28)
+  - retry loop: `DfAM wall thickness` を retry trigger から外し、`Printability wall thickness:` / `Printability connectivity:` を追加 `SafetyViolationKind::Disconnected` 新設 (directive = union で 1mm 以上重ねる / 連結バーを足す)
+  - UI (Generate 画面) / `ttp check` / `ttp export` JSON / manifest `safety_violations` に `printability` を追加 overhang 角は閉形式で記録するが判定には使わない (曲面形状で常時発火するため)
+- **CI: `alice-stubs` (manifest-only stub) を廃止して実 sibling checkout に統一** (`security-audit.yml` 4 job / `fuzz.yml`) stub は AGPL の `alice-bamboo` / `alice-physics` / `alice-llm` を `license = "MIT OR Apache-2.0"` の空 crate として申告していたので、`deny.toml` の `licenses.exceptions` 4 件が **CI では一度も評価されず**、`alice-print` / `alice-lol` とその transitive 依存も dep 木から消えていた (ALICE-LOL `a6ba9f7` / Physics `3472768` と同じ置換)
+- **CI: node20 runtime の action を更新** — `actions/upload-artifact@v4` → v6 (6 箇所) / `download-artifact@v4` → v7 / `softprops/action-gh-release@v2` → v3 GitHub の node20 削除 (2026-09-23) で release workflow が落ちる前に追従 sibling は既に対応済 (SDF `ea09e88` / LOL `fbcc63a` / Bamboo `433ff59`)
+
+### Added
+- **証明の三値を share payload に載せた** (`quality.printability`、schema v1 に optional 追加) `erosion` / `connectivity` / `thin_triangles` / `min_local_thickness_mm` / `notes` を上げる `safety_violations` は未決定を表現できない (未決定は violation message を出さない) ので、受け手の LoRA 学習が「検証していない形状」を「合格した形状」として扱わないよう三値のまま渡す `quality.required` には入れないため、proof pass を通らない export 経路と 2026-09-28 より前の client が書いた payload も従来通り受ける (`ok` は送らない — bool 1 個に畳むと未決定と違反の区別が失われる)
+- **判定の oracle 7 本** (`pipeline.rs` / `network/src/share.rs` / `network/tests/share_schema.rs`) — 薄板 2 枚の分離検出 / 1 枚板と 5mm 殻の決着 / **fail が 1 件も出ない形状 (肉厚 2.0mm の殻) で `ok` が false になること** / 三値のうち `proved` だけが合格であること / 三値が wire を往復して畳まれないこと / 未知の verdict を schema が弾くこと / printability 無しでも schema conform すること 実測した境界は 2.5mm → `proved` / 2.0mm → `undecided` で fail 0 件 / 1.6mm → 薄い三角形 59,024 枚で `violated`
+- **`actionlint` job** (`ci.yml`) — 上記 node20 逸脱を push 時点で検知できていなかったので追加 (canonical: ALICE-LOL / ALICE-SDF)
+- **`quality-deep.yml`** (`cargo-mutants`、canonical: ALICE-Physics / ALICE-LOL) — 判定の核 (`printability_summary` / `connectivity_verdict` / `should_use_dual_contouring` / `from_message` 等) の**検出力**を測り、生存変異 0 を gate にする 週次 + 該当 file を触った PR + 手動 測定結果 file が無い / 形式が想定外なら fail (「見つからない」を「問題なし」に読み替えない)
+
 ### Security
 - rustls 0.23.43 → 0.23.45 (RUSTSEC-2026-0285、TLS 1.3 handshake message encryption level 境界) `cargo update -p rustls`
 - `deny.toml` を real sibling 依存木で green に: ALICE-* sibling 4 crate (alice-physics / alice-llm AGPL、alice-bamboo AGPL-3.0-only、alice-print proprietary) を `licenses.exceptions` で限定許可、bincode 1.3 unmaintained (RUSTSEC-2025-0141、`.cargo/audit.toml` と同期) を ignore

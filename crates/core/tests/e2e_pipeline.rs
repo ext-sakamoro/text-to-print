@@ -226,6 +226,214 @@ fn exported_3mf_is_watertight() {
     assert_eq!(non_manifold, 0, "非多様体エッジ {non_manifold} 本");
 }
 
+/// STEP (ISO 10303-21) の DATA section を `#id → (entity 名, 引数)` に読み戻す
+///
+/// `export_step` の出力を **独立に**パースするための最小実装 record は
+/// `#12=ADVANCED_FACE('',(#11),#10,.T.);` の形なので `;` 区切りで拾う
+fn read_step_entities(path: &str) -> std::collections::HashMap<u64, (String, String)> {
+    let text = std::fs::read_to_string(path).expect("read step");
+    parse_step_entities(&text)
+}
+
+/// [`read_step_entities`] の本体 (text から parse、detector 自体の test で再利用)
+fn parse_step_entities(text: &str) -> std::collections::HashMap<u64, (String, String)> {
+    assert!(
+        text.starts_with("ISO-10303-21;"),
+        "ISO-10303-21 の magic で始まっていない"
+    );
+    assert!(
+        text.trim_end().ends_with("END-ISO-10303-21;"),
+        "END-ISO-10303-21 で終わっていない"
+    );
+    let data = text
+        .split_once("DATA;")
+        .expect("DATA section が無い")
+        .1
+        .split_once("ENDSEC;")
+        .expect("DATA の ENDSEC が無い")
+        .0;
+
+    let mut out = std::collections::HashMap::new();
+    for record in data.split(';') {
+        let record = record.trim();
+        let Some(body) = record.strip_prefix('#') else {
+            continue;
+        };
+        let Some((id, rhs)) = body.split_once('=') else {
+            continue;
+        };
+        let Ok(id) = id.trim().parse::<u64>() else {
+            continue;
+        };
+        // 閉じ括弧は 1 個だけ落とす (`trim_end_matches` だと
+        // `CARTESIAN_POINT('',(0.0,0.0,0.0))` の内側の `)` まで剥がれる)
+        let (name, args) = rhs
+            .trim()
+            .split_once('(')
+            .map_or((rhs.trim(), ""), |(n, a)| {
+                (n, a.strip_suffix(')').unwrap_or(a))
+            });
+        out.insert(id, (name.trim().to_string(), args.to_string()));
+    }
+    out
+}
+
+/// 引数文字列に現れる `#N` 参照を全部拾う
+fn step_refs(args: &str) -> Vec<u64> {
+    let mut out = Vec::new();
+    let bytes = args.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'#' {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end > start
+                && let Ok(n) = args[start..end].parse::<u64>()
+            {
+                out.push(n);
+            }
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// 定義されていない `#N` を参照している record を列挙する
+fn step_dangling_refs(entities: &std::collections::HashMap<u64, (String, String)>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (id, (name, args)) in entities {
+        for r in step_refs(args) {
+            if !entities.contains_key(&r) {
+                out.push(format!("#{id}={name} が #{r} を参照 (未定義)"));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `CARTESIAN_POINT('',(x,y,z))` の座標を読む
+fn step_point(args: &str) -> Option<[f64; 3]> {
+    let tuple = args.split_once('(')?.1;
+    let tuple = tuple.split_once(')')?.0;
+    let mut it = tuple.split(',').map(|v| v.trim().parse::<f64>());
+    match (it.next(), it.next(), it.next()) {
+        (Some(Ok(x)), Some(Ok(y)), Some(Ok(z))) => Some([x, y, z]),
+        _ => None,
+    }
+}
+
+/// STEP 出力が (1) 未定義参照なし (2) AP214 の必須 root あり (3) 頂点が解析解の
+/// 球面に乗っている ことを 1 回の export で確認する
+///
+/// ALICE-SDF 側は `762b04c` まで未定義の `#0` を参照する file を書いていて
+/// (= どの CAD でも開けない)、text-to-print の `ttp export --format step` は
+/// そのまま壊れた file を出していた 本 test は t2p の pipeline 配線
+/// (`StepConfig` の bounds / resolution) 経由で同じ破れを検出する
+///
+/// Preview 品質の `sphere(10)` STEP は 55 MB / 71,672 面あるので export は
+/// 1 回だけ回して 3 つの oracle を同じ file に当てる
+#[test]
+fn exported_step_is_a_sound_brep_of_the_analytic_sphere() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let lol = pipeline::extract_lol(MOCK_LLM_RESPONSE).expect("extract");
+    let stats = pipeline::export_mesh(&lol, dir.path(), ExportFormat::Step, Quality::Preview)
+        .expect("STEP export should succeed");
+    assert!(stats.path.ends_with(".step"), "出力が .step でない");
+
+    let entities = read_step_entities(&stats.path);
+    assert!(!entities.is_empty(), "DATA section にレコードが無い");
+
+    // (1) 未定義参照 0 件 (検出力は
+    //     `step_dangling_ref_detector_catches_an_injected_fault` で別途確認)
+    let dangling = step_dangling_refs(&entities);
+    assert!(
+        dangling.is_empty(),
+        "解決できない参照 {} 件:\n{}",
+        dangling.len(),
+        dangling
+            .iter()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    // (2) solid として成立する root
+    for root in [
+        "CLOSED_SHELL",
+        "MANIFOLD_SOLID_BREP",
+        "ADVANCED_BREP_SHAPE_REPRESENTATION",
+        "SHAPE_DEFINITION_REPRESENTATION",
+    ] {
+        assert!(
+            entities.values().any(|(name, _)| name == root),
+            "{root} が STEP に無い"
+        );
+    }
+
+    // (3) VERTEX_POINT が指す CARTESIAN_POINT だけを見る (原点 / 軸の定義点は除外)
+    // t2p は `StepConfig.bounds` を tight AABB ± 1mm、resolution を `Quality` から
+    // 決めて渡す 配線が狂うと solid が clip / ずれるが「file として成立している」
+    // だけの assert では検出できない
+    let radii: Vec<f64> = entities
+        .values()
+        .filter(|(name, _)| name == "VERTEX_POINT")
+        .filter_map(|(_, args)| step_refs(args).first().copied())
+        .filter_map(|pid| entities.get(&pid))
+        .filter(|(name, _)| name == "CARTESIAN_POINT")
+        .filter_map(|(_, args)| step_point(args))
+        .map(|[x, y, z]| (x * x + y * y + z * z).sqrt())
+        .collect();
+    assert!(
+        radii.len() > 100,
+        "VERTEX_POINT が {} 個しかない = tessellation が走っていない",
+        radii.len()
+    );
+
+    // oracle: 半径 10mm の球面 marching cubes の頂点は線形補間で表面に乗る
+    // 独立実装 (python で同 file を再パース) の実測は max |r − 10| = 0.0006mm
+    // なので 0.05mm は 80 倍の余裕がある = 乖離したら bounds / scale の配線ずれ
+    let worst = radii
+        .iter()
+        .copied()
+        .fold(0.0_f64, |acc, r| acc.max((r - 10.0).abs()));
+    assert!(
+        worst < 0.05,
+        "頂点の球面からの乖離 最大 {worst:.4}mm (許容 0.05mm) = bounds / scale の配線ずれ"
+    );
+}
+
+/// detector 自体の検出力 — 未定義参照を 1 個注入したら必ず落ちること
+///
+/// 「未定義参照 0 件」の assert は parser が何も読めていなくても通る (vacuous)
+/// ので、欠陥を注入して実際に検出されるかを別に確かめる
+#[test]
+fn step_dangling_ref_detector_catches_an_injected_fault() {
+    let sound = "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n\
+        #1=CARTESIAN_POINT('',(0.0,0.0,0.0));\n\
+        #2=VERTEX_POINT('',#1);\n\
+        ENDSEC;\nEND-ISO-10303-21;\n";
+    assert!(
+        step_dangling_refs(&parse_step_entities(sound)).is_empty(),
+        "健全な STEP で誤検出した"
+    );
+
+    let broken = sound.replace("VERTEX_POINT('',#1)", "VERTEX_POINT('',#0)");
+    let hits = step_dangling_refs(&parse_step_entities(&broken));
+    assert_eq!(
+        hits.len(),
+        1,
+        "未定義 #0 を注入したのに検出されなかった: {hits:?}"
+    );
+}
+
 #[test]
 fn raw_response_without_fence_falls_through_extract_lol() {
     // `extract_lol` returns None; the app path treats the raw response

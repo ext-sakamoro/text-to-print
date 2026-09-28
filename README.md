@@ -141,7 +141,7 @@ email delivery via Resend All Rust
 | **3MF (MakerWorld compatible)** | `alice_bamboo::bambu_3mf::export_bambu_3mf` (template embed, 12-file zip, Phase 5.7) | Bambu Lab AMS / MakerWorld direct upload | Standard FDM print |
 | **STL** | `alice_bamboo::print_export::lol_to_stl` (post Stage 4 consolidation) | Any slicer | Legacy pipelines |
 | **FBX** | `alice_bamboo::print_export::lol_to_fbx` (post Stage 4 consolidation) | 3D animation / game engines | Non-print exchange |
-| **STEP** | `alice_sdf::io::step::export_step` | Fusion 360 / FreeCAD / SolidWorks | CAD editing round-trip |
+| **STEP** | `alice_sdf::io::step::export_step` (AP214 faceted BREP, structure verified by a read-back oracle; **real CAD import unverified**) | Fusion 360 / FreeCAD / SolidWorks | CAD editing round-trip |
 | **G-code** | `alice_print::slice_sdf` (Bambu preset, Marlin flavor) | Direct-to-printer | Skip Bambu Studio |
 | **3MF (4-color)** | `alice_bamboo::color4::quantize_to_4color` | Bambu Lab AMS 4-filament | Multi-color print |
 
@@ -152,7 +152,7 @@ and `skills/text-to-print/SKILL.md` teaches Claude Code / Codex to drive it:
 
 ```bash
 cargo build --release -p text-to-print-core --bin ttp
-ttp check    --lol part.lol                                  # safety + DfAM findings + orientation hint
+ttp check    --lol part.lol                                  # printability proof + safety + DfAM findings + orientation hint
 ttp export   --lol part.lol --out ./out --format 3mf         # 3mf | stl | fbx | step | gcode
 ttp validate --gcode ./out/<id>.gcode --bed h2d              # static G-code check vs machine bounds
 ```

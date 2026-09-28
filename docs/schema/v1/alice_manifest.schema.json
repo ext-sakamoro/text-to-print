@@ -102,7 +102,37 @@
           "enum": ["3mf", "stl", "obj", "fbx", "step", "gcode"]
         },
         "user_kept": { "type": "boolean" },
-        "user_edited": { "type": "boolean" }
+        "user_edited": { "type": "boolean" },
+        "printability": {
+          "description": "Proof-based printability verdicts. Optional: absent when the export path skipped the proof pass, or when written by a client older than 2026-09-28. A verdict that is neither 'proved' nor 'violated' means unverified, not passing.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["erosion", "connectivity", "thin_triangles"],
+          "properties": {
+            "erosion": {
+              "description": "Global wall-thickness proof (erosion)",
+              "enum": ["proved", "violated", "undecided", "not_run"]
+            },
+            "connectivity": {
+              "description": "2-point reachability proof (is the solid one piece)",
+              "enum": ["proved", "violated", "undecided", "not_run"]
+            },
+            "thin_triangles": {
+              "description": "Triangles whose exact local thickness is under the process minimum",
+              "type": "integer",
+              "minimum": 0
+            },
+            "min_local_thickness_mm": {
+              "description": "Smallest exact local thickness found, in mm",
+              "type": ["number", "null"]
+            },
+            "notes": {
+              "description": "Why a verdict stayed undecided or was not run — never a pass reason",
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "environment": {

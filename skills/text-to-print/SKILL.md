@@ -42,12 +42,26 @@ export PATH="$PWD/target/release:$PATH"
    ttp check --lol part.lol
    ```
 
-   Read `dfam.findings` in severity order (watertight → scale → wall →
-   feature → hole → bridge → support). Exit code 3 means at least one `fail`
-   or a safety violation. Treat `need more info` as "not proven", never as
-   pass. If `dfam.orientation_hint` is present, tell the user the better
-   build direction (it is a rotation to apply, not something `ttp` applies
-   for you).
+   Read `printability` first, then `dfam.findings` in severity order
+   (watertight → scale → feature → hole → bridge → support). Exit code 3
+   means at least one `fail` or a safety violation. Treat `need more info`
+   as "not proven", never as pass. If `dfam.orientation_hint` is present,
+   tell the user the better build direction (it is a rotation to apply, not
+   something `ttp` applies for you).
+
+   `printability` is the **proof-based** verdict and owns two quantities
+   outright — wall thickness and connectivity — so `dfam.findings` no longer
+   gates wall thickness. Its three-valued fields never collapse "not found"
+   into "passed":
+
+   | field | values | how to read it |
+   |---|---|---|
+   | `erosion` | `proved` / `violated` / `undecided` | `violated` = **every** part is thinner than `min_wall_mm`; `undecided` = the octree ran out of depth, which is not a pass |
+   | `min_local_thickness_mm` / `thin_triangles` | mm / count | exact per-triangle march; any `thin_triangles > 0` is a real thin wall, not a sampling artefact |
+   | `connectivity` | `proved` / `violated` / `undecided` / `not_run` | `violated` = the model is two or more separate solids and would print as loose parts; `undecided` means the grid could not resolve a passage (raise detail, do not assume it is connected) |
+
+   `fail_messages` are the retry-worthy ones; `notes` carry the undecided
+   states. Report `undecided` to the user as undecided.
 3. **Repair the LOL, not the mesh.** Each `fail` message carries the measured
    value, the cited limit and a location. Thicken walls, enlarge holes,
    shorten spans (add a rib / chamfer), then re-run `check` until no `fail`

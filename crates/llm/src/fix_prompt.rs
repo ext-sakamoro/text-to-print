@@ -45,6 +45,12 @@ pub enum SafetyViolationKind {
     HoleTooSmall,
     /// DfAM: longest unsupported downward span exceeds the process maximum
     BridgeTooLong,
+    /// Printability: the solid is two or more disconnected pieces
+    ///
+    /// Proved by `alice_bamboo::law`'s `Reachable` constraint (no path through
+    /// cells that are not provably outside), so this is not a sampling artefact
+    /// — the print really would come apart
+    Disconnected,
     /// LOL DSL failed to parse (Stage 8 syntax-fix retry hook)
     ///
     /// `safety_check_lol` surfaces `"LOL parse error: ..."` when the
@@ -68,10 +74,11 @@ impl SafetyViolationKind {
             Self::BeamOverloaded => "beam bending overload",
             Self::OverhangExcessive => "overhang exceeds budget",
             Self::NotWatertight => "mesh not watertight",
-            Self::WallTooThin => "wall too thin (DfAM)",
+            Self::WallTooThin => "wall too thin (proved)",
             Self::FeatureTooSmall => "feature too small (DfAM)",
             Self::HoleTooSmall => "hole too small (DfAM)",
             Self::BridgeTooLong => "bridge too long (DfAM)",
+            Self::Disconnected => "model is in separate pieces (proved)",
             Self::LolParseError => "LOL DSL syntax error",
         }
     }
@@ -124,6 +131,11 @@ impl SafetyViolationKind {
                  arch under the span, split it with a rib, or thicken the supporting legs so \
                  the span is shorter"
             }
+            Self::Disconnected => {
+                "The shape is two or more separate solids, so it would print as loose parts \
+                 Make the pieces overlap by at least 1 mm inside union(), or add a connecting \
+                 bar / fillet between them — every part must touch the rest of the model"
+            }
             Self::LolParseError => {
                 "The previous LOL DSL failed to parse Common mistakes to avoid:\n\
                  - Output ONE single expression only — NEVER two shapes on separate lines\n\
@@ -151,6 +163,18 @@ impl SafetyViolationKind {
         // error: ...` is the sole message when this fires)
         if lower.starts_with("lol parse error") {
             return Some(Self::LolParseError);
+        }
+        // 証明ベースの判定は "Printability {check}: ..." prefix
+        // (`text_to_print_core::pipeline::PrintabilitySummary`) 肉厚と連結性は
+        // こちらが canonical source (DfAM 側の壁厚は retry に流さない)
+        if let Some(rest) = lower.strip_prefix("printability ") {
+            return if rest.starts_with("wall thickness") {
+                Some(Self::WallTooThin)
+            } else if rest.starts_with("connectivity") {
+                Some(Self::Disconnected)
+            } else {
+                None
+            };
         }
         // DfAM findings are prefixed "DfAM {check}: ..." by
         // `text_to_print_core::pipeline::DfamSummary` (only `Fail` verdicts
@@ -306,11 +330,52 @@ mod tests {
             SafetyViolationKind::ThermalNearGlassTransition,
             SafetyViolationKind::BeamOverloaded,
             SafetyViolationKind::OverhangExcessive,
+            SafetyViolationKind::NotWatertight,
+            SafetyViolationKind::WallTooThin,
+            SafetyViolationKind::FeatureTooSmall,
+            SafetyViolationKind::HoleTooSmall,
+            SafetyViolationKind::BridgeTooLong,
+            SafetyViolationKind::Disconnected,
             SafetyViolationKind::LolParseError,
         ] {
             assert!(!k.label().is_empty());
             assert!(!k.fix_directive().is_empty());
         }
+    }
+
+    /// 証明ベース判定の prefix (`Printability ...`) が分類される
+    ///
+    /// 肉厚の canonical source を `alice_sdf::validity` に移した時 (2026-09-28)、
+    /// prefix が変わったのに classifier を直し忘れると `from_message` が `None` を
+    /// 返し、**retry の directive が空になって LLM が同じ失敗を繰り返す** ここは
+    /// 型で守れない文字列契約なので test で固定する
+    #[test]
+    fn printability_messages_are_classified() {
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "Printability wall thickness: 造形物のどこも 1.6mm 未満 (erosion で残る材料なしを証明)"
+            ),
+            Some(SafetyViolationKind::WallTooThin)
+        );
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "Printability connectivity: 造形物が 2 つ以上に分かれている (2 点間の到達不能を証明)"
+            ),
+            Some(SafetyViolationKind::Disconnected)
+        );
+        // 未知の Printability check は None (勝手に別 kind に寄せない)
+        assert_eq!(
+            SafetyViolationKind::from_message("Printability something else: ..."),
+            None
+        );
+    }
+
+    /// 分離した造形物の directive は「重ねる / 繋ぐ」を言う
+    #[test]
+    fn disconnected_directive_tells_the_model_to_join_the_pieces() {
+        let out = fix_prompt_for_violations(&[SafetyViolationKind::Disconnected]);
+        assert!(out.contains("separate solids"), "{out}");
+        assert!(out.contains("overlap"), "{out}");
     }
 
     #[test]

@@ -1,0 +1,173 @@
+name: Quality Deep
+
+# 深層品質 job (canonical: ALICE-Physics / ALICE-LOL `.github/workflows/quality-deep.yml`)
+#
+# - mutants : cargo-mutants で **判定器の核の検出力** を測る test が green でも
+#             比較演算子を 1 つ書き換えて誰も落ちないなら、その分岐は検査されて
+#             いない 生存変異 0 が gate (等価変異の除外は `.cargo/mutants.toml`
+#             に理由付きで書く)
+#
+# 対象は `--re` で **判定の核** に限定する text-to-print の src は GUI / DB /
+# ダウンローダ / sidecar を含み、file 全体を測ると (1) mutant 数が数千になり
+# runner が落ちる (2) UI 描画のように「変異しても test が落ちないのが正しい」
+# 領域まで gate に入ってしまう
+#
+# **判定を足したら `--re` にその関数名を足すこと** — 足さないと新しい判定経路は
+# 測定対象外のまま green に見える
+#
+# 罠 #22 (continue-on-error は compile error も green に潰す) に従い
+# continue-on-error は使わない measurement の exit code (2 = missed、3 =
+# timeout) は受けてから中身で判定する
+
+on:
+  schedule:
+    - cron: '0 18 * * 0' # 日曜 03:00 JST
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/core/src/pipeline.rs'
+      - 'crates/core/tests/e2e_pipeline.rs'
+      - 'crates/llm/src/fix_prompt.rs'
+      - '.cargo/mutants.toml'
+      - '.github/workflows/quality-deep.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutants:
+    name: Mutation testing (judgement core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      # ci.yml と同じ実 sibling checkout (stub では compile できない)
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+          fetch-depth: 0
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      # keyring crate は libdbus-sys 経由で libdbus-1-dev を要求
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@cargo-mutants
+
+      # `--in-place` は multi-repo layout で必須 (tree copy すると `../ALICE-SDF`
+      # 等の sibling path dep が切れる) in-place は tree を書き換えるので
+      # `--jobs` と併用不可 (cargo-mutants 自身が usage error で落ちる)
+      - name: Mutants (judgement core)
+        working-directory: text-to-print
+        run: |
+          set +e
+          cargo mutants --in-place \
+            --timeout 300 --build-timeout 600 \
+            --file crates/core/src/pipeline.rs \
+            --file crates/llm/src/fix_prompt.rs \
+            --re 'printability_summary|connectivity_verdict|farthest_interior_pair|should_use_dual_contouring|aabb_significantly_inflated|is_retryable_dfam_check|merge_safety_violations|from_message|extract_lol|dedup_lol_parse_prefix' \
+            -- --lib --test e2e_pipeline
+          rc=$?
+          set -e
+          # 0 = 全て caught、2 = missed あり、3 = timeout あり → 測定結果として
+          # 受けて下の gate で中身を見る それ以外 (4 = baseline red 等) は
+          # 「何も測れていない」ので即 fail
+          case $rc in 0 | 2 | 3) ;; *) echo "::error::cargo-mutants exit $rc (baseline red or usage error)"; exit $rc ;; esac
+
+      # 罠: `--output DIR` は DIR の **中に** mutants.out を作る 上で `--output`
+      # を渡していないので結果は workspace 直下の `mutants.out/` 「file が無い」を
+      # 「生存 0」に読み替えないため、測定結果の不在は fail にする
+      # (ALICE-LOL run 36325718354: gate が存在しない path を見て 4 shard 全部
+      #  success = false green、artifact の中身には生存 22 件)
+      - name: Summary + gate (missed must be 0)
+        if: always()
+        working-directory: text-to-print
+        run: |
+          if [ ! -f mutants.out/outcomes.json ]; then
+            echo "::error::mutants.out/outcomes.json が無い = 何も測れていない"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sys
+          d = json.load(open("mutants.out/outcomes.json"))
+          s = d.get("summary", d)
+          if "caught" not in s:
+              print("::error::outcomes.json に caught key が無い = 形式が想定外")
+              sys.exit(1)
+          caught, missed = s.get("caught", 0), s.get("missed", 0)
+          unviable, timeout = s.get("unviable", 0), s.get("timeout", 0)
+          lines = [
+              "## cargo-mutants — judgement core",
+              "",
+              f"- caught: {caught}",
+              f"- **missed: {missed}**",
+              f"- unviable: {unviable}",
+              f"- timeout: {timeout}",
+          ]
+          if missed:
+              lines += ["", "### 生存変異 (test が殺せていない)", "```"]
+              try:
+                  lines += open("mutants.out/missed.txt").read().splitlines()
+              except OSError:
+                  lines.append("(missed.txt を読めなかった)")
+              lines.append("```")
+          out = "\n".join(lines) + "\n"
+          print(out)
+          if (p := os.environ.get("GITHUB_STEP_SUMMARY")):
+              with open(p, "a") as f:
+                  f.write(out)
+          if missed:
+              print(f"::error::生存変異 {missed} 件 — test を足すか mutants.toml に理由付きで除外する")
+              sys.exit(1)
+          PY
+
+      - name: Upload mutants.out
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mutants-out
+          path: text-to-print/mutants.out
+          retention-days: 14

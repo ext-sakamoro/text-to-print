@@ -159,6 +159,23 @@ jobs:
   #
   # Ubuntu 単体で十分 (wasm target は OS 非依存) `wrangler deploy` は本 job で
   # 実行せず、check pass 後に手動で trigger する運用
+  # workflow YAML 自体の検証 (canonical: ALICE-LOL / ALICE-SDF)
+  #
+  # 2026-09-28 追加: `actions/upload-artifact@v4` 等の node20 runtime action が
+  # 8 箇所残っていたのを push まで検知できなかった (GitHub の node20 削除は
+  # 2026-09-23) actionlint は deprecated runtime を error にするので、次からは
+  # push 時点で落ちる
+  actionlint:
+    name: actionlint (workflow YAML 検証)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          fail_level: error
+          reporter: github-check
+
   check-wasm-worker:
     name: check-wasm (crates/worker)
     runs-on: ubuntu-latest

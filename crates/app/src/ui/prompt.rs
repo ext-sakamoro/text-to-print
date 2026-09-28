@@ -366,6 +366,43 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
                         ui.colored_label(color, format!("  {msg}"));
                     }
                 }
+                // 証明ベースの印刷可能性判定 (肉厚 / 連結性) 三値なので
+                // 「未決定」を OK と同じ色にしない
+                if let Some(p) = &stats.printability_summary {
+                    let warn_color = ui.style().visuals.warn_fg_color;
+                    let head_color = if p.ok {
+                        egui::Color32::GREEN
+                    } else if p.fail_messages.is_empty() {
+                        ui.style().visuals.weak_text_color()
+                    } else {
+                        warn_color
+                    };
+                    let verdict = if p.ok {
+                        "OK (証明)"
+                    } else if p.fail_messages.is_empty() {
+                        "未決定"
+                    } else {
+                        "NG"
+                    };
+                    ui.colored_label(
+                        head_color,
+                        format!(
+                            "Printability: {verdict}  肉厚 {}/{:.1}mm ({})  連結 {}  overhang max {:.0}°",
+                            p.min_local_thickness_mm
+                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                            p.min_wall_mm,
+                            p.erosion.slug(),
+                            p.connectivity.slug(),
+                            p.max_overhang_deg,
+                        ),
+                    );
+                    for msg in &p.fail_messages {
+                        ui.colored_label(warn_color, format!("  {msg}"));
+                    }
+                    for note in &p.notes {
+                        ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {note}"));
+                    }
+                }
             }
 
             ui.collapsing(crate::i18n::T::prompt_p020(lang), |ui| {
@@ -1197,6 +1234,10 @@ fn start_generation(state: &mut AppState, lang: Lang) {
                             export_format: "3mf",
                             user_kept: true,
                             user_edited: false,
+                            printability: stats
+                                .printability_summary
+                                .as_ref()
+                                .map(printability_signals),
                         },
                     );
                     let dry_path = match text_to_print_network::share::dump_dry_run(
@@ -4614,4 +4655,25 @@ fn show_servo_mount_customizer(ui: &mut egui::Ui, state: &mut AppState, lang: La
         start_generation_from_lol(state, g_copy.to_lol(), &label, lang);
     }
     ui.add_space(2.0);
+}
+
+/// 証明ベースの印刷可能性判定を share payload 用の signals に変換する
+///
+/// `network` crate は `core` に依存しないので、三値は `slug()` の文字列で渡す
+/// (変換は app 境界に置く、`share::PrintabilitySignals` の doc 参照)
+///
+/// `ok` は送らない 受け手は `erosion` / `connectivity` から再導出できるし、
+/// bool 1 個に畳むと **「未決定」と「違反」の区別が失われる** LoRA 学習側で
+/// 「検証していない形状」を「合格した形状」として扱わせないため、この 2 つは
+/// 別の値として上げる
+fn printability_signals(
+    p: &text_to_print_core::pipeline::PrintabilitySummary,
+) -> text_to_print_network::share::PrintabilitySignals {
+    text_to_print_network::share::PrintabilitySignals {
+        erosion: p.erosion.slug().to_string(),
+        connectivity: p.connectivity.slug().to_string(),
+        thin_triangles: p.thin_triangles,
+        min_local_thickness_mm: p.min_local_thickness_mm,
+        notes: p.notes.clone(),
+    }
 }

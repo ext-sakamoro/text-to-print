@@ -191,9 +191,9 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd4269e9085b09f6218cc8d1aa0d729466d5d7e2e4fba958e32ec7dd6785f03"
+checksum = "904f96f5693c26a12ef191056c1114ffd796a68ffbf991a442cb5bbc15646ff7"
 dependencies = [
  "bytemuck",
  "wide",
@@ -251,7 +251,7 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "3.1.0"
+version = "4.0.0"
 dependencies = [
  "alice-det-math",
  "bincode",

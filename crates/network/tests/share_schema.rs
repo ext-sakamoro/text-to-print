@@ -17,7 +17,7 @@
 
 use jsonschema::Validator;
 use serde_json::{Value, json};
-use text_to_print_network::share::{ShareInputs, SharePayload};
+use text_to_print_network::share::{PrintabilitySignals, ShareInputs, SharePayload};
 
 fn schema_path() -> std::path::PathBuf {
     // The schema lives at workspace root: `docs/schema/v1/...` The tests
@@ -53,6 +53,15 @@ fn build_test_payload() -> SharePayload {
         export_format: "3mf",
         user_kept: true,
         user_edited: false,
+        // 三値のうち「未決定」を載せた状態を既定の test payload にする
+        // (合格でも違反でもない状態が wire と schema を通ることが要点)
+        printability: Some(PrintabilitySignals {
+            erosion: "undecided".to_string(),
+            connectivity: "proved".to_string(),
+            thin_triangles: 0,
+            min_local_thickness_mm: Some(1.98),
+            notes: vec!["肉厚の大域判定が未決定 (合格ではない)".to_string()],
+        }),
     })
 }
 
@@ -62,6 +71,26 @@ fn build_test_payload() -> SharePayload {
 /// `triangle_count`, `environment`, `timestamp`) are filled with
 /// reasonable defaults so the schema check passes
 fn payload_as_manifest_doc(p: &SharePayload) -> Value {
+    let mut quality = json!({
+        "success": p.quality.success,
+        "retry_count": p.quality.retry_count,
+        "time_to_file_ms": p.quality.time_to_file_ms,
+        "safety_violations": p.quality.safety_violations,
+        "export_format": p.quality.export_format,
+        "user_kept": p.quality.user_kept,
+        "user_edited": p.quality.user_edited,
+    });
+    // `quality` は `additionalProperties: false` なので、未設定の時は key ごと
+    // 出さない (schema v1 は printability あり / なし の両方を受ける)
+    if let Some(pr) = &p.quality.printability {
+        quality["printability"] = json!({
+            "erosion": pr.erosion,
+            "connectivity": pr.connectivity,
+            "thin_triangles": pr.thin_triangles,
+            "min_local_thickness_mm": pr.min_local_thickness_mm,
+            "notes": pr.notes,
+        });
+    }
     json!({
         "schema_version": p.schema_version,
         "uuid": p.uuid,
@@ -77,21 +106,55 @@ fn payload_as_manifest_doc(p: &SharePayload) -> Value {
             "vertex_count": 1024,
             "triangle_count": 2048,
         },
-        "quality": {
-            "success": p.quality.success,
-            "retry_count": p.quality.retry_count,
-            "time_to_file_ms": p.quality.time_to_file_ms,
-            "safety_violations": p.quality.safety_violations,
-            "export_format": p.quality.export_format,
-            "user_kept": p.quality.user_kept,
-            "user_edited": p.quality.user_edited,
-        },
+        "quality": quality,
         "environment": {
             "app_version": "test-0.0.0",
             "os": "macos",
             "arch": "aarch64",
         },
     })
+}
+
+/// printability が無い payload も v1 に conform する (optional であることの固定)
+///
+/// `quality.required` に入れていないので、proof pass を通らない export 経路と
+/// 2026-09-28 より前の client が書いた payload も受けられる ここが required に
+/// 昇格すると古い payload が一律 `schema_invalid` で弾かれる
+#[test]
+fn payload_without_printability_still_conforms() {
+    let schema = load_schema();
+    let validator = Validator::new(&schema).expect("schema compile");
+
+    let payload = build_test_payload();
+    let mut doc = payload_as_manifest_doc(&payload);
+    doc["quality"]
+        .as_object_mut()
+        .expect("quality is an object")
+        .remove("printability")
+        .expect("build_test_payload sets printability");
+
+    let errors: Vec<_> = validator.iter_errors(&doc).collect();
+    assert!(errors.is_empty(), "errors: {errors:?}");
+}
+
+/// 三値以外の verdict は schema が弾く
+///
+/// 受け手 (Worker / 学習 pipeline) が知らない語を「たぶん合格」と解釈する事故を
+/// 防ぐ enum を緩めるとここが green のまま通ってしまうので、明示 test で固定する
+#[test]
+fn unknown_printability_verdict_is_rejected_by_schema() {
+    let schema = load_schema();
+    let validator = Validator::new(&schema).expect("schema compile");
+
+    let payload = build_test_payload();
+    let mut doc = payload_as_manifest_doc(&payload);
+    doc["quality"]["printability"]["erosion"] = json!("probably_fine");
+
+    let errors: Vec<_> = validator.iter_errors(&doc).collect();
+    assert!(
+        !errors.is_empty(),
+        "'probably_fine' のような未知の verdict は enum で弾かれなければならない"
+    );
 }
 
 #[test]

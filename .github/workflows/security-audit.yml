@@ -5,6 +5,13 @@ name: Security & Hygiene
 #
 # 補完的展開: audit job は既存 ci.yml (.cargo/audit.toml + informational_warnings)
 # の方が sophisticated なため重複せず、以下 5 job のみを canonical として追加
+#
+# 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
+# ci.yml と同じ実 sibling checkout に統一 stub は AGPL の alice-bamboo /
+# alice-physics / alice-llm を `license = "MIT OR Apache-2.0"` の空 crate として
+# 申告していたので、deny.toml の licenses.exceptions が CI では一度も評価されず、
+# alice-print / alice-lol とその transitive 依存も dep 木から消えていた
+# (ALICE-LOL a6ba9f7 / Physics 3472768 と同じ置換、Backlog 443)
 
 on:
   push:
@@ -15,7 +22,6 @@ on:
       - '**/src/**'
       - 'deny.toml'
       - '.github/workflows/security-audit.yml'
-      - '.github/actions/**'
   pull_request:
     branches: [main]
     paths:
@@ -24,7 +30,6 @@ on:
       - '**/src/**'
       - 'deny.toml'
       - '.github/workflows/security-audit.yml'
-      - '.github/actions/**'
   schedule:
     - cron: '0 9 * * 1'
   workflow_dispatch:
@@ -45,13 +50,54 @@ jobs:
   deny:
     name: cargo-deny (license + advisories + bans + sources)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
+      # Real siblings, same layout as ci.yml (8 repo: 6 public + Bamboo / Print
+      # private via ALICE_ECO_TOKEN) 実 dep 木でないと license / advisory を
+      # 一切見ていない green になる
       - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
+        with:
+          workspaces: text-to-print
 
       - name: Install cargo-deny
         run: cargo install --locked cargo-deny
@@ -62,14 +108,60 @@ jobs:
   unused-deps:
     name: cargo-machete (unused dependencies)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
+      # Real siblings (同 layout) machete 自体は manifest しか見ないが、
+      # workspace 解決が sibling 不在で fail するため checkout は必須
       - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
+      # bnjbvr/cargo-machete@main は repo root で走るので、t2p を subdir に
+      # checkout する layout では使えない (ALICE-LOL a6ba9f7 と同じ置換)
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
 
-      - uses: bnjbvr/cargo-machete@main
+      - name: Run cargo machete
+        run: cargo machete
 
   stub-guard:
     name: Stub / mock / dbg guard (grep)
@@ -121,15 +213,58 @@ jobs:
     name: Coverage (cargo-llvm-cov、informational)
     runs-on: ubuntu-latest
     continue-on-error: true
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
+      # Real siblings (同 layout)
       - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
 
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
+      # keyring crate は libdbus-sys 経由で libdbus-1-dev を要求 (ci.yml と同じ)
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -139,10 +274,10 @@ jobs:
           cargo llvm-cov --workspace --lib --summary-only 2>&1 | tee coverage-summary.txt
 
       - name: Upload coverage summary as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-summary
-          path: coverage-summary.txt
+          path: text-to-print/coverage-summary.txt
           retention-days: 30
 
   semver-checks:
@@ -150,20 +285,62 @@ jobs:
     runs-on: ubuntu-latest
     # text-to-print は private (publish=false 想定)、git baseline で比較
     continue-on-error: true
+    defaults:
+      run:
+        working-directory: text-to-print
     steps:
+      # Real siblings (同 layout)
       - uses: actions/checkout@v5
         with:
+          path: text-to-print
           fetch-depth: 0
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-SDF
+          path: ALICE-SDF
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LOL
+          path: ALICE-LOL
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-View
+          path: ALICE-View
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-LLM
+          path: ALICE-LLM
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Physics
+          path: ALICE-Physics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Kinematics
+          path: ALICE-Kinematics
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Bamboo
+          path: ALICE-Bamboo
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
+      - uses: actions/checkout@v5
+        with:
+          repository: ext-sakamoro/ALICE-Print
+          path: ALICE-Print
+          token: ${{ secrets.ALICE_ECO_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
 
-      - name: Create ALICE optional bridge stubs
-        uses: ./.github/actions/alice-stubs
-
+      # version 明示 pin: `@latest` は rustc MSRV を追いかけるので toolchain と
+      # 一緒に月次で bump する (ALICE-LOL 2026-09-14 事案)
       - name: Install cargo-semver-checks
-        uses: taiki-e/install-action@cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks@0.50.0
 
-      # workspace lib crate (text-to-print-core / text-to-print-llm / text-to-print-network) 対象
+      # workspace lib crate (text-to-print-core / -llm / -network) 対象
       # publish=false crate は自動 skip
       - name: Run cargo semver-checks
         run: |

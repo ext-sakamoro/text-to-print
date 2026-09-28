@@ -35,6 +35,39 @@ pub struct QualitySignals {
     pub export_format: String,
     pub user_kept: bool,
     pub user_edited: bool,
+    /// Proof-based printability verdicts, when the export path ran them
+    ///
+    /// Absent for exports that skip the proof pass (and for payloads written
+    /// by clients older than 2026-09-28), so it stays optional — schema v1
+    /// accepts a payload with or without it
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printability: Option<PrintabilitySignals>,
+}
+
+/// Proof-based printability verdicts, mirrored from
+/// `text_to_print_core::pipeline::PrintabilitySummary` at the app boundary
+///
+/// Verdicts stay stringly-typed (the `slug()` values) to keep this crate free
+/// of a hard core dep — same reason as [`SharePayload::tier`]
+///
+/// The three-valued verdicts are the whole point of shipping this upstream: a
+/// shared sample whose wall-thickness proof came back `undecided` is **not** a
+/// passing sample, and a LoRA training set that labels it as one is learning
+/// from a shape nobody verified `safety_violations` alone cannot express that
+/// difference, because an undecided proof produces no violation message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrintabilitySignals {
+    /// Global wall-thickness verdict — `proved` / `violated` / `undecided` /
+    /// `not_run` (`ProofVerdict::slug`)
+    pub erosion: String,
+    /// Same four slugs, for the 2-point reachability (connectivity) proof
+    pub connectivity: String,
+    /// Triangles whose exact local thickness is under the process minimum
+    pub thin_triangles: usize,
+    /// Smallest exact local thickness found, in mm
+    pub min_local_thickness_mm: Option<f32>,
+    /// Why a verdict stayed undecided or was not run — never a pass reason
+    pub notes: Vec<String>,
 }
 
 /// Fields that describe a completed generation, before serialising to the wire.
@@ -63,6 +96,9 @@ pub struct ShareInputs<'a> {
     pub export_format: &'a str,
     pub user_kept: bool,
     pub user_edited: bool,
+    /// Proof-based printability verdicts, when the export path ran them
+    /// (see [`PrintabilitySignals`])
+    pub printability: Option<PrintabilitySignals>,
 }
 
 /// Persist a `SharePayload` to a local dry-run directory so we can
@@ -130,6 +166,7 @@ impl SharePayload {
                 export_format: i.export_format.to_string(),
                 user_kept: i.user_kept,
                 user_edited: i.user_edited,
+                printability: i.printability,
             },
         }
     }
@@ -417,6 +454,7 @@ mod tests {
             export_format: "3mf",
             user_kept: true,
             user_edited: false,
+            printability: None,
         })
     }
 
@@ -677,6 +715,13 @@ mod tests {
             export_format: "3mf",
             user_kept: true,
             user_edited: false,
+            printability: Some(PrintabilitySignals {
+                erosion: "undecided".to_string(),
+                connectivity: "violated".to_string(),
+                thin_triangles: 12,
+                min_local_thickness_mm: Some(0.8),
+                notes: vec!["肉厚の大域判定が未決定".to_string()],
+            }),
         });
 
         let json = serde_json::to_string(&p).unwrap();
@@ -688,5 +733,33 @@ mod tests {
         assert!(back.quality.user_kept);
         assert!(!back.quality.user_edited);
         assert_eq!(back.quality.export_format, "3mf");
+        // 三値は wire を往復しても畳まれない undecided を proved / violated に
+        // 寄せると、受け手 (LoRA 学習) の label が「検証していない形状」と
+        // 「検証して落ちた形状」を区別できなくなる
+        let pr = back
+            .quality
+            .printability
+            .expect("printability must survive the roundtrip");
+        assert_eq!(pr.erosion, "undecided");
+        assert_eq!(pr.connectivity, "violated");
+        assert_eq!(pr.thin_triangles, 12);
+        assert_eq!(pr.min_local_thickness_mm, Some(0.8));
+        assert_eq!(pr.notes, vec!["肉厚の大域判定が未決定"]);
+    }
+
+    /// printability が無い payload は wire に field を出さない
+    ///
+    /// schema v1 の `quality.required` に入れていないので、古い受け手 (と
+    /// proof pass を通らない export 経路) と互換であることを固定する
+    #[test]
+    fn absent_printability_is_omitted_from_the_wire() {
+        let p = make_test_payload("018f4e8c-0000-7000-8000-000000000000");
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(
+            !json.contains("printability"),
+            "未設定なら field を出さない: {json}"
+        );
+        let back: SharePayload = serde_json::from_str(&json).unwrap();
+        assert!(back.quality.printability.is_none());
     }
 }

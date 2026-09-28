@@ -28,6 +28,7 @@ has_toolchain() { rustup toolchain list | grep -q "^$1"; }
 #   - security-audit.yml:semver-checks (job is continue-on-error: informational in CI)
 #   - fuzz.yml:fuzz (job is continue-on-error: informational in CI)
 
+need actionlint "brew install actionlint"
 need cargo-audit "cargo install cargo-audit --locked"
 need cargo-deny "cargo install cargo-deny --locked"
 need cargo-machete "cargo install cargo-machete --locked"
@@ -42,6 +43,9 @@ relint
 step "ci.yml / clippy-test-doc: cargo doc (no deps)"
 ( export CARGO_TERM_COLOR="always" RUSTDOCFLAGS="-D warnings"; cargo doc --workspace --no-deps )
 
+step "ci.yml / actionlint: actionlint"
+actionlint .github/workflows/*.yml
+
 step "ci.yml / check-wasm-worker: cargo check --target wasm32-unknown-unknown"
 rustup target list --installed | grep -q '^wasm32-unknown-unknown$' || rustup target add wasm32-unknown-unknown
 (cd "crates/worker" && ( export CARGO_TERM_COLOR="always"; cargo check --target wasm32-unknown-unknown --release ))
@@ -49,8 +53,8 @@ rustup target list --installed | grep -q '^wasm32-unknown-unknown$' || rustup ta
 step "security-audit.yml / deny: Run cargo deny check all"
 ( export CARGO_TERM_COLOR="always" CARGO_NET_RETRY="5" CARGO_HTTP_MULTIPLEXING="false"; cargo deny --all-features check all )
 
-step "security-audit.yml / unused-deps: cargo machete"
-cargo machete
+step "security-audit.yml / unused-deps: Run cargo machete"
+( export CARGO_TERM_COLOR="always" CARGO_NET_RETRY="5" CARGO_HTTP_MULTIPLEXING="false"; cargo machete )
 
 step "security-audit.yml / stub-guard: Detect todo! / unimplemented! / panic!(STUB) in src/**"
 (
