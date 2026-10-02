@@ -305,6 +305,42 @@ fn rotated_thin_plate_keeps_the_analytic_box_volume_and_stays_watertight() {
     );
 }
 
+/// 薄板 (30 x 30 x 0.8 mm = 720 mm³) と、そこから 120mm 離れた小さな球 (半径 3mm = 113.097 mm³)
+///
+/// 1 回目の粗い mesh は離れた球を捉えられず、2 回目の bounds にも入らないので球が黙って落ちる
+/// (回転あり: 体積 715.9)  回転が無くても bbox が 30 x 138 x 6 mm と長いので、bbox 全体に張った
+/// 単一の格子 (cell 約 1.4mm) が 0.8mm の板を取りこぼす (体積 530.9、境界エッジ 96)
+/// どちらも 3MF は **エラー無しで書き出される**
+const FAR_SPHERE_VOLUME: f64 = 4.0 / 3.0 * std::f64::consts::PI * 27.0;
+
+#[test]
+fn a_far_small_part_survives_next_to_a_rotated_thin_plate() {
+    let lol = "rotate(30.0, 0.0, 0.0, union(box3d(15.0, 15.0, 0.4), translate(0.0, 120.0, 0.0, sphere(3.0))))";
+    let want = 30.0 * 30.0 * 0.8 + FAR_SPHERE_VOLUME;
+    let (verts, tris) = export_and_read(lol, Quality::Preview);
+    let got = signed_volume(&verts, &tris);
+    let rel = (got - want).abs() / want;
+    let (boundary, non_manifold) = edge_defects(&tris);
+    assert!(
+        rel < 0.03 && boundary == 0 && non_manifold == 0,
+        "離れた球が落ちた / 欠損: 体積 {got:.2} (期待 {want:.2}, rel {rel:.4}) 境界エッジ {boundary} 非多様体 {non_manifold}"
+    );
+}
+
+#[test]
+fn a_thin_plate_keeps_its_volume_when_another_part_makes_the_bbox_long() {
+    let lol = "union(box3d(15.0, 15.0, 0.4), translate(0.0, 120.0, 0.0, sphere(3.0)))";
+    let want = 30.0 * 30.0 * 0.8 + FAR_SPHERE_VOLUME;
+    let (verts, tris) = export_and_read(lol, Quality::Preview);
+    let got = signed_volume(&verts, &tris);
+    let rel = (got - want).abs() / want;
+    let (boundary, non_manifold) = edge_defects(&tris);
+    assert!(
+        rel < 0.03 && boundary == 0 && non_manifold == 0,
+        "bbox が長いと薄板を取りこぼす: 体積 {got:.2} (期待 {want:.2}, rel {rel:.4}) 境界エッジ {boundary} 非多様体 {non_manifold}"
+    );
+}
+
 #[test]
 fn bulky_box_mc_volume_matches_the_analytic_box() {
     let (verts, tris) = export_and_read(BULKY_BOX, Quality::Preview);
