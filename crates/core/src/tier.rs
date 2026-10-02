@@ -80,7 +80,18 @@ impl Tier {
             RollbackPolicy::Immediate => TierState::RolledBack,
             RollbackPolicy::NoRollback => TierState::Active(payload_tier),
             RollbackPolicy::GracePeriod(d) => {
-                let deadline = expires_at + d;
+                // `expires_at + d` panics when the sum leaves chrono's range (an extreme instant,
+                // a negative or an enormous grace): saturate to the representable end instead, so
+                // an unbounded grace stays in grace and a grace that reaches before the start of
+                // time is already over
+                let deadline =
+                    expires_at
+                        .checked_add_signed(d)
+                        .unwrap_or(if d > Duration::zero() {
+                            DateTime::<Utc>::MAX_UTC
+                        } else {
+                            DateTime::<Utc>::MIN_UTC
+                        });
                 if now <= deadline {
                     TierState::Grace {
                         tier: payload_tier,

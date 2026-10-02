@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{
     PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, Signature, Signer, SigningKey, Verifier, VerifyingKey,
@@ -54,11 +54,19 @@ impl LicenseIssuer {
 
     /// ライセンスキーを発行
     pub fn issue(&self, tier: Tier, user_id: &str, valid_days: i64) -> Result<LicenseKey> {
+        let issued_at = Utc::now();
+        // `Duration::days` and `DateTime + Duration` panic for a span chrono cannot represent
+        // (`i64::MAX` days, or just 100 million days): report it as an error instead
+        let expires_at = chrono::Duration::try_days(valid_days)
+            .and_then(|span| issued_at.checked_add_signed(span))
+            .with_context(|| {
+                format!("valid_days = {valid_days} is outside the representable range (about +-96 million days)")
+            })?;
         let payload = LicensePayload {
             tier,
             user_id: user_id.to_string(),
-            issued_at: Utc::now(),
-            expires_at: Utc::now() + chrono::Duration::days(valid_days),
+            issued_at,
+            expires_at,
         };
 
         let payload_bytes = serde_json::to_vec(&payload)?;
