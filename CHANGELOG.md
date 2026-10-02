@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### Added — 配線ガード (`scripts/wiring_guard.py`) を導入 (2026-10-02)
+
+実装したが production から呼ばれていない `pub` / `pub(crate)` item と、理由の無い
+`#[allow(dead_code)]` の新規追加を CI で止める検査器を ALICE-Physics から移植した
+対象は workspace member の `crates/app` / `core` / `llm` / `network`
+
+- `scripts/test_wiring_guard.py`: 検査器自身の oracle 79 本
+- `scripts/wiring-baseline.txt`: 既存の違反 (unwired 146 件 / dead_code 7 件) を記録するラチェット 既存分は解消しておらず、新規の違反だけが fail する
+- CI: `wiring-guard` job (ubuntu / macOS / Windows) と `scripts/preflight.sh` の step を追加
+- 限界: workspace から exclude された `crates/worker` の pub item は unwired の走査対象外 (dead_code は走査される)
+
 ## [v0.1.0-beta.4.1] - 2026-09-28
 
 肉厚と連結性の判定を証明ベースに移した hardening release (STEP export / 連結性判定 / integration test 未実行 の 3 件を修正)

@@ -43,6 +43,10 @@ relint
 step "ci.yml / clippy-test-doc: cargo doc (no deps)"
 ( export CARGO_TERM_COLOR="always" RUSTDOCFLAGS="-D warnings"; cargo doc --workspace --no-deps )
 
+step "ci.yml / wiring-guard: oracle + 新規の未配線 / 理由の無い dead_code が無い"
+python3 scripts/test_wiring_guard.py
+python3 scripts/wiring_guard.py
+
 step "ci.yml / actionlint: actionlint"
 actionlint .github/workflows/*.yml
 
