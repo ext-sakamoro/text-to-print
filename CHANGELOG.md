@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### Added — DC 経路 (薄板) と MC 経路の体積・水密を閉形式で突合する oracle (2026-10-02)
+
+薄板 `box3d(15, 15, 0.4)` (30 x 30 x 0.8 mm、DC 経路) の 3MF を独立パーサで読み戻し、体積が
+箱の閉形式 `30 * 30 * 0.8` と相対誤差 5e-4 以内で一致し、全エッジがちょうど 2 枚に共有される (水密) ことを
+`crates/core/tests/e2e_pipeline.rs` で検査する 対照として厚い箱 (MC 経路) も同様に突合する
+薄板は t2p の主力形状だが、DC 経路の実 mesh はこれまで体積も水密も突合されていなかった
+変異 (DC 判定を MC に回す / DC の分解能 / bounds の縮小 / MC の分解能) が red になることを実測した
+
 ### Added — 配線ガード (`scripts/wiring_guard.py`) を導入 (2026-10-02)
 
 実装したが production から呼ばれていない `pub` / `pub(crate)` item と、理由の無い

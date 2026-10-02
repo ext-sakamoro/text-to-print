@@ -204,6 +204,30 @@ fn exported_3mf_volume_matches_the_analytic_sphere() {
     );
 }
 
+/// 無向エッジごとの共有三角形数から (境界エッジ数, 非多様体エッジ数) を数える
+///
+/// 閉じた多様体では全ての無向エッジがちょうど 2 枚に共有される
+fn edge_defects(tris: &[[usize; 3]]) -> (usize, usize) {
+    let mut edges: std::collections::HashMap<(usize, usize), usize> =
+        std::collections::HashMap::new();
+    for &[a, b, c] in tris {
+        for (u, v) in [(a, b), (b, c), (c, a)] {
+            *edges.entry((u.min(v), u.max(v))).or_insert(0) += 1;
+        }
+    }
+    let boundary = edges.values().filter(|&&n| n == 1).count();
+    let non_manifold = edges.values().filter(|&&n| n > 2).count();
+    (boundary, non_manifold)
+}
+
+/// `lol` を 3MF に書き出して、中の mesh を独立パーサで読み戻す
+fn export_and_read(lol: &str, quality: Quality) -> (Vec<[f64; 3]>, Vec<[usize; 3]>) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let stats = pipeline::export_mesh(lol, dir.path(), ExportFormat::ThreeMf, quality)
+        .expect("3MF export should succeed");
+    read_3mf_mesh(&stats.path)
+}
+
 #[test]
 fn exported_3mf_is_watertight() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -213,17 +237,57 @@ fn exported_3mf_is_watertight() {
     let (_, tris) = read_3mf_mesh(&stats.path);
 
     // oracle: 閉じた多様体では全ての無向エッジがちょうど 2 枚に共有される
-    let mut edges: std::collections::HashMap<(usize, usize), usize> =
-        std::collections::HashMap::new();
-    for &[a, b, c] in &tris {
-        for (u, v) in [(a, b), (b, c), (c, a)] {
-            *edges.entry((u.min(v), u.max(v))).or_insert(0) += 1;
-        }
-    }
-    let boundary = edges.values().filter(|&&n| n == 1).count();
-    let non_manifold = edges.values().filter(|&&n| n > 2).count();
+    let (boundary, non_manifold) = edge_defects(&tris);
     assert_eq!(boundary, 0, "境界エッジ {boundary} 本 = 水密でない");
     assert_eq!(non_manifold, 0, "非多様体エッジ {non_manifold} 本");
+}
+
+/// 薄板 `box3d(15, 15, 0.4)` (half extents なので 30 x 30 x 0.8 mm) は
+/// `should_use_dual_contouring` が真 (min_dim <= 5mm) になる DC 経路の入力
+/// t2p の主力は薄物なのに、DC 経路の実 mesh は体積も水密も突合されていなかった
+const THIN_PLATE: &str = "box3d(15.0, 15.0, 0.4)";
+/// 同じ箱を厚くしたもの (20 x 20 x 20 mm、aspect 1 / min_dim 20 なので MC 経路) の対照
+const BULKY_BOX: &str = "box3d(10.0, 10.0, 10.0)";
+
+#[test]
+fn thin_plate_dc_volume_matches_the_analytic_box() {
+    let (verts, tris) = export_and_read(THIN_PLATE, Quality::Preview);
+    // oracle: 箱の体積 = 辺の積 (half extents 15, 15, 0.4 -> 30 * 30 * 0.8)
+    let want = 30.0 * 30.0 * 0.8;
+    let got = signed_volume(&verts, &tris);
+    assert!(got > 0.0, "符号付き体積が負 = 内向き巻き ({got})");
+    // DC は Hermite data で軸平行な面を厳密に再現するので誤差は浮動小数の丸めだけ
+    // (実測 rel 1.1e-5)  薄板を MC 経路に回すと 1.4e-3 まで落ちるので、許容を 5e-4 に
+    // 絞って「DC 経路で作られたこと」まで pin する (5% では経路の取り違えを検出できない)
+    let rel = (got - want).abs() / want;
+    assert!(
+        rel < 5e-4,
+        "薄板 (DC 経路) の体積 {got:.4}mm³ が箱の閉形式 {want:.4}mm³ から外れた (rel {rel:.6})"
+    );
+}
+
+#[test]
+fn thin_plate_dc_mesh_is_watertight() {
+    let (_, tris) = export_and_read(THIN_PLATE, Quality::Preview);
+    let (boundary, non_manifold) = edge_defects(&tris);
+    assert_eq!(boundary, 0, "薄板の境界エッジ {boundary} 本 = 水密でない");
+    assert_eq!(non_manifold, 0, "薄板の非多様体エッジ {non_manifold} 本");
+}
+
+#[test]
+fn bulky_box_mc_volume_matches_the_analytic_box() {
+    let (verts, tris) = export_and_read(BULKY_BOX, Quality::Preview);
+    // oracle: half extents 10 -> 20 * 20 * 20
+    let want = 20.0_f64.powi(3);
+    let got = signed_volume(&verts, &tris);
+    assert!(got > 0.0, "符号付き体積が負 = 内向き巻き ({got})");
+    let rel = (got - want).abs() / want;
+    assert!(
+        rel < 0.05,
+        "箱 (MC 経路) の体積 {got:.2}mm³ が閉形式 {want:.2}mm³ から外れた (rel {rel:.4})"
+    );
+    let (boundary, non_manifold) = edge_defects(&tris);
+    assert_eq!((boundary, non_manifold), (0, 0), "箱の mesh が水密でない");
 }
 
 /// STEP (ISO 10303-21) の DATA section を `#id → (entity 名, 引数)` に読み戻す
