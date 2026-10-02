@@ -1420,6 +1420,105 @@ fn extract_json_code(text: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    // ---- 2-pass remesh 判定 (compute_empirical_aabb / aabb_significantly_inflated) ----
+    // 仕様は関数の doc: 前者は頂点位置の軸ごとの min / max (空 mesh は None)、
+    // 後者は「いずれかの軸で tight / empirical > 2.0 (厳密に超える)」で真
+    // 2 回目の再メッシュに入るかの分岐で、閾値の取り違えは回転形状の欠けに直結する
+
+    fn mesh_of(points: &[Vec3]) -> alice_sdf::mesh::Mesh {
+        let mut mesh = alice_sdf::mesh::Mesh::new();
+        mesh.vertices = points
+            .iter()
+            .map(|&p| alice_sdf::mesh::Vertex::new(p, Vec3::Z))
+            .collect();
+        mesh
+    }
+
+    #[test]
+    fn empirical_aabb_of_an_empty_mesh_is_none() {
+        assert!(compute_empirical_aabb(&mesh_of(&[])).is_none());
+    }
+
+    #[test]
+    fn empirical_aabb_of_a_single_vertex_is_that_point() {
+        let p = Vec3::new(-3.5, 0.0, 7.25);
+        let (min, max) = compute_empirical_aabb(&mesh_of(&[p])).expect("one vertex");
+        assert_eq!((min, max), (p, p));
+    }
+
+    #[test]
+    fn empirical_aabb_matches_an_independent_per_axis_reference() {
+        // 決定論的な擬似乱数 (LCG) で負値を含む点群を作り、軸ごとの fold と突合する
+        let mut state: u32 = 0x1234_5678;
+        let mut next = || {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 8) as f32 / (1u32 << 24) as f32 * 200.0 - 100.0
+        };
+        let pts: Vec<Vec3> = (0..257)
+            .map(|_| Vec3::new(next(), next(), next()))
+            .collect();
+        let want_min = [
+            pts.iter().map(|p| p.x).fold(f32::INFINITY, f32::min),
+            pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min),
+            pts.iter().map(|p| p.z).fold(f32::INFINITY, f32::min),
+        ];
+        let want_max = [
+            pts.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max),
+            pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max),
+            pts.iter().map(|p| p.z).fold(f32::NEG_INFINITY, f32::max),
+        ];
+        let (min, max) = compute_empirical_aabb(&mesh_of(&pts)).expect("non-empty");
+        assert_eq!(min.to_array(), want_min);
+        assert_eq!(max.to_array(), want_max);
+        // 頂点の順序に依らない (先頭頂点だけで初期化する実装の取りこぼしを検出)
+        let mut rev = pts.clone();
+        rev.reverse();
+        let (rmin, rmax) = compute_empirical_aabb(&mesh_of(&rev)).expect("non-empty");
+        assert_eq!((rmin, rmax), (min, max));
+    }
+
+    /// tight は原点から `t`、empirical は原点から `e` の AABB (各軸の寸法 = t, e)
+    fn inflated(t: Vec3, e: Vec3) -> bool {
+        aabb_significantly_inflated(Vec3::ZERO, t, Vec3::ZERO, e)
+    }
+
+    #[test]
+    fn inflation_threshold_is_strictly_greater_than_two() {
+        let one = Vec3::ONE;
+        // 比がちょうど 2.0 は再メッシュしない (`>`、`>=` ではない)
+        assert!(!inflated(Vec3::new(2.0, 1.0, 1.0), one));
+        // f32 で 2.0 の次の値は再メッシュする
+        let just_above = f32::from_bits(2.0_f32.to_bits() + 1);
+        assert!(inflated(Vec3::new(just_above, 1.0, 1.0), one));
+        // 比が 1 (膨らみなし) は再メッシュしない
+        assert!(!inflated(one, one));
+    }
+
+    #[test]
+    fn inflation_on_any_single_axis_triggers_the_remesh() {
+        let one = Vec3::ONE;
+        assert!(inflated(Vec3::new(3.0, 1.0, 1.0), one), "x のみ");
+        assert!(inflated(Vec3::new(1.0, 3.0, 1.0), one), "y のみ");
+        assert!(inflated(Vec3::new(1.0, 1.0, 3.0), one), "z のみ");
+    }
+
+    #[test]
+    fn a_tight_aabb_smaller_than_the_empirical_one_does_not_trigger() {
+        // tight < empirical (比 < 1) は膨らみではない
+        assert!(!inflated(Vec3::ONE, Vec3::new(5.0, 5.0, 5.0)));
+    }
+
+    #[test]
+    fn a_zero_thickness_empirical_axis_is_floored_at_1e_3() {
+        // empirical 0 厚の軸は 1e-3 に floor されるので、tight が 1mm 以上あれば
+        // 比 1000 で再メッシュ、tight も 0 厚なら比 1 で再メッシュしない
+        assert!(inflated(Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.0, 1.0, 0.0)));
+        assert!(!inflated(
+            Vec3::new(1.0, 1.0, 0.0),
+            Vec3::new(1.0, 1.0, 0.0)
+        ));
+    }
+
     #[test]
     fn safety_check_lol_returns_empty_for_small_pla_sphere() {
         // small sphere with PLA material → safety_validate.is_safe == true

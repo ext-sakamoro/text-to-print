@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### Added — 2 回目の再メッシュ判定 (`compute_empirical_aabb` / `aabb_significantly_inflated`) の oracle (2026-10-02)
+
+仕様 (頂点位置の軸ごとの min / max、空 mesh は `None`、いずれかの軸で tight / empirical が厳密に 2.0 を超えたら再メッシュ、
+empirical の 0 厚軸は 1e-3 に floor) を境界値で検査する 7 本を `crates/core/src/pipeline.rs` の test に追加した
+独立の軸ごと fold との突合、頂点順の入れ替え、比がちょうど 2.0 と f32 で次の値の対、単一軸のみの膨らみ、0 厚軸を含む
+変異 6 種 (`>` を `>=`、閾値 3.0、z 軸を見ない、floor を外す、max を更新しない、原点で初期化) が red になることを実測した
+
 ### Added — DC 経路 (薄板) と MC 経路の体積・水密を閉形式で突合する oracle (2026-10-02)
 
 薄板 `box3d(15, 15, 0.4)` (30 x 30 x 0.8 mm、DC 経路) の 3MF を独立パーサで読み戻し、体積が
