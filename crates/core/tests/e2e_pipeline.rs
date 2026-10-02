@@ -274,6 +274,37 @@ fn thin_plate_dc_mesh_is_watertight() {
     assert_eq!(non_manifold, 0, "薄板の非多様体エッジ {non_manifold} 本");
 }
 
+/// X 軸まわりに傾けた薄板 `rotate(θ, 0, 0, box3d(15, 15, 0.4))` は体積が回転で不変 (30 * 30 * 0.8)
+///
+/// tight AABB は区間演算で回転後の Y / Z を大きく過大評価する (30 度で 612 x 578 mm)
+/// そのため 1 回目の mesh が板をほとんど捉えられず、2 回目の再メッシュの bounds が
+/// 板を切り落とす (30 度で体積の 73% を失う)  また 45 度 (Preview) では水密な mesh を
+/// `MeshRepair::repair_all` が開く  どちらも 3MF は **エラー無しで書き出される**
+#[test]
+fn rotated_thin_plate_keeps_the_analytic_box_volume_and_stays_watertight() {
+    let want = 30.0 * 30.0 * 0.8;
+    let mut failures = Vec::new();
+    for quality in [Quality::Preview, Quality::High] {
+        for angle in [15.0, 30.0, 45.0, 60.0] {
+            let lol = format!("rotate({angle:.1}, 0.0, 0.0, box3d(15.0, 15.0, 0.4))");
+            let (verts, tris) = export_and_read(&lol, quality);
+            let got = signed_volume(&verts, &tris);
+            let rel = (got - want).abs() / want;
+            let (boundary, non_manifold) = edge_defects(&tris);
+            if got <= 0.0 || rel >= 0.02 || boundary != 0 || non_manifold != 0 {
+                failures.push(format!(
+                    "{quality:?} {angle}deg: 体積 {got:.2} (rel {rel:.4}) 境界エッジ {boundary} 非多様体 {non_manifold}"
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "回転した薄板の 3MF が欠損 / 非水密:\n{}",
+        failures.join("\n")
+    );
+}
+
 #[test]
 fn bulky_box_mc_volume_matches_the_analytic_box() {
     let (verts, tris) = export_and_read(BULKY_BOX, Quality::Preview);
