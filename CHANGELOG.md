@@ -5,6 +5,20 @@
 
 ## [Unreleased]
 
+### Fixed — X 軸回転した薄板の 3MF が体積を失う / 水密が破れる 2 件 (2026-10-02)
+
+`rotate(θ, 0, 0, box3d(15, 15, 0.4))` (正解体積 720 mm³、回転で不変) の 3MF が、エラー無しで次のように壊れていた
+
+- **30 / 60 度で体積の 73% を失う**: tight AABB が回転で 612 x 578 mm に膨張し、1 回目の mesh が薄板をほとんど捉えられず、
+  その実測 AABB (y ±0.40 / z ±0.27、真値は y ±13.2 / z ±7.85) ± 5mm の bounds で 2 回目の再メッシュが板を切り落としていた
+  再メッシュを `mesh_with_remesh` に共通化し、mesh が bounds の 1 cell 以内に接している (= 切り落とされている) 間は
+  bounds を倍々に広げる (上限は 1 回目の bounds) 上限まで広げても切り落としが残るときは欠損した mesh を返さずエラーにする
+  preview / 3MF export / `safety_check_lol` の 3 経路が同じ helper を使う
+- **45 度 (Preview) で水密な mesh が開く**: `MeshRepair::repair_all` が 845 三角形を落として境界エッジ 567 本を作っていた
+  `repair_mesh` で、修復が境界エッジを増やしたら修復前の mesh を採用する
+- 体積誤差は最大 0.8% (Preview) / 0.2% (High)、全角度で境界エッジ 0 (15 / 30 / 45 / 60 度、Preview / High)
+- 変異 (広げない / 拡張量 0 / 上側の検出を外す / 反復上限 0 / 水密ガードを外す / 境界の数え方) が red になることを実測した
+
 ### Added — 2 回目の再メッシュ判定 (`compute_empirical_aabb` / `aabb_significantly_inflated`) の oracle (2026-10-02)
 
 仕様 (頂点位置の軸ごとの min / max、空 mesh は `None`、いずれかの軸で tight / empirical が厳密に 2.0 を超えたら再メッシュ、

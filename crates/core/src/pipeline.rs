@@ -662,45 +662,122 @@ pub fn preview_lol_to_mesh(
         .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
     let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
-    let padding = Vec3::splat(1.0);
-    let dims = (
-        aabb.max.x - aabb.min.x,
-        aabb.max.y - aabb.min.y,
-        aabb.max.z - aabb.min.z,
-    );
-    let use_dc = should_use_dual_contouring(dims);
-    // 1st pass mesh (may use inflated bbox from interval arith on rotate)
-    let mesh1 = generate_mesh(
-        &sdf,
-        aabb.min - padding,
-        aabb.max + padding,
-        quality,
-        use_dc,
-    );
-    // 2-pass: empirical AABB check → re-mesh at proper cell size if inflated
-    let mesh = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
-        && aabb_significantly_inflated(aabb.min, aabb.max, emp_min, emp_max)
-    {
-        let emp_dims = (
-            emp_max.x - emp_min.x,
-            emp_max.y - emp_min.y,
-            emp_max.z - emp_min.z,
-        );
-        let use_dc2 = should_use_dual_contouring(emp_dims);
-        // 5mm padding で 1st pass の under-sample 分 (cell size ~5mm) を回収
-        let padding_2nd = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
-        generate_mesh(
-            &sdf,
-            emp_min - padding_2nd,
-            emp_max + padding_2nd,
-            quality,
-            use_dc2,
-        )
-    } else {
-        mesh1
-    };
-    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    let (mesh, _bounds) = mesh_with_remesh(&sdf, aabb.min, aabb.max, quality)?;
+    let mesh = repair_mesh(&mesh);
     Ok(std::sync::Arc::new(mesh))
+}
+
+/// 再メッシュで bounds を広げる反復の上限 (毎回 extent を倍にし、1 回目の bounds で頭打ち)
+const AABB_REMESH_MAX_GROWTH: usize = 6;
+
+/// 1 回目の mesh → (tight AABB が膨らんでいれば) 実測 AABB で再メッシュ、の 2-pass 生成
+///
+/// 返すのは最終 mesh と、それを作った bounds
+///
+/// tight AABB は区間演算で回転後の軸を大きく過大評価する (X 軸 30 度回転で 612 x 578 mm)
+/// その cell で切った 1 回目の mesh は薄板をほとんど捉えられず、実測 AABB が実寸より遥かに
+/// 小さくなる 固定 5mm の padding ではその分を回収できず、2 回目の bounds が板を切り落として
+/// 体積の 73% を失った (2026-10-02 実測)  そのため
+/// - 再メッシュした mesh が bounds に接している (= 切り落とされている) 間は bounds を倍々に広げる
+///   (上限は 1 回目の bounds、tight AABB は保守的なので形状はその内側に収まる)
+///
+/// # Errors
+/// 反復の上限まで広げても mesh が bounds に接したままのとき (欠損した mesh を黙って返さない)
+fn mesh_with_remesh(
+    sdf: &alice_sdf::SdfNode,
+    tight_min: Vec3,
+    tight_max: Vec3,
+    quality: Quality,
+) -> Result<(alice_sdf::mesh::Mesh, (Vec3, Vec3))> {
+    let padding = Vec3::splat(1.0);
+    let (first_min, first_max) = (tight_min - padding, tight_max + padding);
+    let dims = tight_max - tight_min;
+    let use_dc = should_use_dual_contouring((dims.x, dims.y, dims.z));
+    let mesh1 = generate_mesh(sdf, first_min, first_max, quality, use_dc);
+    let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1) else {
+        return Ok((mesh1, (first_min, first_max)));
+    };
+    if !aabb_significantly_inflated(tight_min, tight_max, emp_min, emp_max) {
+        return Ok((mesh1, (first_min, first_max)));
+    }
+
+    let res = quality.mesh_resolution().max(1) as f32;
+    // padding を 1 回目の cell に比例させると 2 回目の格子が粗くなって薄板を取りこぼす
+    // (45 度の 0.8mm 板で padding 21mm → 体積 -5%)  固定 5mm のままにして、
+    // 切り落としは下の反復 (bounds を倍々に広げる) で回収する
+    let pad = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
+    let (first_lo, first_hi) = (first_min.to_array(), first_max.to_array());
+    let mut lo = (emp_min - pad).max(first_min).to_array();
+    let mut hi = (emp_max + pad).min(first_max).to_array();
+    let mut extent = emp_max - emp_min;
+    info!(
+        padding_mm = pad.max_element(),
+        "tight_aabb inflated → re-mesh at empirical bounds"
+    );
+    for round in 0..=AABB_REMESH_MAX_GROWTH {
+        let (lo_v, hi_v) = (Vec3::from_array(lo), Vec3::from_array(hi));
+        let use_dc2 = should_use_dual_contouring((extent.x, extent.y, extent.z));
+        let mesh = generate_mesh(sdf, lo_v, hi_v, quality, use_dc2);
+        let Some((e_min, e_max)) = compute_empirical_aabb(&mesh) else {
+            return Ok((mesh, (lo_v, hi_v)));
+        };
+        let (e_lo, e_hi) = (e_min.to_array(), e_max.to_array());
+        let cell = ((hi_v - lo_v) / res).to_array();
+        let (mut new_lo, mut new_hi) = (lo, hi);
+        let mut clipped = false;
+        for a in 0..3 {
+            let step = (hi[a] - lo[a]) * 0.5;
+            // 広げる余地のある側で、mesh が bounds の 1 cell 以内に接していれば切り落とし
+            if lo[a] > first_lo[a] && e_lo[a] <= lo[a] + cell[a] {
+                new_lo[a] = (lo[a] - step).max(first_lo[a]);
+                clipped = true;
+            }
+            if hi[a] < first_hi[a] && e_hi[a] >= hi[a] - cell[a] {
+                new_hi[a] = (hi[a] + step).min(first_hi[a]);
+                clipped = true;
+            }
+        }
+        if !clipped {
+            return Ok((mesh, (lo_v, hi_v)));
+        }
+        if round == AABB_REMESH_MAX_GROWTH {
+            anyhow::bail!(
+                "mesh が bounds で切り落とされたまま収束しなかった (bounds {lo_v:?} .. {hi_v:?}、形状の一部が欠けている)"
+            );
+        }
+        extent = e_max - e_min;
+        (lo, hi) = (new_lo, new_hi);
+    }
+    unreachable!("loop は round == AABB_REMESH_MAX_GROWTH で必ず return / bail する")
+}
+
+/// 境界エッジ (1 枚の三角形にしか共有されない無向エッジ) の本数
+fn count_boundary_edges(mesh: &alice_sdf::mesh::Mesh) -> usize {
+    let mut edges: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+    for t in mesh.indices.as_chunks::<3>().0 {
+        for (u, v) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+            *edges.entry((u.min(v), u.max(v))).or_insert(0) += 1;
+        }
+    }
+    edges.values().filter(|&&n| n == 1).count()
+}
+
+/// `MeshRepair::repair_all` を掛けるが、境界エッジを増やしたら修復前の mesh を採用する
+///
+/// 薄板では `repair_all` が水密な mesh の三角形を落として穴を開けることがある
+/// (X 軸 45 度回転の 0.8mm 板で 845 三角形を落として境界エッジ 567 本、2026-10-02 実測)
+fn repair_mesh(mesh: &alice_sdf::mesh::Mesh) -> alice_sdf::mesh::Mesh {
+    let repaired = MeshRepair::repair_all(mesh, 5e-3);
+    let (before, after) = (count_boundary_edges(mesh), count_boundary_edges(&repaired));
+    if after > before {
+        tracing::warn!(
+            before,
+            after,
+            "repair_all が境界エッジを増やしたので修復前の mesh を採用する"
+        );
+        return mesh.clone();
+    }
+    repaired
 }
 
 /// Mesh generation helper (MC or DC dispatch based on `use_dc`)
@@ -781,9 +858,6 @@ fn export_3mf_via_bamboo(
     // 500mm bbox / iter 24 / subdivisions 16 は preset_large() の canonical 値
     let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
-    let padding = Vec3::splat(1.0);
-    let min_bounds = aabb.min - padding;
-    let max_bounds = aabb.max + padding;
 
     // Phase 5.4 → 5.5 (2026-08-08): 経路判定を AABB Y 軸単独から aspect ratio ベースに拡張
     // 「薄物 vs 厚物」は AABB Y だけでなく shape aspect ratio で決定 (SKADIS panel 300×300 は
@@ -809,45 +883,12 @@ fn export_3mf_via_bamboo(
         "mesh route selected (aspect_ratio > 5.0 OR min_dim <= 5.0 → DC)"
     );
 
-    // 1st pass mesh (2026-09-04: tight_aabb は interval 演算で rotate X 軸回転時
-    // Y/Z 軸を massive overestimate する既知欠点、生 mesh から empirical AABB を
-    // 取って再判定する 2-pass 戦略)
-    let mesh1 = generate_mesh(&sdf, min_bounds, max_bounds, quality, use_dc);
+    // 1st pass + 必要なら再メッシュ (`mesh_with_remesh`)
     // `mesh_bounds` = 最終 mesh を作った bound 証明ベースの印刷可能性判定
     // (`printability_summary`) は「この bound の外は見ない」ので、mesh と同じ
     // bound を渡さないと形状の一部を検査しないことになる
-    let (mesh, mesh_bounds) = if let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1)
-        && aabb_significantly_inflated(aabb.min, aabb.max, emp_min, emp_max)
-    {
-        let emp_dims = (
-            emp_max.x - emp_min.x,
-            emp_max.y - emp_min.y,
-            emp_max.z - emp_min.z,
-        );
-        let use_dc2 = should_use_dual_contouring(emp_dims);
-        // 5mm padding で 1st pass の under-sample 分 (cell size ~5mm) を回収
-        let padding_2nd = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
-        info!(
-            emp_max_dim = emp_dims.0.max(emp_dims.1).max(emp_dims.2),
-            emp_min_dim = emp_dims.0.min(emp_dims.1).min(emp_dims.2),
-            use_dc_2nd = use_dc2,
-            padding_2nd_mm = AABB_2ND_PASS_PADDING_MM,
-            "tight_aabb inflated → 2nd-pass re-mesh at empirical bounds for proper cell size"
-        );
-        (
-            generate_mesh(
-                &sdf,
-                emp_min - padding_2nd,
-                emp_max + padding_2nd,
-                quality,
-                use_dc2,
-            ),
-            (emp_min - padding_2nd, emp_max + padding_2nd),
-        )
-    } else {
-        (mesh1, (min_bounds, max_bounds))
-    };
-    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    let (mesh, mesh_bounds) = mesh_with_remesh(&sdf, aabb.min, aabb.max, quality)?;
+    let mesh = repair_mesh(&mesh);
 
     let overhang_report = analyze_overhang(&mesh, &OverhangConfig::default());
     let overhang_summary = OverhangSummary::from_report(&overhang_report);
@@ -1109,16 +1150,10 @@ fn printability_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String>
     {
         return Vec::new();
     }
-    let padding = Vec3::splat(1.0);
-    let use_dc = should_use_dual_contouring(dims);
-    let mesh = generate_mesh(
-        sdf,
-        aabb.min - padding,
-        aabb.max + padding,
-        Quality::Preview,
-        use_dc,
-    );
-    let mesh = MeshRepair::repair_all(&mesh, 5e-3);
+    let Ok((mesh, bounds)) = mesh_with_remesh(sdf, aabb.min, aabb.max, Quality::Preview) else {
+        return Vec::new();
+    };
+    let mesh = repair_mesh(&mesh);
     let mut cfg = dfam_config();
     cfg.grid_resolution = 48;
     cfg.max_thickness_samples = 20_000;
@@ -1131,9 +1166,7 @@ fn printability_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String>
         .collect();
 
     // 肉厚 / 連結性は証明ベース側が canonical (`PrintabilitySummary` の表参照)
-    out.extend(
-        printability_summary(sdf, &mesh, aabb.min - padding, aabb.max + padding).fail_messages,
-    );
+    out.extend(printability_summary(sdf, &mesh, bounds.0, bounds.1).fail_messages);
     out
 }
 
@@ -1419,6 +1452,103 @@ fn extract_json_code(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- 再メッシュの切り落とし回収 (mesh_with_remesh) と repair の水密維持 (repair_mesh) ----
+    // X 軸まわりに θ 度傾けた薄板 box3d(15, 15, 0.4) の半 extent は閉形式で
+    // y = 15|cosθ| + 0.4|sinθ|、z = 15|sinθ| + 0.4|cosθ| (x は 15)
+    // tight AABB が膨らんで 1 回目の mesh が板を捉えられなくても、最終 mesh の AABB は
+    // この閉形式に cell size 以内で届かなければならない (切り落とされていれば届かない)
+
+    fn tilted_plate_half_extents(deg: f32) -> [f32; 3] {
+        let (s, c) = deg.to_radians().sin_cos();
+        [
+            15.0,
+            15.0 * c.abs() + 0.4 * s.abs(),
+            15.0 * s.abs() + 0.4 * c.abs(),
+        ]
+    }
+
+    #[test]
+    fn remeshed_tilted_plate_reaches_its_analytic_extent() {
+        for deg in [15.0_f32, 30.0, 45.0, 60.0] {
+            let lol = format!("rotate({deg:.1}, 0.0, 0.0, box3d(15.0, 15.0, 0.4))");
+            let mesh = preview_lol_to_mesh(&lol, Quality::Preview).expect("preview mesh");
+            let (min, max) = compute_empirical_aabb(&mesh).expect("non-empty mesh");
+            let want = tilted_plate_half_extents(deg);
+            for (axis, w) in want.iter().enumerate() {
+                let (lo, hi) = (min.to_array()[axis], max.to_array()[axis]);
+                // 表面の頂点は真の extent の内側に cell 以内で届く (上側は丸め程度の超過のみ)
+                assert!(
+                    (hi - w).abs() < 0.5 && (lo + w).abs() < 0.5,
+                    "{deg}deg axis {axis}: [{lo:.3}, {hi:.3}] が閉形式 ±{w:.3} に届かない (切り落とし)"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn count_boundary_edges_matches_hand_counted_topologies() {
+        let mut m = alice_sdf::mesh::Mesh::new();
+        m.vertices = [Vec3::ZERO, Vec3::X, Vec3::Y, Vec3::Z]
+            .iter()
+            .map(|&p| alice_sdf::mesh::Vertex::new(p, Vec3::Z))
+            .collect();
+        // 単独の三角形: 3 辺すべてが境界
+        m.indices = vec![0, 1, 2];
+        assert_eq!(count_boundary_edges(&m), 3);
+        // 辺 (1, 2) を共有する 2 枚: 共有辺を除く 4 本が境界
+        m.indices = vec![0, 1, 2, 1, 3, 2];
+        assert_eq!(count_boundary_edges(&m), 4);
+        // 閉じた四面体: 境界なし (全 6 辺がちょうど 2 枚に共有される)
+        m.indices = vec![0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3];
+        assert_eq!(count_boundary_edges(&m), 0);
+        // 空 mesh
+        assert_eq!(count_boundary_edges(&alice_sdf::mesh::Mesh::new()), 0);
+    }
+
+    #[test]
+    fn repair_mesh_never_adds_boundary_edges() {
+        // 45 度の薄板を、固定 5mm padding の旧来の 2 回目の bounds (実測 AABB ± 5mm) で
+        // 直接メッシュすると、水密な mesh (境界 0) を `repair_all` が開く (境界 567 本)
+        // 再メッシュの bounds を直した現在は `mesh_with_remesh` 経由ではこの mesh は出ないので、
+        // `repair_mesh` のガードはこの入力でしか実効が出ない (経路を直しても防御は残す)
+        let sdf = alice_bamboo::lol_to_sdf("rotate(45.0, 0.0, 0.0, box3d(15.0, 15.0, 0.4))")
+            .expect("parse");
+        let aabb = compute_tight_aabb_with_config(&sdf, &TightAabbConfig::preset_large());
+        let pad1 = Vec3::splat(1.0);
+        let mesh1 = generate_mesh(
+            &sdf,
+            aabb.min - pad1,
+            aabb.max + pad1,
+            Quality::Preview,
+            true,
+        );
+        let (emp_min, emp_max) = compute_empirical_aabb(&mesh1).expect("1st pass mesh");
+        let pad2 = Vec3::splat(AABB_2ND_PASS_PADDING_MM);
+        // 経路は旧来どおり実測の寸法で決める (45 度の板は 30 x 21.8 x 21.8 mm なので MC)
+        let dims = emp_max - emp_min;
+        let use_dc2 = should_use_dual_contouring((dims.x, dims.y, dims.z));
+        let mesh = generate_mesh(
+            &sdf,
+            emp_min - pad2,
+            emp_max + pad2,
+            Quality::Preview,
+            use_dc2,
+        );
+        assert_eq!(count_boundary_edges(&mesh), 0, "再メッシュ直後は水密のはず");
+        // 前提: repair_all 単体は水密な mesh を開く (これが成り立たなくなったら、
+        // ALICE-SDF 側で修正された可能性があるので、本 test と repair_mesh の要否を見直す)
+        let raw = MeshRepair::repair_all(&mesh, 5e-3);
+        assert!(
+            count_boundary_edges(&raw) > 0,
+            "repair_all が水密な mesh を開かなくなった (ALICE-SDF で修正された?)"
+        );
+        let after = count_boundary_edges(&repair_mesh(&mesh));
+        assert_eq!(
+            after, 0,
+            "repair_mesh が水密な mesh を開いた (境界エッジ {after} 本)"
+        );
+    }
 
     // ---- 2-pass remesh 判定 (compute_empirical_aabb / aabb_significantly_inflated) ----
     // 仕様は関数の doc: 前者は頂点位置の軸ごとの min / max (空 mesh は None)、
