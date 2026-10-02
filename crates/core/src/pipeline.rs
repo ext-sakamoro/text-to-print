@@ -667,12 +667,241 @@ pub fn preview_lol_to_mesh(
     Ok(std::sync::Arc::new(mesh))
 }
 
+/// 固体探索 (区間評価の八分木) の `eval_interval` 回数の上限 (超えたら実測方式に退避する)
+const SOLID_SEARCH_BUDGET: usize = 400_000;
+/// 探索 1 段の分割 (各軸 2^6 = 64 分割、単位は最大 64^3 個)
+const SOLID_SEARCH_LEVELS: u32 = 6;
+/// 成分の AABB で再探索して絞り込む段数の上限
+const SOLID_SEARCH_MAX_REFINE: usize = 3;
+/// 別々にメッシュする成分数の上限 (成分ごとに格子を張るので、超えたら 1 つにまとめる)
+const SOLID_SEARCH_MAX_CLUSTERS: usize = 8;
+/// 成分ごとのメッシュ bounds の padding (mm)
+const CLUSTER_PADDING_MM: f32 = 1.0;
+
+/// 区間 `iv` の箱が固体を含まないと **証明できる** か (`f > 0` が箱の全域で成り立つ)
+///
+/// 下限が NaN (評価不能) のときは証明できないので排除しない (保守側)
+fn interval_excludes(iv: alice_sdf::interval::Interval) -> bool {
+    iv.lo > 0.0
+}
+
+/// 領域 `[rmin, rmax]` で、`f <= 0` の固体が存在しうる単位格子を八分木で求める
+///
+/// `eval_interval(box)` は箱内の全点で `lo <= f <= hi` を保証するので、`lo > 0` の箱は
+/// 固体を含まない (排除) `hi < 0` の箱は全域が内部なので分割せず採用する
+/// 区間が NaN のときは排除しない (保守側)
+///
+/// 戻り値は `64^3` 個の占有ビット (`index = (x * 64 + y) * 64 + z`)  評価回数が予算を超えたら `None`
+fn solid_units(
+    sdf: &alice_sdf::SdfNode,
+    rmin: Vec3,
+    rmax: Vec3,
+    evals: &mut usize,
+) -> Option<Vec<bool>> {
+    use alice_sdf::interval::{Vec3Interval, eval_interval};
+    let n: u32 = 1 << SOLID_SEARCH_LEVELS;
+    let nu = n as usize;
+    let unit = (rmax - rmin) / n as f32;
+    let mut marked = vec![false; nu * nu * nu];
+    let mut stack: Vec<([u32; 3], u32)> = vec![([0, 0, 0], n)];
+    while let Some((idx, size)) = stack.pop() {
+        *evals += 1;
+        if *evals > SOLID_SEARCH_BUDGET {
+            return None;
+        }
+        let lo = rmin + unit * Vec3::new(idx[0] as f32, idx[1] as f32, idx[2] as f32);
+        let hi = rmin
+            + unit
+                * Vec3::new(
+                    (idx[0] + size) as f32,
+                    (idx[1] + size) as f32,
+                    (idx[2] + size) as f32,
+                );
+        let iv = eval_interval(sdf, Vec3Interval::from_bounds(lo, hi));
+        if interval_excludes(iv) {
+            continue;
+        }
+        if size == 1 || iv.hi < 0.0 {
+            for x in idx[0]..idx[0] + size {
+                for y in idx[1]..idx[1] + size {
+                    for z in idx[2]..idx[2] + size {
+                        marked[(x as usize * nu + y as usize) * nu + z as usize] = true;
+                    }
+                }
+            }
+            continue;
+        }
+        let half = size / 2;
+        for dx in [0, half] {
+            for dy in [0, half] {
+                for dz in [0, half] {
+                    stack.push(([idx[0] + dx, idx[1] + dy, idx[2] + dz], half));
+                }
+            }
+        }
+    }
+    Some(marked)
+}
+
+/// 占有単位を 26 近傍の連結成分に分け、成分ごとの world 軸 AABB を返す
+fn unit_components(marked: &[bool], rmin: Vec3, rmax: Vec3) -> Vec<(Vec3, Vec3)> {
+    let nu = 1usize << SOLID_SEARCH_LEVELS;
+    let unit = (rmax - rmin) / nu as f32;
+    let mut seen = vec![false; marked.len()];
+    let mut out = Vec::new();
+    for start in 0..marked.len() {
+        if !marked[start] || seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let mut queue = vec![start];
+        let (mut lo, mut hi) = ([usize::MAX; 3], [0usize; 3]);
+        while let Some(u) = queue.pop() {
+            let c = [u / (nu * nu), (u / nu) % nu, u % nu];
+            for a in 0..3 {
+                lo[a] = lo[a].min(c[a]);
+                hi[a] = hi[a].max(c[a]);
+            }
+            for dx in -1i64..=1 {
+                for dy in -1i64..=1 {
+                    for dz in -1i64..=1 {
+                        let (x, y, z) = (c[0] as i64 + dx, c[1] as i64 + dy, c[2] as i64 + dz);
+                        if [x, y, z].iter().any(|&v| v < 0 || v >= nu as i64) {
+                            continue;
+                        }
+                        let v = (x as usize * nu + y as usize) * nu + z as usize;
+                        if marked[v] && !seen[v] {
+                            seen[v] = true;
+                            queue.push(v);
+                        }
+                    }
+                }
+            }
+        }
+        let f = |c: [usize; 3], off: usize| {
+            rmin + unit
+                * Vec3::new(
+                    (c[0] + off) as f32,
+                    (c[1] + off) as f32,
+                    (c[2] + off) as f32,
+                )
+        };
+        out.push((f(lo, 0), f(hi, 1)));
+    }
+    out
+}
+
+/// 重なる (padding 込みで接する) AABB を 1 つにまとめる 別々の格子が同じ固体を二重に
+/// メッシュしないよう、残る AABB は互いに padding 込みで重ならない
+fn merge_overlapping(mut boxes: Vec<(Vec3, Vec3)>) -> Vec<(Vec3, Vec3)> {
+    let pad = Vec3::splat(CLUSTER_PADDING_MM);
+    'again: loop {
+        for i in 0..boxes.len() {
+            for j in i + 1..boxes.len() {
+                let (a, b) = (boxes[i], boxes[j]);
+                let overlap =
+                    (a.0 - pad).cmple(b.1 + pad).all() && (b.0 - pad).cmple(a.1 + pad).all();
+                if overlap {
+                    boxes[i] = (a.0.min(b.0), a.1.max(b.1));
+                    boxes.swap_remove(j);
+                    continue 'again;
+                }
+            }
+        }
+        return boxes;
+    }
+}
+
+fn box_volume(b: (Vec3, Vec3)) -> f32 {
+    let d = (b.1 - b.0).max(Vec3::splat(1e-3));
+    d.x * d.y * d.z
+}
+
+/// 固体が存在しうる領域を、連結成分ごとの AABB として **証明ベース** で求める
+///
+/// 区間評価の八分木 (`solid_units`) で `f > 0` の箱を排除し、残った単位を連結成分に分ける
+/// 成分の AABB が領域より十分小さければ、その AABB で再探索して絞り込む
+/// mesh の実測 AABB と違い、1 回目の mesh が捉え損ねた離れた部品も落とさず、回転で膨張しない
+/// (健全性は `eval_interval` の包含保証のみに依る)
+///
+/// 評価回数が予算を超えたとき、領域が不正なときは `None` (呼び出し側は実測方式に退避する)
+fn solid_clusters(sdf: &alice_sdf::SdfNode, rmin: Vec3, rmax: Vec3) -> Option<Vec<(Vec3, Vec3)>> {
+    let d = rmax - rmin;
+    if !(d.is_finite() && d.min_element() > 0.0) {
+        return None;
+    }
+    fn refine(
+        sdf: &alice_sdf::SdfNode,
+        rmin: Vec3,
+        rmax: Vec3,
+        depth: usize,
+        evals: &mut usize,
+    ) -> Option<Vec<(Vec3, Vec3)>> {
+        let marked = solid_units(sdf, rmin, rmax, evals)?;
+        let comps = unit_components(&marked, rmin, rmax);
+        let region = box_volume((rmin, rmax));
+        let mut out = Vec::new();
+        for c in comps {
+            if depth < SOLID_SEARCH_MAX_REFINE && box_volume(c) < 0.5 * region {
+                out.extend(refine(sdf, c.0, c.1, depth + 1, evals)?);
+            } else {
+                out.push(c);
+            }
+        }
+        Some(out)
+    }
+    let mut evals = 0usize;
+    let boxes = refine(sdf, rmin, rmax, 0, &mut evals)?;
+    let mut merged = merge_overlapping(boxes);
+    if merged.len() > SOLID_SEARCH_MAX_CLUSTERS {
+        let all = merged.iter().fold(
+            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+            |a, b| (a.0.min(b.0), a.1.max(b.1)),
+        );
+        merged = vec![all];
+    }
+    Some(merged)
+}
+
+/// 成分ごとの AABB を専用の格子でメッシュして連結する (返す bounds は全成分の外接)
+fn mesh_clusters(
+    sdf: &alice_sdf::SdfNode,
+    clusters: &[(Vec3, Vec3)],
+    quality: Quality,
+) -> (alice_sdf::mesh::Mesh, (Vec3, Vec3)) {
+    let pad = Vec3::splat(CLUSTER_PADDING_MM);
+    let mut merged = alice_sdf::mesh::Mesh::new();
+    let mut union = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+    for &(cmin, cmax) in clusters {
+        let (lo, hi) = (cmin - pad, cmax + pad);
+        let d = cmax - cmin;
+        let part = generate_mesh(
+            sdf,
+            lo,
+            hi,
+            quality,
+            should_use_dual_contouring((d.x, d.y, d.z)),
+        );
+        let base = u32::try_from(merged.vertices.len()).unwrap_or(u32::MAX);
+        merged.vertices.extend(part.vertices);
+        merged
+            .indices
+            .extend(part.indices.iter().map(|&i| i + base));
+        union = (union.0.min(lo), union.1.max(hi));
+    }
+    (merged, union)
+}
+
 /// 再メッシュで bounds を広げる反復の上限 (毎回 extent を倍にし、1 回目の bounds で頭打ち)
 const AABB_REMESH_MAX_GROWTH: usize = 6;
 
-/// 1 回目の mesh → (tight AABB が膨らんでいれば) 実測 AABB で再メッシュ、の 2-pass 生成
+/// tight AABB から mesh を作る (膨張 / 離れた部品に対応する)  返すのは最終 mesh と、それを作った bounds
 ///
-/// 返すのは最終 mesh と、それを作った bounds
+/// 1. `solid_clusters` が区間評価の八分木で固体の存在しうる領域を **証明** する
+///    単一成分で tight AABB が膨らんでいなければ従来どおり tight AABB で 1 回メッシュする
+///    それ以外 (回転で膨らむ / 離れた部品がある) は成分ごとに専用の格子でメッシュして連結する
+///    (離れた部品を落とさず、長い bbox でも薄板を取りこぼさない)
+/// 2. 八分木が予算を超えたときは、1 回目の mesh の実測 AABB で再メッシュする方式に退避する (下記)
 ///
 /// tight AABB は区間演算で回転後の軸を大きく過大評価する (X 軸 30 度回転で 612 x 578 mm)
 /// その cell で切った 1 回目の mesh は薄板をほとんど捉えられず、実測 AABB が実寸より遥かに
@@ -693,6 +922,18 @@ fn mesh_with_remesh(
     let (first_min, first_max) = (tight_min - padding, tight_max + padding);
     let dims = tight_max - tight_min;
     let use_dc = should_use_dual_contouring((dims.x, dims.y, dims.z));
+
+    // 固体が存在しうる領域を区間評価で **証明** する (mesh の実測に頼らない)
+    // 単一成分で tight AABB が膨らんでいなければ従来どおり tight AABB で 1 回メッシュする
+    // (通常の形状の出力は変えない)  それ以外 (回転で膨らむ / 離れた部品がある) は
+    // 成分ごとに専用の格子でメッシュして連結する
+    if let Some(clusters) = solid_clusters(sdf, tight_min, tight_max) {
+        let unchanged = clusters.len() == 1
+            && !aabb_significantly_inflated(tight_min, tight_max, clusters[0].0, clusters[0].1);
+        if !clusters.is_empty() && !unchanged {
+            return Ok(mesh_clusters(sdf, &clusters, quality));
+        }
+    }
     let mesh1 = generate_mesh(sdf, first_min, first_max, quality, use_dc);
     let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1) else {
         return Ok((mesh1, (first_min, first_max)));
@@ -1452,6 +1693,227 @@ fn extract_json_code(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- 固体領域の証明 (solid_clusters) と成分ごとのメッシュ (mesh_clusters) ----
+    // 独立の参照は閉形式の幾何: X 軸まわりに θ 度傾けた薄板 box3d(15, 15, 0.4) の内部の点は
+    // (x, u, w) in [-15, 15] x [-15, 15] x [-0.4, 0.4] から y = u cosθ - w sinθ、z = u sinθ + w cosθ で作れる
+
+    fn plate_tilted(deg: f32) -> alice_sdf::SdfNode {
+        alice_bamboo::lol_to_sdf(&format!(
+            "rotate({deg:.1}, 0.0, 0.0, box3d(15.0, 15.0, 0.4))"
+        ))
+        .expect("parse")
+    }
+
+    fn tight_of(sdf: &alice_sdf::SdfNode) -> (Vec3, Vec3) {
+        let a = compute_tight_aabb_with_config(sdf, &TightAabbConfig::preset_large());
+        (a.min, a.max)
+    }
+
+    fn contains(b: (Vec3, Vec3), p: Vec3) -> bool {
+        p.cmpge(b.0).all() && p.cmple(b.1).all()
+    }
+
+    #[test]
+    fn solid_clusters_never_exclude_a_solid_point_of_a_tilted_plate() {
+        // 健全性: 板の内部の点 (閉形式で生成) は必ずいずれかの成分 AABB に入る
+        for deg in [15.0_f32, 30.0, 45.0, 60.0] {
+            let sdf = plate_tilted(deg);
+            let (tmin, tmax) = tight_of(&sdf);
+            let clusters = solid_clusters(&sdf, tmin, tmax).expect("search within budget");
+            let (s, c) = deg.to_radians().sin_cos();
+            let mut checked = 0;
+            for xi in 0..=6 {
+                for ui in 0..=12 {
+                    for wi in 0..=2 {
+                        let x = -15.0 + 30.0 * xi as f32 / 6.0;
+                        let u = -15.0 + 30.0 * ui as f32 / 12.0;
+                        let w = -0.4 + 0.8 * wi as f32 / 2.0;
+                        let p = Vec3::new(x, u * c - w * s, u * s + w * c);
+                        // 参照の自己検査: 生成した点は本当に f <= 0 (境界上は丸めの余裕を見る)
+                        assert!(alice_sdf::eval(&sdf, p) <= 1e-3, "{deg}deg: 生成点が板の外");
+                        assert!(
+                            clusters.iter().any(|&b| contains(b, p)),
+                            "{deg}deg: 固体の点 {p:?} がどの成分 AABB にも入らない (排除が不健全)"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+            assert_eq!(checked, 7 * 13 * 3);
+        }
+    }
+
+    #[test]
+    fn solid_clusters_of_a_tilted_plate_is_one_tight_box() {
+        // tight 性: 成分は 1 つで、閉形式の半 extent を含み、余りは小さい (tight AABB は数百 mm に膨らむ)
+        for deg in [15.0_f32, 30.0, 45.0, 60.0] {
+            let sdf = plate_tilted(deg);
+            let (tmin, tmax) = tight_of(&sdf);
+            let clusters = solid_clusters(&sdf, tmin, tmax).expect("within budget");
+            assert_eq!(clusters.len(), 1, "{deg}deg: 板は 1 成分のはず");
+            let (cmin, cmax) = clusters[0];
+            let (s, c) = deg.to_radians().sin_cos();
+            let want = [
+                15.0,
+                15.0 * c.abs() + 0.4 * s.abs(),
+                15.0 * s.abs() + 0.4 * c.abs(),
+            ];
+            for (a, &w) in want.iter().enumerate() {
+                let (lo, hi) = (cmin.to_array()[a], cmax.to_array()[a]);
+                assert!(
+                    lo <= -w + 1e-3 && hi >= w - 1e-3,
+                    "{deg}deg axis {a}: [{lo:.3}, {hi:.3}] が閉形式 ±{w:.3} を含まない"
+                );
+                assert!(
+                    -w - lo < 1.5 && hi - w < 1.5,
+                    "{deg}deg axis {a}: [{lo:.3}, {hi:.3}] の余りが大きい (閉形式 ±{w:.3})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn solid_clusters_separates_far_parts_and_merges_overlapping_ones() {
+        let parse = |lol: &str| alice_bamboo::lol_to_sdf(lol).expect("parse");
+        let count = |lol: &str| {
+            let sdf = parse(lol);
+            let (tmin, tmax) = tight_of(&sdf);
+            solid_clusters(&sdf, tmin, tmax).expect("within budget")
+        };
+        let plate = "box3d(15.0, 15.0, 0.4)";
+        // 薄板 + 120mm 離れた球 = 2 成分、球の成分は球 (中心 y=120、半径 3) を含む
+        let far = count(&format!(
+            "union({plate}, translate(0.0, 120.0, 0.0, sphere(3.0)))"
+        ));
+        assert_eq!(far.len(), 2, "離れた部品は別成分: {far:?}");
+        assert!(
+            far.iter().any(|&b| contains(b, Vec3::new(0.0, 123.0, 0.0))
+                && contains(b, Vec3::new(0.0, 117.0, 0.0))),
+            "球を含む成分が無い: {far:?}"
+        );
+        // 板に食い込む球 = 1 成分
+        let near = count(&format!(
+            "union({plate}, translate(0.0, 0.0, 0.5, sphere(3.0)))"
+        ));
+        assert_eq!(near.len(), 1, "重なる部品は 1 成分: {near:?}");
+        // 板のみ = 1 成分
+        assert_eq!(count(plate).len(), 1);
+    }
+
+    #[test]
+    fn interval_excludes_only_a_box_proven_strictly_positive() {
+        use alice_sdf::interval::Interval;
+        let iv = |lo: f32, hi: f32| Interval { lo, hi };
+        assert!(interval_excludes(iv(0.001, 5.0)), "全域で f > 0 は排除");
+        assert!(
+            !interval_excludes(iv(0.0, 5.0)),
+            "下限 0 は f = 0 の点を含みうる"
+        );
+        assert!(
+            !interval_excludes(iv(-1.0, 1.0)),
+            "符号をまたぐ箱は排除しない"
+        );
+        assert!(!interval_excludes(iv(-5.0, -1.0)), "内部の箱は排除しない");
+        assert!(
+            !interval_excludes(iv(f32::NAN, 1.0)),
+            "NaN は証明にならないので排除しない"
+        );
+        assert!(interval_excludes(iv(f32::INFINITY, f32::INFINITY)));
+    }
+
+    #[test]
+    fn solid_units_gives_up_when_the_evaluation_budget_is_spent() {
+        let sdf = plate_tilted(30.0);
+        let mut evals = SOLID_SEARCH_BUDGET;
+        assert!(solid_units(&sdf, Vec3::splat(-20.0), Vec3::splat(20.0), &mut evals).is_none());
+        let mut fresh = 0;
+        assert!(solid_units(&sdf, Vec3::splat(-20.0), Vec3::splat(20.0), &mut fresh).is_some());
+    }
+
+    #[test]
+    fn solid_clusters_rejects_a_degenerate_region() {
+        let sdf = plate_tilted(30.0);
+        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::ZERO).is_none());
+        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::new(1.0, 0.0, 1.0)).is_none());
+        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::splat(f32::NAN)).is_none());
+    }
+
+    #[test]
+    fn unit_components_use_26_connectivity() {
+        let n = 1usize << SOLID_SEARCH_LEVELS;
+        let at = |x: usize, y: usize, z: usize| (x * n + y) * n + z;
+        let (rmin, rmax) = (Vec3::ZERO, Vec3::splat(n as f32)); // 1 単位 = 1mm
+        // 角でだけ接する 2 単位 (対角) は 1 成分
+        let mut g = vec![false; n * n * n];
+        g[at(1, 1, 1)] = true;
+        g[at(2, 2, 2)] = true;
+        let c = unit_components(&g, rmin, rmax);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0], (Vec3::splat(1.0), Vec3::splat(3.0)));
+        // 1 単位空けると 2 成分
+        let mut g = vec![false; n * n * n];
+        g[at(1, 1, 1)] = true;
+        g[at(3, 1, 1)] = true;
+        assert_eq!(unit_components(&g, rmin, rmax).len(), 2);
+        // 何も無ければ成分なし
+        assert!(unit_components(&vec![false; n * n * n], rmin, rmax).is_empty());
+    }
+
+    #[test]
+    fn merge_overlapping_joins_boxes_that_touch_within_the_padding() {
+        let b = |a: f32, c: f32| (Vec3::new(a, 0.0, 0.0), Vec3::new(c, 1.0, 1.0));
+        // padding 1mm: 間隔 1.5mm (< 2mm) は接する、間隔 3mm は別
+        let joined = merge_overlapping(vec![b(0.0, 1.0), b(2.5, 3.5)]);
+        assert_eq!(
+            joined,
+            vec![(Vec3::new(0.0, 0.0, 0.0), Vec3::new(3.5, 1.0, 1.0))]
+        );
+        assert_eq!(merge_overlapping(vec![b(0.0, 1.0), b(4.0, 5.0)]).len(), 2);
+        // 連鎖: A-B が接し B-C が接すれば 3 つとも 1 つ
+        assert_eq!(
+            merge_overlapping(vec![b(0.0, 1.0), b(2.5, 3.5), b(5.0, 6.0)]).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn mesh_clusters_concatenates_parts_with_correct_index_offsets() {
+        let sdf =
+            alice_bamboo::lol_to_sdf("union(sphere(5.0), translate(40.0, 0.0, 0.0, sphere(5.0)))")
+                .expect("parse");
+        let (tmin, tmax) = tight_of(&sdf);
+        let clusters = solid_clusters(&sdf, tmin, tmax).expect("within budget");
+        assert_eq!(clusters.len(), 2);
+        let (mesh, bounds) = mesh_clusters(&sdf, &clusters, Quality::Preview);
+        assert!(
+            mesh.indices
+                .iter()
+                .all(|&i| (i as usize) < mesh.vertices.len())
+        );
+        assert_eq!(count_boundary_edges(&mesh), 0, "連結後も各球は水密");
+        // 体積 = 2 球 (4/3 π 5³ x 2 = 1047.2)
+        let vol: f64 = mesh
+            .indices
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|t| {
+                let p = |k: usize| mesh.vertices[t[k] as usize].position.as_dvec3();
+                p(0).dot(p(1).cross(p(2))) / 6.0
+            })
+            .sum();
+        let want = 2.0 * 4.0 / 3.0 * std::f64::consts::PI * 125.0;
+        assert!(
+            (vol - want).abs() / want < 0.03,
+            "体積 {vol:.2} (期待 {want:.2})"
+        );
+        // bounds は両方の球を含む
+        assert!(
+            contains(bounds, Vec3::new(-5.0, 0.0, 0.0))
+                && contains(bounds, Vec3::new(45.0, 0.0, 0.0))
+        );
+    }
 
     // ---- 再メッシュの切り落とし回収 (mesh_with_remesh) と repair の水密維持 (repair_mesh) ----
     // X 軸まわりに θ 度傾けた薄板 box3d(15, 15, 0.4) の半 extent は閉形式で
