@@ -1976,12 +1976,19 @@ mod tests {
         // `repair_mesh` のガードはこの入力でしか実効が出ない (経路を直しても防御は残す)
         let sdf = alice_bamboo::lol_to_sdf("rotate(45.0, 0.0, 0.0, box3d(15.0, 15.0, 0.4))")
             .expect("parse");
-        let aabb = compute_tight_aabb_with_config(&sdf, &TightAabbConfig::preset_large());
+        // 1 回目の bounds は、tight AABB が回転で膨らんでいた頃の値 (X 軸 45 度回転の 0.8mm 板で
+        // 15 x 500 x 500 の半幅) を **固定** で置く tight AABB は ALICE-SDF 側の準位集合の bound で
+        // 板の実寸に絞られるようになり (`08582d5`)、`compute_tight_aabb_with_config` から作ると
+        // この mesh が再現しなくなる
+        let (first_min, first_max) = (
+            Vec3::new(-15.0, -500.0, -500.0),
+            Vec3::new(15.0, 500.0, 500.0),
+        );
         let pad1 = Vec3::splat(1.0);
         let mesh1 = generate_mesh(
             &sdf,
-            aabb.min - pad1,
-            aabb.max + pad1,
+            first_min - pad1,
+            first_max + pad1,
             Quality::Preview,
             true,
         );
@@ -2010,6 +2017,39 @@ mod tests {
             after, 0,
             "repair_mesh が水密な mesh を開いた (境界エッジ {after} 本)"
         );
+    }
+
+    #[test]
+    fn tight_aabb_of_a_rotated_thin_plate_is_no_longer_inflated() {
+        // 回転した薄板の tight AABB は、区間演算の相関落ちで実寸の 2 倍超に膨らみ、再メッシュ経路
+        // (実測 AABB との比較) に入って板の大半を欠いていた ALICE-SDF の準位集合の bound
+        // (`08582d5`) で実寸 (`|R| * half`) に絞られるので、どの角度でも膨張判定に掛からない
+        let half = Vec3::new(15.0, 15.0, 0.4);
+        for deg in [0.0f32, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0] {
+            let sdf = alice_bamboo::lol_to_sdf(&format!(
+                "rotate({deg:.1}, 0.0, 0.0, box3d(15.0, 15.0, 0.4))"
+            ))
+            .expect("parse");
+            let aabb = compute_tight_aabb_with_config(&sdf, &TightAabbConfig::preset_large());
+            let (s, c) = deg.to_radians().sin_cos();
+            let exact_half = Vec3::new(
+                half.x,
+                half.y * c.abs() + half.z * s.abs(),
+                half.y * s.abs() + half.z * c.abs(),
+            );
+            assert!(
+                !aabb_significantly_inflated(aabb.min, aabb.max, -exact_half, exact_half),
+                "{deg} deg: tight AABB {:?} .. {:?} is inflated against the exact half-extents {exact_half:?}",
+                aabb.min,
+                aabb.max
+            );
+            // 板を切り落としていない (実寸以上)
+            let dims = (aabb.max - aabb.min) * 0.5;
+            assert!(
+                dims.cmpge(exact_half - Vec3::splat(0.05)).all(),
+                "{deg} deg: {dims:?} < {exact_half:?}"
+            );
+        }
     }
 
     // ---- 2-pass remesh 判定 (compute_empirical_aabb / aabb_significantly_inflated) ----

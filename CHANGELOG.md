@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### Changed — 回転した薄板の tight AABB が実寸に絞られる (ALICE-SDF `08582d5` の追従) (2026-10-03)
+
+ALICE-SDF の `compute_tight_aabb` が準位集合の bound を伝播するようになり、回転した薄板 (X 軸 45 度の 30 x 30 x 0.8 mm) の AABB が
+半幅 15 x 500 x 500 (探索範囲の上限) から実寸 15 x 11 x 11 に絞られた 再メッシュ経路 (実測 AABB との比較) に入る形状が減る
+- `repair_mesh_never_adds_boundary_edges` の 1 回目の bounds を tight AABB から作らず、膨らんでいた頃の値で固定した (tight AABB が絞られると `repair_all` が水密な mesh を開く入力が再現しなくなるため)
+- `tight_aabb_of_a_rotated_thin_plate_is_no_longer_inflated` を追加 (0 / 15 / 30 / 45 / 60 / 75 / 90 度で膨張判定に掛からず、板を切り落とさない)
+
 ### Fixed — 離れた小部品が 3MF から落ちる / bbox が長いと薄板を取りこぼす 2 件 (2026-10-02)
 
 薄板 (30 x 30 x 0.8 mm = 720 mm³) と、120mm 離れた球 (半径 3mm = 113.1 mm³) の合計 833.1 mm³ が、エラー無しで次のように壊れていた
