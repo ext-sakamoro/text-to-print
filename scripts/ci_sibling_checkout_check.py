@@ -365,6 +365,9 @@ def verify_resolution(root: Path, siblings: Path, pins: dict[str, str]) -> tuple
     proc = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--locked", "--manifest-path", str(root / "Cargo.toml")],
         capture_output=True, text=True, encoding="utf-8",
+        # cargo は `.cargo/config.toml` を「実行した directory とその親」から探す build と同じく
+        # repo の root で実行しないと、repo の中の config (paths / [patch]) を見落とす
+        cwd=root,
     )
     if proc.returncode != 0:
         return [f"cargo metadata --locked が失敗:\n{proc.stderr.strip()}"], 0
@@ -610,8 +613,16 @@ def self_test() -> int:
         errs, n = verify_resolution(t / "app", t, pins_now)
         assert errs == [] and n == 2, (errs, n)
         crate("fork-b", "alice-b")
-        # `.cargo/config.toml` の paths は registry / git の依存にしか効かない (path 依存は差し替わらない)
-        # ので、実際に差し替わるのは manifest の path の書き換えと [patch] (registry の alice-*)
+        # `.cargo/config.toml` の paths は path 依存も差し替える (repo の中と親 directory の両方)
+        for cfg in ("app/.cargo/config.toml", ".cargo/config.toml"):
+            w(cfg, f'paths = ["{(t / "fork-b").as_posix()}"]\n')
+            assert verify_heads(t, pins_now) == [], "前提: sibling の tree は clean"
+            errs, _ = verify_resolution(t / "app", t, pins_now)
+            assert errs, f"{cfg} の paths による差し替えを検出しない"
+            assert heads_only(t / "app", t) == 1, f"action の照合が {cfg} の paths を検出しない"
+            (t / cfg).unlink()
+            assert verify_resolution(t / "app", t, pins_now)[0] == [], f"{cfg} を外した後に元へ戻らない"
+        # 実際の差し替えは他に manifest の path の書き換えと [patch] (registry の alice-*)
         # path の書き換えは実物で、[patch] は下の合成した解決結果で確かめる
         crate("fork-a", "alice-a", 'alice-b={path="../ALICE-B"}\n')
         c_manifest = (t / "app/c/Cargo.toml").read_text(encoding="utf-8")

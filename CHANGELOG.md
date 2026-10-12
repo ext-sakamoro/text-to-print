@@ -25,6 +25,8 @@ CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout 
 - 同じ step で `cargo metadata --locked` の解決結果も照合する: path の alice-* は固定した sibling の directory の下から来ること
   / 固定した sibling が提供する名前が registry・git から来ていないこと / registry の alice-* を `[patch]` で手元の path に
   差し替えていないこと (sibling の tree の外での差し替えを捕まえる)  照合した alice-* が 0 件なら fail
+- 解決先の照合で `cargo metadata` を repo の root で実行する (cargo は `.cargo/config.toml` を実行した directory とその親から
+  探すので、workspace の root から実行すると repo の中の config の `paths` / `[patch]` を見落としていた)
 - `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
   sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
   不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail
