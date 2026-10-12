@@ -49,7 +49,7 @@ PIN_LINE_RE = re.compile(r'^ALICE-[A-Za-z0-9-]+ = "[0-9a-f]{40}"$')
 # 綴りを列挙して禁じるのでなく、許す形だけを通す (値に `${{ }}` / `$` を含むものは一律不可)
 ALLOWED_REPOSITORIES: frozenset[str] = frozenset()
 LOCAL_ACTION_PATH = ".github/actions/alice-siblings"
-REPOSITORY_KEY_RE = re.compile(r"""(?i)^\s*(?:-\s*)?["']?repository["']?\s*:""")
+REPOSITORY_KEY_RE = re.compile(r"""(?i)(?<![\w-])["']?repository["']?\s*:""")
 FETCH_CMD_RE = re.compile(
     r"(?i)\bgit\b[^\n]*\b(?:clone|fetch|pull|submodule|remote|archive)\b"
     r"|\bgh\s+(?:repo\s+clone|api)\b|\bsvn\s+(?:co|checkout|export)\b"
@@ -184,8 +184,9 @@ def workflow_violations(text: str) -> tuple[list[tuple[int, str]], int]:
             continue
         if re.match(r"^\s+-\s+(?:name|uses|run|id|if|with|shell)\b", line):
             steps += 1
-        if REPOSITORY_KEY_RE.match(line):
-            value = line.split(":", 1)[1].strip().strip("'\"")
+        key = REPOSITORY_KEY_RE.search(line)
+        if key:  # block 形式でも flow 形式 (`with: {"repository": …}`) でも
+            value = re.split(r"[,}]", line[key.end():], maxsplit=1)[0].strip().strip("'\"")
             if value not in ALLOWED_REPOSITORIES:
                 hits.append((i, f"repository: の指定 ({value or '空'}) — sibling は composite action だけが checkout する"))
         if FETCH_CMD_RE.search(line):
@@ -231,15 +232,58 @@ def action_shape_errors(action: Path, pins: dict[str, str]) -> list[str]:
     return errors
 
 
+# sibling の directory に置いてよい「追跡外」は cargo の build 出力 1 つだけ
+# (CI では consumer 側の target に書くので通常は存在しない)
+ALLOWED_IGNORED = frozenset({"target/"})
+
+
 def verify_heads(siblings: Path, pins: dict[str, str]) -> list[str]:
+    """各 sibling の中身が固定 commit の tree と完全に一致することを確かめる
+
+    HEAD (pointer) だけでなく、cargo / rustup が実際に読む bytes を照合する:
+      - HEAD が固定 commit
+      - `git diff --quiet HEAD` (追跡 file の書き換え無し、index 含む)
+      - `git status --porcelain --untracked-files=all --ignored=matching` が空
+        (未追跡 file 無し、ignore されているが存在する file 無し、例外は ALLOWED_IGNORED)
+    取得の方法 (clone / tarball / script) に依らず、中身が違えば fail する
+    """
     errors: list[str] = []
+    if not pins:
+        return ["照合する sibling が 0 件"]
     for name, sha in sorted(pins.items()):
-        proc = subprocess.run(
-            ["git", "-C", str(siblings / name), "rev-parse", "HEAD"], capture_output=True, text=True
-        )
+        d = str(siblings / name)
+        proc = subprocess.run(["git", "-C", d, "rev-parse", "HEAD"], capture_output=True, text=True)
         head = proc.stdout.strip()
         if proc.returncode != 0 or head != sha:
             errors.append(f"{name} の HEAD {head or '(取得失敗)'} が固定 commit {sha} と違う")
+            continue
+        # status / diff から file を隠す index の flag (assume-unchanged = 小文字、skip-worktree = S) と
+        # commit の中身を差し替える replace ref は、それ自体を不可とする
+        flags = subprocess.run(["git", "-C", d, "ls-files", "-v"], capture_output=True, text=True)
+        hidden = [l[2:] for l in flags.stdout.splitlines() if l[:1].islower() or l[:1] == "S"]
+        if flags.returncode != 0 or hidden:
+            errors.append(f"{name} に status から隠された追跡 file がある: {', '.join(hidden[:5]) or '(ls-files 失敗)'}")
+        replaced = subprocess.run(["git", "-C", d, "replace", "-l"], capture_output=True, text=True)
+        if replaced.returncode != 0 or replaced.stdout.strip():
+            errors.append(f"{name} に replace ref がある (commit の中身が差し替えられうる)")
+        diff = subprocess.run(["git", "-C", d, "diff", "--quiet", "HEAD"], capture_output=True)
+        if diff.returncode != 0:
+            errors.append(f"{name} の追跡 file が固定 commit から書き換えられている")
+        st = subprocess.run(
+            ["git", "-C", d, "status", "--porcelain", "--untracked-files=all", "--ignored=matching"],
+            capture_output=True, text=True,
+        )
+        if st.returncode != 0:
+            errors.append(f"{name} の git status が失敗した")
+            continue
+        extra = []
+        for line in st.stdout.splitlines():
+            if line.startswith("!! ") and line[3:] in ALLOWED_IGNORED:
+                continue
+            extra.append(line)
+        if extra:
+            shown = ", ".join(extra[:5]) + (f" ほか {len(extra) - 5} 件" if len(extra) > 5 else "")
+            errors.append(f"{name} に固定 commit の tree に無い / 異なる file がある: {shown}")
     return errors
 
 
@@ -292,11 +336,9 @@ def heads_only(root: Path, siblings: Path) -> int:
     """checkout 後に全 pin の HEAD を照合する (composite action の最後の step)"""
     pins, errors = read_pins(norm(root))
     errors += verify_heads(norm(siblings), pins)
-    if not pins:
-        errors.append("照合した pin が 0 件")
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
-    print(f"verified {len(pins) if not errors else 0}/{len(pins)} sibling HEADs")
+    print(f"verified {len(pins) if not errors else 0}/{len(pins)} sibling trees (HEAD + clean)")
     return 1 if errors else 0
 
 
@@ -331,6 +373,7 @@ def self_test() -> int:
         crate("ALICE-A", "a", 'b={path="../ALICE-B"}\nz={path="../ALICE-Z",optional=true}\n')
         crate("ALICE-B", "b")
         crate("ALICE-Z", "z")
+        w("ALICE-A/.gitignore", "target/\nrust-toolchain.toml\n.cargo/\n")
         sha_a, sha_b = git_init("ALICE-A"), git_init("ALICE-B")
 
         need, err = required_siblings(t / "app", t)
@@ -386,6 +429,7 @@ def self_test() -> int:
             "直接 checkout": "      - with:\n          repository: o/ALICE-A\n",
             "引用符の repository": '      - with:\n          repository: "ext-sakamoro/ALICE-A"\n',
             "式の owner": "      - with:\n          repository: ${{ github.repository_owner }}/ALICE-A\n",
+            "flow 形式の repository": '      - uses: actions/checkout@v5\n        with: {"repository": "someone/other", path: x}\n',
             "小文字の名前": "      - with:\n          repository: ext-sakamoro/alice-a\n",
             "matrix の名前": "    strategy:\n      matrix:\n        sib: [ALICE-A]\n    steps:\n      - with:\n          repository: ext-sakamoro/${{ matrix.sib }}\n",
             "env の名前": "    env:\n      SIB: ALICE-A\n    steps:\n      - with:\n          repository: ${{ github.repository_owner }}/${{ env.SIB }}\n",
@@ -426,6 +470,65 @@ def self_test() -> int:
         setup(pins=good_pins.replace(sha_b, sha_a))
         assert check(t / "app", t, heads=True) == 1, "HEAD と固定 commit の不一致を検出しない"
         assert heads_only(t / "app", t) == 1, "action の HEAD 照合が不一致を検出しない"
+
+        # 中身の照合: HEAD が固定 commit のままでも、tree が違えば red
+        setup()
+        pins_now = read_pins(t / "app")[0]
+        assert verify_heads(t, pins_now) == [], "clean な tree を red にした"
+        (t / "ALICE-A/target/debug").mkdir(parents=True)
+        (t / "ALICE-A/target/debug/x").write_text("build output", encoding="utf-8")
+        assert verify_heads(t, pins_now) == [], "許可した target/ を red にした"
+
+        def restore() -> None:
+            for d in ("ALICE-A", "ALICE-B"):
+                subprocess.run(["git", "-C", str(t / d), "checkout", "-q", "--", "."], check=True)
+                subprocess.run(["git", "-C", str(t / d), "clean", "-qfdx", "-e", "target/"], check=True)
+
+        tampers = {
+            "追跡 file の上書き": lambda: (t / "ALICE-B/src/lib.rs").write_text("pub fn evil() {}\n", encoding="utf-8"),
+            "未追跡の .rs": lambda: (t / "ALICE-A/src/extra.rs").write_text("pub fn x() {}\n", encoding="utf-8"),
+            "tarball の展開 (別 tree)": lambda: (
+                (t / "ALICE-A/Cargo.toml").write_text('[package]\nname="a"\nversion="9.0.0"\nedition="2021"\n', encoding="utf-8"),
+                (t / "ALICE-A/README").write_text("from release tarball\n", encoding="utf-8"),
+            ),
+            "ignore されている rust-toolchain.toml": lambda: (t / "ALICE-A/rust-toolchain.toml").write_text('[toolchain]\nchannel="nightly"\n', encoding="utf-8"),
+            "ignore されている .cargo/config.toml": lambda: (
+                (t / "ALICE-A/.cargo").mkdir(exist_ok=True),
+                (t / "ALICE-A/.cargo/config.toml").write_text("[build]\nrustflags=[]\n", encoding="utf-8"),
+            ),
+            "skip-worktree で隠した書き換え": lambda: (
+                subprocess.run(["git", "-C", str(t / "ALICE-B"), "update-index", "--skip-worktree", "src/lib.rs"], check=True),
+                (t / "ALICE-B/src/lib.rs").write_text("pub fn hidden() {}\n", encoding="utf-8"),
+            ),
+            "assume-unchanged で隠した書き換え": lambda: (
+                subprocess.run(["git", "-C", str(t / "ALICE-B"), "update-index", "--assume-unchanged", "src/lib.rs"], check=True),
+                (t / "ALICE-B/src/lib.rs").write_text("pub fn hidden() {}\n", encoding="utf-8"),
+            ),
+            "replace ref": lambda: subprocess.run(
+                ["git", "-C", str(t / "ALICE-B"), "replace", "HEAD",
+                 subprocess.run(["git", "-C", str(t / "ALICE-B"), "commit-tree", "HEAD^{tree}", "-m", "r"],
+                                capture_output=True, text=True, check=True).stdout.strip()],
+                check=True,
+            ),
+            "index だけの変更 (作業 tree は HEAD と同じ)": lambda: (
+                (t / "ALICE-B/src/lib.rs").write_text("// staged\n", encoding="utf-8"),
+                subprocess.run(["git", "-C", str(t / "ALICE-B"), "add", "src/lib.rs"], check=True),
+                (t / "ALICE-B/src/lib.rs").write_text("", encoding="utf-8"),
+            ),
+        }
+        for label, tamper in tampers.items():
+            tamper()
+            assert verify_heads(t, pins_now) != [], f"{label} を検出しない"
+            assert heads_only(t / "app", t) == 1, f"action の照合が {label} を検出しない"
+            for r in subprocess.run(["git", "-C", str(t / "ALICE-B"), "replace", "-l"],
+                                    capture_output=True, text=True).stdout.split():
+                subprocess.run(["git", "-C", str(t / "ALICE-B"), "replace", "-d", r], check=True, capture_output=True)
+            for flag in ("--no-skip-worktree", "--no-assume-unchanged"):
+                subprocess.run(["git", "-C", str(t / "ALICE-B"), "update-index", flag, "src/lib.rs"], check=True)
+            subprocess.run(["git", "-C", str(t / "ALICE-B"), "reset", "-q", "--hard", "HEAD"], check=True)
+            restore()
+            assert verify_heads(t, pins_now) == [], f"{label} の後に元へ戻らない"
+        assert verify_heads(t, {}) != [], "照合する sibling が 0 件で fail しない"
 
         setup()
         (t / "ALICE-B/Cargo.toml").rename(t / "ALICE-B/Cargo.toml.off")

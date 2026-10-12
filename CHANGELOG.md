@@ -18,7 +18,10 @@ CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout 
   取得する command (git clone・fetch・pull・submodule・remote・archive、gh repo clone、gh api、svn) を使わない /
   GitHub から download する URL は literal で ALICE の名前を含めない / `owner/ALICE-Xxx` 形の参照は大文字小文字を問わず不可
   (`../ALICE-Xxx` と本 repo の action の path は可)  見た step が 0 件なら fail
-- sibling を使う全 job の最後に HEAD の再照合 step を置く (途中で別 commit を checkout し直したら fail)
+- sibling を使う全 job の最初 (action の最後) と最後に、各 sibling の中身が固定 commit の tree と完全一致することを照合する
+  (HEAD / `git diff --quiet HEAD` / `git status --porcelain --untracked-files=all --ignored=matching` が空、例外は `target/`
+  のみ / skip-worktree・assume-unchanged で隠した file と replace ref も不可)  取得の方法 (clone / tarball / script) に依らず、
+  cargo が読む bytes が固定 commit と違えば fail する  workflow の静的な許可リストは早期の検出として残す
 - `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
   sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
   不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail
