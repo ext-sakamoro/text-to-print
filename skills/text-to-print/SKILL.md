@@ -57,7 +57,7 @@ export PATH="$PWD/target/release:$PATH"
    | field | values | how to read it |
    |---|---|---|
    | `erosion` | `proved` / `violated` / `undecided` | `violated` = **every** part is thinner than `min_wall_mm`; `undecided` = the octree ran out of depth, which is not a pass |
-   | `min_local_thickness_mm` / `thin_triangles` | mm / count | exact per-triangle march; any `thin_triangles > 0` is a real thin wall, not a sampling artefact |
+   | `min_local_thickness_mm` / `thin_triangles` | mm / count | exact per-triangle march; `thin_triangles > 0` is usually a real thin wall, but a handful of triangles can also come from a concave crease where two solids touch face to face (a known false positive: sink one part slightly into the other and re-check before thinning anything) |
    | `connectivity` | `proved` / `violated` / `undecided` / `not_run` | `violated` = the model is two or more separate solids and would print as loose parts; `undecided` means the grid could not resolve a passage (raise detail, do not assume it is connected) |
 
    `fail_messages` are the retry-worthy ones; `notes` carry the undecided
