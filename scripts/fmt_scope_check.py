@@ -23,7 +23,17 @@ FORMATTING_RE = re.compile(r"^Formatting (.+\.rs)\s*$")
 
 
 def norm(p: str | Path) -> str:
+    """表示用の正規化 (比較には file_id を使う)"""
+    p = str(p)
+    if p.startswith("\\\\?\\"):
+        p = p[4:]
     return os.path.normcase(os.path.realpath(p))
+
+
+def file_id(p: str) -> tuple[int, int]:
+    r"""path の綴り (Windows の \\?\ 接頭辞 / 短縮名 / 大小文字) に依らない file の同一性"""
+    st = os.stat(p)
+    return (st.st_dev, st.st_ino)
 
 
 def expected_files(root: Path) -> set[str]:
@@ -56,7 +66,10 @@ def run_fmt(root: Path) -> tuple[int, set[str], str]:
     for line in (proc.stdout + "\n" + proc.stderr).splitlines():
         m = FORMATTING_RE.match(line.strip())
         if m:
-            checked.add(norm(m.group(1)))
+            path = m.group(1)
+            if not os.path.isabs(path) and not path.startswith("\\\\?\\"):
+                path = str(root / path)  # 相対 path は cargo fmt の cwd (= root) 基準
+            checked.add(norm(path))
     return proc.returncode, checked, proc.stdout + proc.stderr
 
 
@@ -72,9 +85,13 @@ def check(root: Path) -> int:
         errors.append("workspace member の .rs が 0 件 (検査が何も見ていない)")
     if not checked:
         errors.append("rustfmt が検査した file が 0 件")
-    missing = sorted(expected - checked)
+    checked_ids = {file_id(c) for c in checked if os.path.exists(c)}
+    missing = sorted(e for e in expected if file_id(e) not in checked_ids)
     if missing:
-        errors.append(f"検査から漏れた file {len(missing)} 件: {', '.join(os.path.relpath(m, root) for m in missing)}")
+        errors.append(
+            f"検査から漏れた file {len(missing)} 件: {', '.join(os.path.relpath(m, root) for m in missing)}"
+            f" (rustfmt の出力例: {sorted(checked)[:2]})"
+        )
     print(f"fmt checked {len(checked)} file(s), repo workspace .rs {len(expected)} file(s)")
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
