@@ -667,7 +667,9 @@ pub fn export_mesh(
 
 /// 3MF だけを書き出す (安全性 / overhang / DfAM / 向き探索 / 印刷可能性の解析をしない)
 ///
-/// [`export_mesh`] の 3MF と同じ mesh を同じ書き方で書くので、同じ file 名なら同じ bytes になる
+/// file 名は LOL と品質から決まる (`model-<16 桁>.3mf`) ので、同じ LOL と品質からは同じ名前・同じ
+/// bytes の 3MF になる [`export_mesh`] の 3MF と同じ mesh を同じ書き方で書くので、同じ file 名なら
+/// [`export_mesh`] とも同じ bytes になる
 /// (試験 `export_without_analysis_writes_the_same_bytes`) 解析の結果を使わない呼び出し側
 /// (共有シートに渡すだけの app) 向け 解析は書き出しの所要時間の大半を占める
 /// (同梱 template で 3MF の書き出しの 5〜9 倍、host で実測)
@@ -681,10 +683,23 @@ pub fn export_3mf_without_analysis(
 ) -> Result<MeshStats> {
     let output_path = output_dir.join(format!(
         "{}.{}",
-        uuid::Uuid::now_v7(),
+        content_stem(lol_source, quality),
         ExportFormat::ThreeMf.extension()
     ));
     export_3mf_without_analysis_to(lol_source, &output_path, quality)
+}
+
+/// 書き出す file の名前 (拡張子の前): LOL と品質の SHA-256 の先頭 16 桁
+///
+/// 3MF は file 名の stem を model 名として中に書くので、乱数の名前だと同じ形でも container の
+/// bytes が毎回変わる 内容から決めると、同じ LOL と品質からは同じ名前と同じ bytes になる
+fn content_stem(lol_source: &str, quality: Quality) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(format!("{quality:?}").as_bytes());
+    h.update([0u8]);
+    h.update(lol_source.as_bytes());
+    format!("model-{}", &hex::encode(h.finalize())[..16])
 }
 
 fn export_3mf_without_analysis_to(
@@ -1981,6 +1996,44 @@ mod tests {
     }
 
     /// 解析なしの 3MF は、解析つきの書き出し (`export_mesh` の 3MF) と同じ file 名なら同じ bytes
+    /// 同じ LOL と品質からは、別の dir に書いても同じ file 名・同じ bytes (container の SHA が安定)
+    /// 違う LOL / 違う品質なら名前が変わる
+    #[test]
+    fn export_without_analysis_names_the_file_from_the_content() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let lol = "box3d(5, 5, 2.5)";
+        let sa = export_3mf_without_analysis(lol, &a, Quality::Preview).expect("a");
+        let sb = export_3mf_without_analysis(lol, &b, Quality::Preview).expect("b");
+        let (pa, pb) = (
+            std::path::PathBuf::from(&sa.path),
+            std::path::PathBuf::from(&sb.path),
+        );
+        assert_eq!(pa.file_name(), pb.file_name());
+        assert!(
+            pa.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("model-")
+        );
+        assert_eq!(
+            std::fs::read(&pa).unwrap(),
+            std::fs::read(&pb).unwrap(),
+            "同じ内容で bytes が違う"
+        );
+        assert_ne!(
+            content_stem(lol, Quality::Preview),
+            content_stem("box3d(5, 5, 2.6)", Quality::Preview)
+        );
+        assert_ne!(
+            content_stem(lol, Quality::Preview),
+            content_stem(lol, Quality::High)
+        );
+    }
+
     /// (1 部品 / 回転して再メッシュ / 離れた部品 の 3 経路)
     #[test]
     fn export_without_analysis_writes_the_same_bytes() {
