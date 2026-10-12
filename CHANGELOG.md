@@ -20,8 +20,11 @@ CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout 
   (`../ALICE-Xxx` と本 repo の action の path は可)  見た step が 0 件なら fail
 - sibling を使う全 job の最初 (action の最後) と最後に、各 sibling の中身が固定 commit の tree と完全一致することを照合する
   (HEAD / `git diff --quiet HEAD` / `git status --porcelain --untracked-files=all --ignored=matching` が空、例外は `target/`
-  のみ / skip-worktree・assume-unchanged で隠した file と replace ref も不可)  取得の方法 (clone / tarball / script) に依らず、
-  cargo が読む bytes が固定 commit と違えば fail する  workflow の静的な許可リストは早期の検出として残す
+  のみ / index の skip flag・変更無視 flag で隠した file と replace ref も不可)  取得の方法 (clone / tarball / script) に
+  依らず、cargo が読む bytes が固定 commit と違えば fail する  workflow の静的な許可リストは早期の検出として残す
+- 同じ step で `cargo metadata --locked` の解決結果も照合する: path の alice-* は固定した sibling の directory の下から来ること
+  / 固定した sibling が提供する名前が registry・git から来ていないこと / registry の alice-* を `[patch]` で手元の path に
+  差し替えていないこと (sibling の tree の外での差し替えを捕まえる)  照合した alice-* が 0 件なら fail
 - `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
   sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
   不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail

@@ -257,7 +257,7 @@ def verify_heads(siblings: Path, pins: dict[str, str]) -> list[str]:
         if proc.returncode != 0 or head != sha:
             errors.append(f"{name} の HEAD {head or '(取得失敗)'} が固定 commit {sha} と違う")
             continue
-        # status / diff から file を隠す index の flag (assume-unchanged = 小文字、skip-worktree = S) と
+        # status / diff から file を隠す index の flag (変更無視 = 小文字、skip flag = S) と
         # commit の中身を差し替える replace ref は、それ自体を不可とする
         flags = subprocess.run(["git", "-C", d, "ls-files", "-v"], capture_output=True, text=True)
         hidden = [l[2:] for l in flags.stdout.splitlines() if l[:1].islower() or l[:1] == "S"]
@@ -332,14 +332,87 @@ def emit_pins(root: Path) -> int:
     return 0
 
 
+def provided_packages(siblings: Path, pins: dict[str, str]) -> dict[str, str]:
+    """固定した各 sibling の tree にある package 名 → sibling 名"""
+    out: dict[str, str] = {}
+    for name in pins:
+        base = siblings / name
+        for manifest in sorted(base.rglob("Cargo.toml")):
+            rel = manifest.relative_to(base).parts
+            if any(p == "target" or p.startswith(".") for p in rel[:-1]):
+                continue
+            try:
+                with manifest.open("rb") as f:
+                    pkg = (tomllib.load(f).get("package") or {}).get("name")
+            except (OSError, tomllib.TOMLDecodeError):
+                continue
+            if isinstance(pkg, str):
+                out[pkg] = name
+    return out
+
+
+def verify_resolution(root: Path, siblings: Path, pins: dict[str, str]) -> tuple[list[str], int]:
+    """cargo が実際に解決した alice-* の package が、固定した sibling の directory から来ているか
+
+    tree の照合は sibling の directory の中身しか見ないので、その外 (workspace の親の
+    `.cargo/config.toml` の `paths` / `[patch]`、manifest の path の書き換え等) で
+    別の場所の source に差し替えられると通ってしまう ⇒ 解決結果そのものを照合する
+      - path の alice-* は、固定した sibling の directory の下にあること
+      - 固定した sibling が提供する名前の package が registry / git から来ていないこと
+      - 照合した alice-* が 0 件なら fail
+    """
+    errors: list[str] = []
+    proc = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--locked", "--manifest-path", str(root / "Cargo.toml")],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        return [f"cargo metadata --locked が失敗:\n{proc.stderr.strip()}"], 0
+    return judge_resolution(json.loads(proc.stdout), root, siblings, pins)
+
+
+def judge_resolution(meta: dict, root: Path, siblings: Path, pins: dict[str, str]) -> tuple[list[str], int]:
+    errors: list[str] = []
+    provided = provided_packages(siblings, pins)
+    real_sib = Path(os.path.realpath(siblings))
+    real_root = Path(os.path.realpath(root))
+    examined = 0
+    for pkg in meta["packages"]:
+        if not pkg["name"].startswith("alice-"):
+            continue
+        examined += 1
+        mp = Path(os.path.realpath(pkg["manifest_path"]))
+        if pkg.get("source") is None:
+            if mp.parent == real_root or real_root in mp.parents:
+                continue
+            try:
+                owner = mp.relative_to(real_sib).parts[0]
+            except ValueError:
+                owner = None
+            if owner not in pins:
+                errors.append(f"{pkg['name']} が固定した sibling の外から解決されている: {mp.parent}")
+            elif provided.get(pkg["name"]) not in (None, owner):
+                errors.append(f"{pkg['name']} が {owner} から解決されているが、固定した tree では {provided[pkg['name']]} にある")
+        elif pkg["name"] in provided:
+            errors.append(f"{pkg['name']} は {provided[pkg['name']]} に固定しているのに {pkg['source']} から解決されている")
+    if examined == 0:
+        errors.append("解決結果に alice-* の package が 0 件 (照合が何も見ていない)")
+    return errors, examined
+
+
 def heads_only(root: Path, siblings: Path) -> int:
-    """checkout 後に全 pin の HEAD を照合する (composite action の最後の step)"""
-    pins, errors = read_pins(norm(root))
-    errors += verify_heads(norm(siblings), pins)
+    """composite action の最後と各 job の最後: 各 sibling の中身と、cargo の解決先を照合する"""
+    root, siblings = norm(root), norm(siblings)
+    pins, errors = read_pins(root)
+    errors += verify_heads(siblings, pins)
+    res_errors, examined = verify_resolution(root, siblings, pins)
+    errors += res_errors
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
-    print(f"verified {len(pins) if not errors else 0}/{len(pins)} sibling trees (HEAD + clean)")
-    return 1 if errors else 0
+    ok = not errors
+    print(f"verified {len(pins) if ok else 0}/{len(pins)} sibling trees (HEAD + clean)")
+    print(f"verified {examined if ok else 0} alice-* package(s) resolve to the pinned trees")
+    return 0 if ok else 1
 
 
 def self_test() -> int:
@@ -369,10 +442,12 @@ def self_test() -> int:
             return subprocess.run(["git", "-C", d, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
         w("app/Cargo.toml", '[workspace]\nmembers=["c"]\nresolver="2"\n')
-        crate("app/c", "c", 'a={path="../../ALICE-A"}\n')
-        crate("ALICE-A", "a", 'b={path="../ALICE-B"}\nz={path="../ALICE-Z",optional=true}\n')
-        crate("ALICE-B", "b")
-        crate("ALICE-Z", "z")
+        crate("app/c", "c", 'alice-a={path="../../ALICE-A"}\n')
+        crate("ALICE-A", "alice-a", 'alice-b={path="../ALICE-B"}\nalice-z={path="../ALICE-Z",optional=true}\n')
+        crate("ALICE-B", "alice-b")
+        crate("ALICE-Z", "alice-z")
+        subprocess.run(["cargo", "generate-lockfile", "--manifest-path", str(t / "app/Cargo.toml")],
+                       check=True, capture_output=True)
         w("ALICE-A/.gitignore", "target/\nrust-toolchain.toml\n.cargo/\n")
         sha_a, sha_b = git_init("ALICE-A"), git_init("ALICE-B")
 
@@ -496,11 +571,11 @@ def self_test() -> int:
                 (t / "ALICE-A/.cargo").mkdir(exist_ok=True),
                 (t / "ALICE-A/.cargo/config.toml").write_text("[build]\nrustflags=[]\n", encoding="utf-8"),
             ),
-            "skip-worktree で隠した書き換え": lambda: (
+            "index の skip flag で隠した書き換え": lambda: (
                 subprocess.run(["git", "-C", str(t / "ALICE-B"), "update-index", "--skip-worktree", "src/lib.rs"], check=True),
                 (t / "ALICE-B/src/lib.rs").write_text("pub fn hidden() {}\n", encoding="utf-8"),
             ),
-            "assume-unchanged で隠した書き換え": lambda: (
+            "index の変更無視 flag で隠した書き換え": lambda: (
                 subprocess.run(["git", "-C", str(t / "ALICE-B"), "update-index", "--assume-unchanged", "src/lib.rs"], check=True),
                 (t / "ALICE-B/src/lib.rs").write_text("pub fn hidden() {}\n", encoding="utf-8"),
             ),
@@ -530,6 +605,57 @@ def self_test() -> int:
             restore()
             assert verify_heads(t, pins_now) == [], f"{label} の後に元へ戻らない"
         assert verify_heads(t, {}) != [], "照合する sibling が 0 件で fail しない"
+
+        # 解決先の照合: sibling の tree の外で source を差し替えると red
+        errs, n = verify_resolution(t / "app", t, pins_now)
+        assert errs == [] and n == 2, (errs, n)
+        crate("fork-b", "alice-b")
+        # `.cargo/config.toml` の paths は registry / git の依存にしか効かない (path 依存は差し替わらない)
+        # ので、実際に差し替わるのは manifest の path の書き換えと [patch] (registry の alice-*)
+        # path の書き換えは実物で、[patch] は下の合成した解決結果で確かめる
+        crate("fork-a", "alice-a", 'alice-b={path="../ALICE-B"}\n')
+        c_manifest = (t / "app/c/Cargo.toml").read_text(encoding="utf-8")
+        lock = t / "app/Cargo.lock"
+
+        def relock() -> None:
+            subprocess.run(["cargo", "generate-lockfile", "--manifest-path", str(t / "app/Cargo.toml")],
+                           check=True, capture_output=True)
+
+        # consumer の manifest の path を fork に向ける (sibling の tree は clean のまま)
+        (t / "app/c/Cargo.toml").write_text(c_manifest.replace("../../ALICE-A", "../../fork-a"), encoding="utf-8")
+        relock()
+        assert verify_heads(t, pins_now) == [], "前提: sibling の tree は clean"
+        errs, _ = verify_resolution(t / "app", t, pins_now)
+        assert errs, "固定した sibling の外 (fork) への差し替えを検出しない"
+        assert heads_only(t / "app", t) == 1, "action の照合が fork への差し替えを検出しない"
+        (t / "app/c/Cargo.toml").write_text(c_manifest, encoding="utf-8")
+        relock()
+        assert verify_resolution(t / "app", t, pins_now)[0] == [], "差し替えを外した後に元へ戻らない"
+
+        # Cargo.lock と解決が一致しない (--locked) と red
+        saved = lock.read_text(encoding="utf-8")
+        lock.unlink()
+        assert verify_resolution(t / "app", t, pins_now)[0], "Cargo.lock が無い / 古い状態を検出しない"
+        lock.write_text(saved, encoding="utf-8")
+        assert verify_resolution(t / "app", t, pins_now)[0] == []
+
+        def fake(pkgs: list[tuple[str, str | None, Path]]) -> dict:
+            return {"packages": [{"name": n, "source": src, "manifest_path": str(mp)} for n, src, mp in pkgs]}
+
+        reg = "registry+https://github.com/rust-lang/crates.io-index"
+        ok = fake([("alice-a", None, t / "ALICE-A/Cargo.toml"), ("alice-b", None, t / "ALICE-B/Cargo.toml"),
+                   ("alice-det", reg, t / "reg/alice-det/Cargo.toml")])
+        patched = fake([("alice-a", None, t / "ALICE-A/Cargo.toml"), ("alice-det", None, t / "fork-det/Cargo.toml")])
+        assert judge_resolution(patched, t / "app", t, pins_now)[0], "[patch] で registry の alice-* を手元の path に差し替えたのを検出しない"
+        assert judge_resolution(ok, t / "app", t, pins_now) == ([], 3), "固定外の名前の registry 依存を red にした"
+        swapped = fake([("alice-a", None, t / "ALICE-A/Cargo.toml"), ("alice-b", reg, t / "reg/alice-b/Cargo.toml")])
+        assert judge_resolution(swapped, t / "app", t, pins_now)[0], "固定した名前の registry への差し替えを検出しない"
+        moved = fake([("alice-a", None, t / "ALICE-A/Cargo.toml"), ("alice-b", None, t / "ALICE-A/sub/Cargo.toml")])
+        assert judge_resolution(moved, t / "app", t, pins_now)[0], "別の sibling の tree からの解決を検出しない"
+        outside = fake([("alice-a", None, t / "elsewhere/alice-a/Cargo.toml")])
+        assert judge_resolution(outside, t / "app", t, pins_now)[0], "固定した sibling の外からの解決を検出しない"
+        assert judge_resolution(fake([("serde", reg, t / "r/Cargo.toml")]), t / "app", t, pins_now)[0], \
+            "alice-* が 0 件で fail しない"
 
         setup()
         (t / "ALICE-B/Cargo.toml").rename(t / "ALICE-B/Cargo.toml.off")
