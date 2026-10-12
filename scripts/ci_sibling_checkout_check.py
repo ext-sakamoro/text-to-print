@@ -506,7 +506,8 @@ def self_test() -> int:
             ),
             "replace ref": lambda: subprocess.run(
                 ["git", "-C", str(t / "ALICE-B"), "replace", "HEAD",
-                 subprocess.run(["git", "-C", str(t / "ALICE-B"), "commit-tree", "HEAD^{tree}", "-m", "r"],
+                 subprocess.run(["git", "-C", str(t / "ALICE-B"), "-c", "user.name=t", "-c", "user.email=t@t",
+                                 "commit-tree", "HEAD^{tree}", "-m", "r"],
                                 capture_output=True, text=True, check=True).stdout.strip()],
                 check=True,
             ),
