@@ -52,6 +52,11 @@ pub struct MeshStats {
     /// G-code slicer summary (populated only for `ExportFormat::Gcode`
     /// exports via `alice_print::slice_sdf`)
     pub slice_summary: Option<SliceSummary>,
+    /// 安全性 / DfAM / 印刷可能性の検査の結果を構造で ([`crate::violation::Violation`])
+    ///
+    /// 3MF export のみ (他の形式は空) 利用者に見せる文は各 [`crate::violation::Violation`] の
+    /// `title` / `action` から作り、上の要約の文字列は「詳細」にだけ出す
+    pub violations: Vec<crate::violation::Violation>,
     /// Handle to the just-generated mesh, for the in-app preview viewer
     ///
     /// Populated by the 3MF export path — the same mesh that was written
@@ -191,8 +196,22 @@ impl DfamSummary {
 }
 
 /// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
+/// DfAM の設定 限界は印刷可能性の方針の表 (`data/printability_policy.json`) から渡す
+/// (表が 1 つの出所、ALICE-Bamboo の FDM の値と同じことは `violation` の試験が確かめる)
 fn dfam_config() -> DfamConfig {
-    DfamConfig::for_process(Process::Fdm)
+    use crate::violation::{Kind, policy};
+    let mut cfg = DfamConfig::for_process(Process::Fdm);
+    let p = policy();
+    if let Some(v) = p.limit(Kind::WallThin) {
+        cfg.limits.min_unsupported_wall_mm = v;
+    }
+    if let Some(v) = p.limit(Kind::HoleTooSmall) {
+        cfg.limits.min_hole_diameter_mm = v;
+    }
+    if let Some(v) = p.limit(Kind::FeatureTooSmall) {
+        cfg.limits.min_positive_feature_mm = v;
+    }
+    cfg
 }
 
 /// 三値判定の結果ラベル (合格 / 違反 / 未決定)
@@ -1172,6 +1191,11 @@ fn export_3mf_via_bamboo(
         );
     }
 
+    // 利用者に見せる検査の結果 (retry loop の `safety_report` と同じ組み立て)
+    let mut violations = bamboo_violations(&safety_report);
+    violations.extend(violations_from_reports(&sdf, &dfam_report, &printability));
+    crate::violation::annotate(lol_source, &mut violations);
+
     let vertex_count = mesh.vertices.len();
     let triangle_count = mesh.indices.len() / 3;
 
@@ -1199,6 +1223,7 @@ fn export_3mf_via_bamboo(
         dfam_summary: Some(dfam_summary),
         printability_summary: Some(printability),
         slice_summary: None,
+        violations,
         preview_mesh: Some(preview_mesh),
     })
 }
@@ -1213,6 +1238,7 @@ fn to_mesh_stats(stats: &ExportStats) -> MeshStats {
         dfam_summary: None,
         printability_summary: None,
         slice_summary: None,
+        violations: Vec::new(),
         preview_mesh: None,
     }
 }
@@ -1266,6 +1292,7 @@ fn export_step_via_alice_sdf(
         dfam_summary: None,
         printability_summary: None,
         slice_summary: None,
+        violations: Vec::new(),
         preview_mesh: None,
     })
 }
@@ -1303,6 +1330,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
             filament_meters: slice.filament_meters,
             print_time_seconds: slice.print_time_seconds,
         }),
+        violations: Vec::new(),
         preview_mesh: None,
     })
 }
@@ -1357,27 +1385,94 @@ pub struct MetadataInputs<'a> {
 /// mesh gets built later during the final `export_mesh` call
 #[must_use]
 pub fn safety_check_lol(lol_source: &str) -> Vec<String> {
+    safety_report(lol_source)
+        .into_iter()
+        .map(|v| v.message)
+        .collect()
+}
+
+/// [`safety_check_lol`] と同じ検査の結果を構造で返す ([`crate::violation::Violation`])
+///
+/// 文字列 ([`crate::violation::Violation::message`]) は [`safety_check_lol`] と同じ順・同じ
+/// bytes (LLM の修正の指示がこの文字列で分類する) 利用者向けの文は
+/// [`crate::violation::Violation::title`] / `action` / `notes` から作る
+#[must_use]
+pub fn safety_report(lol_source: &str) -> Vec<crate::violation::Violation> {
+    use crate::violation::{Confidence, Kind, annotate, fixed_violation};
     let sdf = match alice_bamboo::lol_to_sdf(lol_source) {
         Ok(sdf) => sdf,
-        Err(e) => return vec![dedup_lol_parse_prefix(e)],
+        Err(e) => {
+            return vec![fixed_violation(
+                Kind::LolParse,
+                Confidence::Proved,
+                None,
+                None,
+                dedup_lol_parse_prefix(e),
+            )];
+        }
     };
     let report = alice_bamboo::safety::safety_validate(&sdf, "PLA", None);
-    let mut violations = if report.is_safe {
-        Vec::new()
-    } else {
-        report.messages
-    };
+    let mut violations = bamboo_violations(&report);
 
     // DfAM (標本測定) + Printability (証明) の fail を retry loop に流す
     // LLM が LOL 側で直せる種類の違反に限定 低解像度 mesh (Preview) で十分
     // (LLM 1 回の推論が分単位なのに対し、この測定は秒未満)
-    violations.extend(printability_fail_messages_for_retry(&sdf));
+    violations.extend(printability_violations_for_retry(&sdf));
+    annotate(lol_source, &mut violations);
     violations
+}
+
+/// `safety_validate` の結果の違反 (安全と判定された時は無し、`messages` と同じ順・同じ文字列)
+fn bamboo_violations(
+    report: &alice_bamboo::safety::SafetyReport,
+) -> Vec<crate::violation::Violation> {
+    use crate::violation::{Confidence, fixed_violation};
+    if report.is_safe {
+        return Vec::new();
+    }
+    bamboo_kinds(report)
+        .into_iter()
+        .zip(report.messages.iter())
+        .map(|(kind, msg)| fixed_violation(kind, Confidence::Measured, None, None, msg.clone()))
+        .collect()
+}
+
+/// `alice_bamboo::safety::safety_validate` が `messages` に積む順と同じ順の種類
+///
+/// Bamboo は (反り、荷重を渡した時の梁、ガラス転移温度、熱応力) の順に積む 荷重はここでは
+/// 渡さない 数が `messages` と合わない時 (Bamboo の積み方が変わった時) は、合わない分を
+/// [`crate::violation::Kind::Other`] にして文字列は落とさない
+fn bamboo_kinds(report: &alice_bamboo::safety::SafetyReport) -> Vec<crate::violation::Kind> {
+    use crate::violation::Kind;
+    use alice_physics::warp_risk::WarpRiskCategory;
+    let mut kinds = Vec::new();
+    match report.warp.category {
+        WarpRiskCategory::Critical => kinds.push(Kind::WarpCritical),
+        WarpRiskCategory::High => kinds.push(Kind::WarpHigh),
+        WarpRiskCategory::Medium => kinds.push(Kind::WarpMedium),
+        WarpRiskCategory::Low => {}
+    }
+    if report.thermal_stress.near_glass_transition {
+        kinds.push(Kind::ThermalNearTg);
+    }
+    if !report.thermal_stress.is_safe {
+        kinds.push(Kind::ThermalStress);
+    }
+    if kinds.len() != report.messages.len() {
+        tracing::warn!(
+            kinds = kinds.len(),
+            messages = report.messages.len(),
+            "safety_validate の messages の数が種類の数と合わない (Other として扱う)"
+        );
+        kinds.truncate(report.messages.len());
+        kinds.resize(report.messages.len(), Kind::Other);
+    }
+    kinds
 }
 
 /// retry loop 用の軽量判定 — Preview 解像度で mesh を 1 回作り、DfAM の `Fail`
 /// (穴径 / 突起) と Printability の fail (肉厚 / 連結性) を返す
-fn printability_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String> {
+fn printability_violations_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<crate::violation::Violation> {
     let aabb = compute_tight_aabb_with_config(sdf, &TightAabbConfig::preset_large());
     let dims = (
         aabb.max.x - aabb.min.x,
@@ -1399,15 +1494,66 @@ fn printability_fail_messages_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<String>
     cfg.grid_resolution = 48;
     cfg.max_thickness_samples = 20_000;
     let report = alice_bamboo::dfam::analyze(sdf, &mesh, &cfg);
-    let mut out: Vec<String> = report
+    let summary = printability_summary(sdf, &mesh, bounds.0, bounds.1);
+    violations_from_reports(sdf, &report, &summary)
+}
+
+/// DfAM の `Fail` (穴径 / 突起) と印刷可能性の fail (肉厚 / 連結性) を違反にする
+///
+/// retry loop (Preview の mesh) と 3MF export (本番の mesh) の両方がこの組み立てを使う
+/// 文字列は従来の `format!("DfAM {check}: {message}")` と `PrintabilitySummary::fail_messages`
+fn violations_from_reports(
+    sdf: &alice_sdf::SdfNode,
+    report: &alice_bamboo::dfam::DfamReport,
+    summary: &PrintabilitySummary,
+) -> Vec<crate::violation::Violation> {
+    use crate::violation::{Confidence, Kind, fixed_violation, measured_violation};
+    let mut out: Vec<_> = report
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Fail && is_retryable_dfam_check(f.check))
-        .map(|f| format!("DfAM {}: {}", f.check, f.message))
+        .map(|f| {
+            let kind = match f.check {
+                alice_bamboo::dfam::Check::HoleDiameter => Kind::HoleTooSmall,
+                _ => Kind::FeatureTooSmall,
+            };
+            measured_violation(
+                sdf,
+                kind,
+                f.measured,
+                f.location,
+                None,
+                format!("DfAM {}: {}", f.check, f.message),
+            )
+        })
         .collect();
 
     // 肉厚 / 連結性は証明ベース側が canonical (`PrintabilitySummary` の表参照)
-    out.extend(printability_summary(sdf, &mesh, bounds.0, bounds.1).fail_messages);
+    // fail_messages は (erosion の違反、薄い三角形、連結性の違反) の順に積まれる
+    let mut kinds = Vec::new();
+    if summary.erosion == ProofVerdict::Violated {
+        kinds.push((Kind::WallTooThinEverywhere, Confidence::Proved, None, None));
+    }
+    if summary.thin_triangles > 0 {
+        kinds.push((
+            Kind::WallThin,
+            Confidence::Measured,
+            summary.min_local_thickness_mm,
+            u32::try_from(summary.thin_triangles).ok(),
+        ));
+    }
+    if summary.connectivity == ProofVerdict::Violated {
+        kinds.push((Kind::Disconnected, Confidence::Proved, None, None));
+    }
+    debug_assert_eq!(kinds.len(), summary.fail_messages.len());
+    for (i, msg) in summary.fail_messages.iter().cloned().enumerate() {
+        let (kind, confidence, measured, count) =
+            kinds
+                .get(i)
+                .copied()
+                .unwrap_or((Kind::Other, Confidence::Measured, None, None));
+        out.push(fixed_violation(kind, confidence, measured, count, msg));
+    }
     out
 }
 

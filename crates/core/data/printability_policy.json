@@ -1,0 +1,28 @@
+{
+  "comment": "印刷可能性の判定の方針 (表 1 つ) 各項目の limit と出所、重大度の決め方 limit は core の検査 (DfAM の限界 / 肉厚の証明) にもこの表から渡す `ours` の付いた値は設計の指針の値ではなく、この製品で選んだ値",
+  "band": {
+    "value": 0.10,
+    "ours": true,
+    "source": "限界から 10% 以内の測定値は advisory にする (測定の誤差と、限界の近くでも多くの場合は印刷できることを考えた選択)"
+  },
+  "discriminator_tolerance_mm": {
+    "value": 0.1,
+    "ours": true,
+    "source": "測り直しでは、標本の点を (この距離の余裕で) 含む最も大きい内接球を探す 余裕は、標本が入隅の点 (どの大きい球にもちょうどは含まれない点) を読んだ時に、隙間の本当の幅の球に届くための最小限の値 (0.1mm で幅 1.5 / 3.0mm の隙間を 1.50 / 3.00 と測り直す、0.25mm 以上では隣の広い所の球まで拾い始める)"
+  },
+  "kinds": {
+    "wall_thin": { "limit_mm": 1.6, "severity": "by_band", "source": "FDM 0.4mm nozzle の最小の自立壁 (Hubs / Formlabs / HP / EOS design guides + ISO/ASTM 52910 §6.5/§6.7 の保守的な既定値、ALICE-Bamboo DfamConfig::for_process(Fdm) の min_unsupported_wall_mm)" },
+    "wall_too_thin_everywhere": { "limit_mm": 1.6, "severity": "blocking", "source": "wall_thin と同じ限界 (erosion の証明: どこにも限界の厚さが無い)" },
+    "hole_too_small": { "limit_mm": 2.0, "severity": "by_band", "source": "FDM の最小の穴径 (同上の design guides、DfamConfig の min_hole_diameter_mm)" },
+    "feature_too_small": { "limit_mm": 0.8, "severity": "by_band", "source": "FDM の最小の突起 (同上の design guides、DfamConfig の min_positive_feature_mm)" },
+    "disconnected": { "severity": "blocking", "source": "連結性の証明 (2 点間に道が無いことの証明) 造形物が 2 つ以上に分かれる" },
+    "warp_critical": { "severity": "blocking", "source": "alice-physics の反りの危険度 Critical (score ≥ 0.75)" },
+    "warp_high": { "severity": "advisory", "ours": true, "source": "反りの危険度 High (0.5 ≤ score < 0.75) ブリム・ベッドの温度・囲いで対処できることが多いので advisory にする" },
+    "warp_medium": { "severity": "info", "ours": true, "source": "反りの危険度 Medium (0.25 ≤ score < 0.5)" },
+    "beam_overloaded": { "severity": "blocking", "source": "梁の荷重の安全率が素材の最小を下回る (荷重を指定した時だけ)" },
+    "thermal_stress": { "severity": "info", "ours": true, "source": "冷却時の熱応力の安全率 < 2.0 (造形室の管理で解決するのが普通なので情報)" },
+    "thermal_near_tg": { "severity": "info", "ours": true, "source": "使用温度が素材のガラス転移温度に近い" },
+    "lol_parse": { "severity": "blocking", "source": "LOL を読めない" },
+    "other": { "severity": "advisory", "ours": true, "source": "core が種類を判別できなかった結果 (検査の文字列の形が変わった時など)" }
+  }
+}

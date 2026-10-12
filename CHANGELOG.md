@@ -5,6 +5,22 @@
 
 ## [Unreleased]
 
+### Changed — 検査の結果を構造で返し、利用者には平易な文と対処を出す (2026-10-12)
+
+- **Behavior change:** desktop の生成後の統計欄は、検査の結果を「印刷の前に確認してください」の下に平易な文 (ja / en) と
+  対処で出す  重大度で印を分ける (⚠ 直す / △ 確認 / ⓘ 参考)  検査の元の出力 (DfAM / Printability の要約と文字列) は
+  「詳細 (検査の結果)」の折り畳みの中だけに出す
+- `pipeline::safety_report` を追加: `safety_check_lol` と同じ検査の結果を `violation::Violation` (種類 / 重大度 / 確かさ /
+  測定値 / 測り直した値 / 限界 / 位置 / 件数 / 元の文字列) で返す  `safety_check_lol` の文字列は従来と同じ bytes
+  (同梱 template 116 件で一致を確認、LLM の修正の指示はこの文字列で分類する)  `MeshStats::violations` も追加 (3MF export)
+- 印刷可能性の判定の方針を `crates/core/data/printability_policy.json` の 1 つの表にした  限界 (肉厚 1.6 / 穴径 2.0 /
+  突起 0.8 mm、FDM の design guides の保守的な既定値) と出所、重大度の決め方 (限界から 10% 以内は advisory、
+  反り High は advisory など、製品で選んだ値は `ours` の印) を持ち、DfAM と肉厚の検査もこの表から限界を受け取る
+- 穴径 / 突起の標本は、報告された位置を含む最も大きい内接球で測り直す  標本が入隅 (床と壁の両方に近い点) を読んで実際より
+  狭く出た時に本当の幅を出し、限界を満たすなら「測り方による誤差の可能性」として参考に下げる
+- 利用者向けの文は `crates/core/data/violation_text.json` の 1 つの表 (desktop と iOS で共用)  同梱 template の意図した形の
+  注記の表 `crates/core/data/template_annotations.json` を追加 (現在は空)
+
 ### Changed — 外部連携の名前を許可リストの箇所に限る (2026-10-12)
 
 - `scripts/vocab_lint.py` を追加 (ci.yml の wiring-guard job と preflight)  追跡 file の本文と file 名を走査し、外部連携の名前を

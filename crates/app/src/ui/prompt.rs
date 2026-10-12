@@ -306,103 +306,13 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
                         lang,
                     ));
                 }
-                if let Some(safety) = &stats.safety_summary {
-                    let warn_color = ui.style().visuals.warn_fg_color;
-                    let color = if safety.is_safe {
-                        egui::Color32::GREEN
-                    } else {
-                        warn_color
-                    };
-                    ui.colored_label(
-                        color,
-                        crate::i18n::T::prompt_fmt_safety(
-                            &safety.material_name,
-                            if safety.is_safe {
-                                "OK"
-                            } else {
-                                crate::i18n::T::prompt_p019(lang)
-                            },
-                            &safety.warp_category,
-                            lang,
-                        ),
-                    );
-                    for msg in &safety.messages {
-                        ui.colored_label(warn_color, format!("  {msg}"));
-                    }
-                }
-                if let Some(dfam) = &stats.dfam_summary {
-                    let warn_color = ui.style().visuals.warn_fg_color;
-                    let head_color = if dfam.ok {
-                        egui::Color32::GREEN
-                    } else {
-                        warn_color
-                    };
-                    ui.colored_label(
-                        head_color,
-                        format!(
-                            "DfAM (FDM): {}  wall p05 {}  hole {}  bridge {:.1}mm  support {:.0}%",
-                            if dfam.ok { "OK" } else { "NG" },
-                            dfam.wall_p05_mm
-                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
-                            dfam.min_hole_mm
-                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
-                            dfam.max_bridge_mm,
-                            dfam.support_ratio * 100.0,
-                        ),
-                    );
-                    if let Some(hint) = &dfam.orientation_hint {
-                        ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {hint}"));
-                    }
-                    // pass は畳んで、fail / need more info / advisory だけ展開表示
-                    for (verdict, msg) in &dfam.findings {
-                        if verdict == "pass" {
-                            continue;
-                        }
-                        let color = if verdict == "fail" {
-                            warn_color
-                        } else {
-                            ui.style().visuals.weak_text_color()
-                        };
-                        ui.colored_label(color, format!("  {msg}"));
-                    }
-                }
-                // 証明ベースの印刷可能性判定 (肉厚 / 連結性) 三値なので
-                // 「未決定」を OK と同じ色にしない
-                if let Some(p) = &stats.printability_summary {
-                    let warn_color = ui.style().visuals.warn_fg_color;
-                    let head_color = if p.ok {
-                        egui::Color32::GREEN
-                    } else if p.fail_messages.is_empty() {
-                        ui.style().visuals.weak_text_color()
-                    } else {
-                        warn_color
-                    };
-                    let verdict = if p.ok {
-                        "OK (証明)"
-                    } else if p.fail_messages.is_empty() {
-                        "未決定"
-                    } else {
-                        "NG"
-                    };
-                    ui.colored_label(
-                        head_color,
-                        format!(
-                            "Printability: {verdict}  肉厚 {}/{:.1}mm ({})  連結 {}  overhang max {:.0}°",
-                            p.min_local_thickness_mm
-                                .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
-                            p.min_wall_mm,
-                            p.erosion.slug(),
-                            p.connectivity.slug(),
-                            p.max_overhang_deg,
-                        ),
-                    );
-                    for msg in &p.fail_messages {
-                        ui.colored_label(warn_color, format!("  {msg}"));
-                    }
-                    for note in &p.notes {
-                        ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {note}"));
-                    }
-                }
+                // 検査の結果: 平易な文と対処 (core の違反の表から、ja / en)
+                // 検査の元の文字列は「詳細」の中だけに出す (`render_check_details`)
+                let vlang = text_to_print_core::violation::Lang::from_tag(lang.as_bcp47());
+                render_violations(ui, &stats.violations, vlang);
+                ui.collapsing(text_to_print_core::violation::details_label(vlang), |ui| {
+                    render_check_details(ui, stats, lang);
+                });
             }
 
             ui.collapsing(crate::i18n::T::prompt_p020(lang), |ui| {
@@ -4675,5 +4585,229 @@ fn printability_signals(
         thin_triangles: p.thin_triangles,
         min_local_thickness_mm: p.min_local_thickness_mm,
         notes: p.notes.clone(),
+    }
+}
+
+/// 検査の結果を平易な文と対処で出す (core の [`text_to_print_core::violation::Violation::shown`])
+///
+/// 重大度で色と印を分ける: 直す (警告色、⚠) / 確認 (警告色、△) / 参考 (薄い色、ⓘ)
+fn render_violations(
+    ui: &mut egui::Ui,
+    violations: &[text_to_print_core::violation::Violation],
+    lang: text_to_print_core::violation::Lang,
+) {
+    use text_to_print_core::violation::{Severity, header, severity_label};
+    if violations.is_empty() {
+        return;
+    }
+    ui.add_space(4.0);
+    ui.strong(header(lang));
+    for v in violations {
+        let shown = v.shown(lang);
+        let (mark, color) = match shown.severity {
+            Severity::Blocking => ("⚠", ui.style().visuals.warn_fg_color),
+            Severity::Advisory => ("△", ui.style().visuals.warn_fg_color),
+            Severity::Info => ("ⓘ", ui.style().visuals.weak_text_color()),
+        };
+        ui.colored_label(color, format!("{mark} {}", shown.title))
+            .on_hover_text(severity_label(shown.severity, lang));
+        let weak = ui.style().visuals.weak_text_color();
+        ui.colored_label(weak, format!("    {}", shown.action));
+        for note in &shown.notes {
+            ui.colored_label(weak, format!("    {note}"));
+        }
+    }
+}
+
+/// 検査の元の出力 (要約と文字列) 「詳細」の中だけで呼ぶ
+///
+/// ここだけが `SafetySummary::messages` / `DfamSummary::findings` /
+/// `PrintabilitySummary::fail_messages` / `notes` を読む (試験 `raw_check_output_only_in_details`)
+fn render_check_details(
+    ui: &mut egui::Ui,
+    stats: &text_to_print_core::pipeline::MeshStats,
+    lang: crate::i18n::Lang,
+) {
+    if let Some(safety) = &stats.safety_summary {
+        let warn_color = ui.style().visuals.warn_fg_color;
+        let color = if safety.is_safe {
+            egui::Color32::GREEN
+        } else {
+            warn_color
+        };
+        ui.colored_label(
+            color,
+            crate::i18n::T::prompt_fmt_safety(
+                &safety.material_name,
+                if safety.is_safe {
+                    "OK"
+                } else {
+                    crate::i18n::T::prompt_p019(lang)
+                },
+                &safety.warp_category,
+                lang,
+            ),
+        );
+        for msg in &safety.messages {
+            ui.colored_label(warn_color, format!("  {msg}"));
+        }
+    }
+    if let Some(dfam) = &stats.dfam_summary {
+        let warn_color = ui.style().visuals.warn_fg_color;
+        let head_color = if dfam.ok {
+            egui::Color32::GREEN
+        } else {
+            warn_color
+        };
+        ui.colored_label(
+            head_color,
+            format!(
+                "DfAM (FDM): {}  wall p05 {}  hole {}  bridge {:.1}mm  support {:.0}%",
+                if dfam.ok { "OK" } else { "NG" },
+                dfam.wall_p05_mm
+                    .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                dfam.min_hole_mm
+                    .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                dfam.max_bridge_mm,
+                dfam.support_ratio * 100.0,
+            ),
+        );
+        if let Some(hint) = &dfam.orientation_hint {
+            ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {hint}"));
+        }
+        // pass は畳んで、fail / need more info / advisory だけ展開表示
+        for (verdict, msg) in &dfam.findings {
+            if verdict == "pass" {
+                continue;
+            }
+            let color = if verdict == "fail" {
+                warn_color
+            } else {
+                ui.style().visuals.weak_text_color()
+            };
+            ui.colored_label(color, format!("  {msg}"));
+        }
+    }
+    // 証明ベースの印刷可能性判定 (肉厚 / 連結性) 三値なので
+    // 「未決定」を OK と同じ色にしない
+    if let Some(p) = &stats.printability_summary {
+        let warn_color = ui.style().visuals.warn_fg_color;
+        let head_color = if p.ok {
+            egui::Color32::GREEN
+        } else if p.fail_messages.is_empty() {
+            ui.style().visuals.weak_text_color()
+        } else {
+            warn_color
+        };
+        let verdict = if p.ok {
+            "OK (証明)"
+        } else if p.fail_messages.is_empty() {
+            "未決定"
+        } else {
+            "NG"
+        };
+        ui.colored_label(
+            head_color,
+            format!(
+                "Printability: {verdict}  肉厚 {}/{:.1}mm ({})  連結 {}  overhang max {:.0}°",
+                p.min_local_thickness_mm
+                    .map_or_else(|| "-".to_string(), |v| format!("{v:.2}mm")),
+                p.min_wall_mm,
+                p.erosion.slug(),
+                p.connectivity.slug(),
+                p.max_overhang_deg,
+            ),
+        );
+        for msg in &p.fail_messages {
+            ui.colored_label(warn_color, format!("  {msg}"));
+        }
+        for note in &p.notes {
+            ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {note}"));
+        }
+    }
+}
+
+#[cfg(test)]
+mod check_output_tests {
+    /// 関数 `name` の本文 (先頭の `{` から対応する `}` まで)
+    fn fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+        let start = src
+            .find(&format!("fn {name}("))
+            .unwrap_or_else(|| panic!("fn {name} が無い"));
+        let open = start + src[start..].find('{').expect("{");
+        let mut depth = 0_i32;
+        for (i, c) in src[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &src[open..=open + i];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("fn {name} の本文が閉じていない")
+    }
+
+    /// 検査の元の文字列 (英語混じりの開発者向けの出力) が利用者向けの欄に出ない
+    ///
+    /// 統計の欄は `render_violations` (core の違反の表の平易な文) と、「詳細」の中の
+    /// `render_check_details` だけを使う 元の要約 (`safety_summary` / `dfam_summary` /
+    /// `printability_summary`) を読むのは `render_check_details` だけ
+    #[test]
+    fn raw_check_output_only_in_details() {
+        let src = include_str!("prompt.rs");
+        // 針を分けて書く (この試験の本文自身に一致しないように)
+        let call = concat!("render_violations(ui, ", "&stats.violations");
+        assert_eq!(
+            src.matches(call).count(),
+            1,
+            "統計の欄から平易な文を出す呼び出しが 1 つ"
+        );
+        // 統計の欄を描く関数 (call を含む fn) を探す
+        let at = src.find(call).unwrap();
+        let fn_start = src[..at]
+            .rfind("\nfn ")
+            .or_else(|| src[..at].rfind("\npub fn "))
+            .unwrap();
+        let name_start = src[fn_start..].find("fn ").unwrap() + fn_start + 3;
+        let name_end = name_start + src[name_start..].find('(').unwrap();
+        let panel = fn_body(src, &src[name_start..name_end]);
+        let mut compared = 0;
+        for raw in [
+            "safety_summary",
+            "dfam_summary",
+            "printability_summary",
+            "fail_messages",
+            ".findings",
+        ] {
+            // テレメトリ (利用者に見せない記録) で読む箇所は統計の欄の関数の外にある
+            assert!(
+                !panel.contains(&format!("&stats.{raw}"))
+                    && !panel.contains(&format!("stats.{raw} ")),
+                "統計の欄が {raw} を直接読む"
+            );
+            compared += 1;
+        }
+        assert_eq!(compared, 5);
+        // render_check_details は「詳細」(折り畳み) の中からだけ呼ぶ
+        let calls: Vec<usize> = src
+            .match_indices(concat!("render_check_details(", "ui, stats, lang)"))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(calls.len(), 1, "render_check_details の呼び出し");
+        let before = &src[calls[0].saturating_sub(200)..calls[0]];
+        assert!(
+            before.contains(concat!(
+                "ui.collapsing(",
+                "text_to_print_core::violation::details_label"
+            )),
+            "詳細の外から呼んでいる"
+        );
+        // render_check_details 以外は元の要約の文字列の欄を読まない (テレメトリの 2 箇所は除く)
+        let details = fn_body(src, "render_check_details");
+        assert!(details.contains("safety.messages") && details.contains("p.fail_messages"));
     }
 }

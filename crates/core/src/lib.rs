@@ -6,3 +6,4 @@ pub mod license;
 pub mod manifest;
 pub mod pipeline;
 pub mod tier;
+pub mod violation;
