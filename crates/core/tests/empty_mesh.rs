@@ -57,3 +57,32 @@ fn ordinary_shapes_are_unaffected() {
     let m = preview_lol_to_mesh("box3d(5, 5, 2.5)", Quality::Preview).expect("box");
     assert!(!m.indices.is_empty());
 }
+
+/// 誤検出が無いこと: 正当に小さい形と、正当に大きい (探索の上限 ±500 mm 未満の) 形は mesh を作る
+///
+/// mesher は bounds の各軸を決まった数の格子 (Preview 96 / High 192 / Ultra 256、`Quality::mesh_resolution`)
+/// に分ける = cell の大きさは形を包む箱に比例する そのため箱が形に合っていれば小さい形も大きい形も
+/// 格子に乗る 空になるのは箱が形より大きく膨らんだ時 (区間評価で絞れない演算) だけ
+#[test]
+fn tiny_and_large_valid_shapes_are_not_empty() {
+    let shapes = [
+        ("box3d(0.3, 0.3, 0.3)", "0.6 mm 角の箱"),
+        ("sphere(0.5)", "半径 0.5 mm の球"),
+        ("box3d(450, 5, 5)", "長さ 900 mm の棒 (上限 ±500 未満)"),
+        (
+            "union(sphere(2), translate(480, 0, 0, sphere(2)))",
+            "480 mm 離れた 2 つの球",
+        ),
+    ];
+    let mut checked = 0;
+    for (lol, what) in shapes {
+        for q in [Quality::Preview, Quality::High] {
+            match preview_lol_to_mesh(lol, q) {
+                Ok(m) => assert!(!m.indices.is_empty(), "{what} ({q:?}) が空"),
+                Err(e) => panic!("{what} ({q:?}) が誤りになった (誤検出): {e}"),
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 8);
+}
