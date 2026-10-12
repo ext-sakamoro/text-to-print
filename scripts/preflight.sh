@@ -46,6 +46,10 @@ step "ci.yml / wiring-guard: oracle + 新規の未配線 / 理由の無い dead_
 python3 scripts/test_wiring_guard.py
 python3 scripts/wiring_guard.py
 
+step "ci.yml / wiring-guard: vocab-lint (許可リスト外の token が無い)"
+python3 scripts/vocab_lint.py --self-test
+python3 scripts/vocab_lint.py
+
 step "ci.yml / clippy-test-doc: sibling pins (固定 commit と cargo の解決の突合)"
 python3 scripts/ci_sibling_checkout_check.py --self-test
 python3 scripts/ci_sibling_checkout_check.py

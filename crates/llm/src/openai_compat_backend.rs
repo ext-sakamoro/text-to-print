@@ -1,7 +1,7 @@
 //! OpenAI-compatible remote LLM backend (BYO LLM, 2026-08-23)
 //!
 //! Sends chat-completion requests to any OpenAI-compatible HTTP endpoint
-//! Preset providers: OpenAI (GPT-5 / o-series), Anthropic (Claude via
+//! Preset providers: OpenAI (GPT-5 / o-series), Anthropic (via its
 //! OpenAI-compat endpoint), Google (Gemini via OpenAI-compat endpoint),
 //! and Custom (Ollama :11434/v1, LM Studio :1234/v1, other self-hosted)
 //!
@@ -14,7 +14,7 @@
 //! Cost-guard defaults (minimize accidental reasoning-token spend):
 //! - OpenAI o-series / GPT-5: `reasoning_effort = "minimal"`
 //! - Google Gemini 2.5 Pro/Flash: `reasoning_effort = "none"`
-//! - Anthropic Claude: `reasoning_effort = None` (compat endpoint does
+//! - Anthropic: `reasoning_effort = None` (the provider's compat endpoint does
 //!   not expose extended thinking; default is off)
 //! - Custom: `reasoning_effort = None` (unknown backend; user decides)
 
@@ -61,7 +61,7 @@ impl OpenAiCompatProvider {
     /// Provider preset の default model 選定基準 (2026-08-23):
     /// - OpenAI: 最新 flagship `gpt-5` (課金 model、reasoning_effort=minimal で
     ///   silent thinking 抑制)
-    /// - Anthropic: 主力 `claude-sonnet-4-5` (課金、Opus と Haiku の中間)
+    /// - Anthropic: その provider の中位の model (課金、上位と軽量の中間)
     /// - Google: **`gemini-2.5-flash`** — 無料枠 (Google AI Studio、~1500 req/day
     ///   目安) が最も寛容な API path β 公開時の 「無料で試せる BYO LLM」推奨
     ///   Pro 版 (`gemini-2.5-pro`) を使う user は Model 欄で自由に変更可

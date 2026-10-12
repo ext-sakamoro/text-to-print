@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+### Changed — 外部連携の名前を許可リストの箇所に限る (2026-10-12)
+
+- `scripts/vocab_lint.py` を追加 (ci.yml の wiring-guard job と preflight)  追跡 file の本文と file 名を走査し、外部連携の名前を
+  含む token が許可リスト (`<path>` と token の組の SHA-256 と出現回数) の外にあれば fail する  走査 0 件も fail
+  許可するのは製品が必要とする箇所 (BYO LLM の provider 名・model id と画面の文言、agent 連携の plugin / skill、その試験) のみ
+- provider について書いた code comment は名前を出さない書き方にした
+
 ### Changed — 配線ガードは "." で始まる directory を走査しない (2026-10-12)
 
 - `scripts/wiring_guard.py` の除外を個別の名前から「"." で始まる directory 全て」に変更 (追跡外の作業用 directory を拾わない)

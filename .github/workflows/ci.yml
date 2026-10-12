@@ -170,6 +170,11 @@ jobs:
         run: python scripts/test_wiring_guard.py
       - name: wiring-guard (新規の未配線 / 理由の無い dead_code が無い)
         run: python scripts/wiring_guard.py
+      # 外部連携の名前は、製品が必要とする (file, token) の許可リストの中だけに置く
+      - name: vocab-lint (検査器の試験 + 許可リスト外の token が無い)
+        run: |
+          python scripts/vocab_lint.py --self-test
+          python scripts/vocab_lint.py
 
   check-wasm-worker:
     name: check-wasm (crates/worker)
