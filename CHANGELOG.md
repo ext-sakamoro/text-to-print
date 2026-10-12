@@ -11,6 +11,11 @@ CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout 
 (alice-zip 0.10 と、それを 0.9 で要求する alice-lol が同時に main にある期間) に `cargo` の解決が失敗し、再現もできなかった
 - `.github/siblings.toml` に sibling ごとの commit SHA を置き、`.github/actions/alice-siblings` がその commit を checkout する
   5 workflow (ci / fuzz / quality-deep / release / security-audit) の 8 job の重複していた checkout をこの action 1 つにまとめた
+- action は pin を検査器と同じ script (`--emit-pins`、`tomllib`) で読み、最後の step で checkout した HEAD を全 pin について照合する
+  (`--heads-only`) ⇒ sibling を checkout する全 job で、固定 commit 以外を取ったら fail する  siblings.toml の各行は
+  `ALICE-Xxx = "<40 桁の SHA>"` の 1 通りの綴りに限る
+- workflow 本文で sibling を固定 commit を経ずに参照するもの (`owner/ALICE-Xxx` を含む値 / 引用符・式の owner / run の
+  `git clone`・`gh repo clone` 等) を検出して fail にする (`../ALICE-Xxx` の相対 path は許す)
 - `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
   sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
   不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail

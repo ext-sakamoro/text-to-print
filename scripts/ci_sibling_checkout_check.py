@@ -39,6 +39,13 @@ SIBLING_RE = re.compile(r"repository:\s*[\w.-]+/(ALICE-[\w-]+)")
 ACTION_USE_RE = re.compile(r"uses:\s*\./(?:[\w.-]+/)?\.github/actions/alice-siblings\s*$", re.M)
 JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+PIN_LINE_RE = re.compile(r'^ALICE-[A-Za-z0-9-]+ = "[0-9a-f]{40}"$')
+# workflow 本文での sibling の参照: 「何か/ALICE-Xxx」(owner/repo・URL・式の owner・引用符を問わない)
+# と、clone / fetch 系の command と同じ行の ALICE-Xxx ⇒ どちらも固定 commit を迂回する
+# `../ALICE-Xxx` (checkout 済みの sibling を相対 path で使う) は許す
+REMOTE_REF_RE = re.compile(r"(?<![.\w])(?:[^\s/'\"]*[^\s/'\".])?/(ALICE-[A-Za-z0-9-]+)")
+FETCH_CMD_RE = re.compile(r"\b(?:git\s+(?:clone|fetch|submodule|remote|archive)|gh\s+repo\s+clone|curl|wget)\b")
+ALICE_NAME_RE = re.compile(r"ALICE-[A-Za-z0-9-]+")
 MANIFEST = Path(".github/siblings.toml")
 ACTION = Path(".github/actions/alice-siblings/action.yml")
 
@@ -57,6 +64,25 @@ def read_pins(root: Path) -> tuple[dict[str, str], list[str]]:
     for name, sha in pins.items():
         if not isinstance(sha, str) or not SHA_RE.match(sha):
             errors.append(f"{MANIFEST}: {name} の値が 40 桁の commit SHA でない: {sha!r}")
+    # [siblings] の各行は 1 通りの綴り (`ALICE-Xxx = "<40 桁>"`) に限る
+    # 読み手は本 script 1 つだが、綴りを固定して手書きの揺れ (単引用符 / inline table /
+    # 複数行) を入口で落とす
+    section = None
+    canonical = 0
+    for i, line in enumerate((root / MANIFEST).read_text(encoding="utf-8").splitlines(), 1):
+        t = line.strip()
+        if not t or t.startswith("#"):
+            continue
+        if t.startswith("["):
+            section = t
+            continue
+        if section == "[siblings]":
+            if PIN_LINE_RE.match(t):
+                canonical += 1
+            else:
+                errors.append(f"{MANIFEST}:{i} が `ALICE-Xxx = \"<40 桁の SHA>\"` の形でない")
+    if canonical != len(pins):
+        errors.append(f"{MANIFEST}: 正規形の行 {canonical} 件と読めた pin {len(pins)} 件が一致しない")
     return pins, errors
 
 
@@ -114,26 +140,64 @@ def split_jobs(text: str) -> dict[str, str]:
 
 def static_checks(root: Path, pins: dict[str, str]) -> tuple[list[str], int]:
     errors: list[str] = []
-    action_set = set(SIBLING_RE.findall((root / ACTION).read_text(encoding="utf-8")))
-    if action_set != set(pins):
-        errors.append(
-            f"{ACTION} の checkout と {MANIFEST} が不一致: "
-            f"action のみ {sorted(action_set - set(pins))} / manifest のみ {sorted(set(pins) - action_set)}"
-        )
+    errors += action_shape_errors(root / ACTION, pins)
     users = 0
-    for wf in sorted((root / ".github/workflows").glob("*.yml")):
-        for job, body in split_jobs(wf.read_text(encoding="utf-8")).items():
-            direct = sorted(set(SIBLING_RE.findall(body)))
-            if direct:
-                errors.append(
-                    f"{wf.name}:{job} が sibling を直接 checkout している ({', '.join(direct)}) "
-                    f"— {ACTION.parent} を使う"
-                )
+    for wf in sorted((root / ".github/workflows").glob("*.y*ml")):
+        text = wf.read_text(encoding="utf-8")
+        for lineno, name in remote_sibling_refs(text):
+            errors.append(
+                f"{wf.name}:{lineno} が sibling {name} を固定 commit を経ずに参照している "
+                f"— {ACTION.parent} を使う"
+            )
+        for job, body in split_jobs(text).items():
             if ACTION_USE_RE.search(body):
                 users += 1
     if users == 0:
         errors.append("composite action を使う job が 0 件 (検査が何も比較していない)")
     return errors, users
+
+
+def remote_sibling_refs(text: str) -> list[tuple[int, str]]:
+    """workflow 本文のうち、sibling を checkout / clone しうる参照 (行番号, 名前)
+
+    YAML の書き方 (引用符 / `${{ }}` の owner / run の中の command) に依らないよう、
+    構文でなく本文の token で判定する 全行が対象 (`#` で始まる comment 行だけ除く)
+    """
+    hits: list[tuple[int, str]] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        for m in REMOTE_REF_RE.finditer(line):
+            start = m.start(1) - 1  # "/" の位置
+            if line[max(0, start - 2) : start] == "..":
+                continue  # ../ALICE-Xxx (checkout 済みの sibling)
+            hits.append((i, m.group(1)))
+        if FETCH_CMD_RE.search(line):
+            hits.extend((i, n) for n in ALICE_NAME_RE.findall(line))
+    return sorted(set(hits))
+
+
+def action_shape_errors(action: Path, pins: dict[str, str]) -> list[str]:
+    """composite action の各 checkout が manifest の同名 pin を ref に使っているか"""
+    errors: list[str] = []
+    text = action.read_text(encoding="utf-8")
+    steps = re.split(r"(?m)^    - ", text)
+    seen: list[str] = []
+    for step in steps:
+        repo = re.search(r"(?m)^\s+repository:\s*ext-sakamoro/(ALICE-[A-Za-z0-9-]+)\s*$", step)
+        if not repo:
+            continue
+        name = repo.group(1)
+        seen.append(name)
+        if not re.search(rf"(?m)^\s+path:\s*{re.escape(name)}\s*$", step):
+            errors.append(f"{action.name}: {name} の checkout の path が {name} でない")
+        if not re.search(rf"(?m)^\s+ref:\s*\$\{{{{ steps\.pins\.outputs\['{re.escape(name)}'\] }}}}\s*$", step):
+            errors.append(f"{action.name}: {name} の checkout の ref が固定 commit (steps.pins.outputs) でない")
+    if sorted(seen) != sorted(pins):
+        errors.append(f"{action.name} の checkout {sorted(seen)} と {MANIFEST} {sorted(pins)} が不一致")
+    if "--emit-pins" not in text or "--heads-only" not in text:
+        errors.append(f"{action.name} が pin を本 script で読んでいない / 最後に HEAD を照合していない")
+    return errors
 
 
 def verify_heads(siblings: Path, pins: dict[str, str]) -> list[str]:
@@ -177,6 +241,34 @@ def check(root: Path, siblings: Path, use_cargo: bool = True, heads: bool = Fals
     return 1 if errors else 0
 
 
+def emit_pins(root: Path) -> int:
+    """manifest を検査器と同じ parser で読み、`$GITHUB_OUTPUT` 用の行を出す (fail closed)"""
+    pins, errors = read_pins(norm(root))
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+    if errors or not pins:
+        return 1
+    out = sys.stdout
+    if hasattr(out, "reconfigure"):
+        out.reconfigure(newline="\n")  # Windows でも `$GITHUB_OUTPUT` に CR を混ぜない
+    for name, sha in sorted(pins.items()):
+        out.write(f"{name}={sha}\n")
+    print(f"emitted {len(pins)} sibling pins", file=sys.stderr)
+    return 0
+
+
+def heads_only(root: Path, siblings: Path) -> int:
+    """checkout 後に全 pin の HEAD を照合する (composite action の最後の step)"""
+    pins, errors = read_pins(norm(root))
+    errors += verify_heads(norm(siblings), pins)
+    if not pins:
+        errors.append("照合した pin が 0 件")
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+    print(f"verified {len(pins) if not errors else 0}/{len(pins)} sibling HEADs")
+    return 1 if errors else 0
+
+
 def self_test() -> int:
     """架空の crate 群で歯を確かめる"""
     import tempfile
@@ -215,9 +307,21 @@ def self_test() -> int:
         assert need == {"ALICE-A", "ALICE-B"}, need  # optional 未有効の Z は解決に出ない
 
         good_pins = f'[siblings]\nALICE-A = "{sha_a}"\nALICE-B = "{sha_b}"\n'
-        good_action = "steps:\n  - with:\n      repository: o/ALICE-A\n  - with:\n      repository: o/ALICE-B\n"
+
+        def action_for(names: list[str], ref_of=None, tail: str = "--heads-only") -> str:
+            out = "runs:\n  steps:\n    - name: pins\n      run: x.py --emit-pins\n"
+            for n in names:
+                ref = ref_of(n) if ref_of else f"${{{{ steps.pins.outputs['{n}'] }}}}"
+                out += (
+                    f"    - name: Checkout {n}\n      uses: actions/checkout@v5\n      with:\n"
+                    f"        repository: ext-sakamoro/{n}\n        path: {n}\n        ref: {ref}\n"
+                )
+            return out + f"    - name: heads\n      run: x.py {tail}\n"
+
+        good_action = action_for(["ALICE-A", "ALICE-B"])
         good_wf = (
             "jobs:\n  build:\n    steps:\n      - uses: ./app/.github/actions/alice-siblings\n"
+            "      - run: cp ../ALICE-A/target/x dist/x\n"
             "  lint:\n    steps:\n      - run: true\n"
         )
 
@@ -227,19 +331,35 @@ def self_test() -> int:
             w("app/.github/workflows/ci.yml", wf)
 
         setup()
-        assert check(t / "app", t, heads=True) == 0
+        assert check(t / "app", t, heads=True) == 0  # ../ALICE-A (checkout 済みの相対 path) は許す
+        assert heads_only(t / "app", t) == 0
 
-        setup(pins=good_pins.replace(f'ALICE-B = "{sha_b}"\n', ""), action=good_action.replace("o/ALICE-B", "o/ALICE-A"))
+        setup(pins=good_pins.replace(f'ALICE-B = "{sha_b}"\n', ""), action=action_for(["ALICE-A"]))
         assert check(t / "app", t) == 1, "cargo が読むのに manifest に無い sibling を検出しない"
 
-        setup(pins=good_pins + f'ALICE-Y = "{sha_a}"\n', action=good_action + "  - with:\n      repository: o/ALICE-Y\n")
+        setup(pins=good_pins + f'ALICE-Y = "{sha_a}"\n', action=action_for(["ALICE-A", "ALICE-B", "ALICE-Y"]))
         assert check(t / "app", t) == 1, "使われない manifest entry を検出しない"
 
-        setup(action=good_action.replace("o/ALICE-B", "o/ALICE-X"))
+        setup(action=action_for(["ALICE-A", "ALICE-X"]))
         assert check(t / "app", t, use_cargo=False) == 1, "action と manifest の不一致を検出しない"
 
-        setup(wf=good_wf + "  direct:\n    steps:\n      - with:\n          repository: o/ALICE-A\n")
-        assert check(t / "app", t, use_cargo=False) == 1, "直接 checkout を検出しない"
+        setup(action=action_for(["ALICE-A", "ALICE-B"], ref_of=lambda n: "main"))
+        assert check(t / "app", t, use_cargo=False) == 1, "pin を使わない ref を検出しない"
+
+        setup(action=action_for(["ALICE-A", "ALICE-B"], tail="true"))
+        assert check(t / "app", t, use_cargo=False) == 1, "action 最後の HEAD 照合の欠落を検出しない"
+
+        bypasses = {
+            "直接 checkout": "      - with:\n          repository: o/ALICE-A\n",
+            "引用符の repository": '      - with:\n          repository: "ext-sakamoro/ALICE-A"\n',
+            "式の owner": "      - with:\n          repository: ${{ github.repository_owner }}/ALICE-A\n",
+            "run の git clone": "      - run: git clone https://github.com/ext-sakamoro/ALICE-A\n",
+            "run の gh repo clone": "      - run: gh repo clone ALICE-A\n",
+            "run の ssh clone": "      - run: git clone git@github.com:ext-sakamoro/ALICE-A.git\n",
+        }
+        for label, step in bypasses.items():
+            setup(wf=good_wf + "  direct:\n    steps:\n" + step)
+            assert check(t / "app", t, use_cargo=False) == 1, f"{label} を検出しない"
 
         setup(wf="jobs:\n  lint:\n    steps:\n      - run: true\n")
         assert check(t / "app", t, use_cargo=False) == 1, "比較 0 件で fail しない"
@@ -247,8 +367,13 @@ def self_test() -> int:
         setup(pins=good_pins.replace(sha_b, sha_b[:7]))
         assert check(t / "app", t, use_cargo=False) == 1, "短縮 SHA を検出しない"
 
+        setup(pins=good_pins.replace(f'"{sha_b}"', f"'{sha_b}'"))
+        assert check(t / "app", t, use_cargo=False) == 1, "単引用符の pin (正規形でない) を検出しない"
+        assert emit_pins(t / "app") == 1, "正規形でない manifest で pin を出力した"
+
         setup(pins=good_pins.replace(sha_b, sha_a))
         assert check(t / "app", t, heads=True) == 1, "HEAD と固定 commit の不一致を検出しない"
+        assert heads_only(t / "app", t) == 1, "action の HEAD 照合が不一致を検出しない"
 
         setup()
         (t / "ALICE-B/Cargo.toml").rename(t / "ALICE-B/Cargo.toml.off")
@@ -264,9 +389,15 @@ def main() -> int:
     ap.add_argument("--no-cargo", action="store_true")
     ap.add_argument("--verify-heads", action="store_true")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--emit-pins", action="store_true", help="composite action 用: `ALICE-Xxx=<sha>` を出力")
+    ap.add_argument("--heads-only", action="store_true", help="composite action 用: checkout 後の HEAD 照合だけ")
     a = ap.parse_args()
     if a.self_test:
         return self_test()
+    if a.emit_pins:
+        return emit_pins(a.root)
+    if a.heads_only:
+        return heads_only(a.root, a.siblings or norm(a.root).parent)
     return check(a.root, a.siblings or norm(a.root).parent, not a.no_cargo, a.verify_heads)
 
 

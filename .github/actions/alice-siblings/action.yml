@@ -16,26 +16,18 @@ inputs:
 runs:
   using: composite
   steps:
+    # pin は検査器 (scripts/ci_sibling_checkout_check.py) と同じ parser で読む
+    # manifest を 2 通りに解釈しないため (読めない綴りは検査器が fail にする)
+    - name: Set up Python (manifest reader)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
     - name: Read sibling pins
       id: pins
       shell: bash
       run: |
         set -euo pipefail
-        # relative to $GITHUB_WORKSPACE (the default working directory), avoids
-        # Windows-style action_path in bash
-        manifest="text-to-print/.github/siblings.toml"
-        n=0
-        while IFS= read -r line; do
-          if [[ "$line" =~ ^(ALICE-[A-Za-z0-9-]+)\ *=\ *\"([0-9a-f]{40})\" ]]; then
-            echo "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
-            n=$((n + 1))
-          fi
-        done < "$manifest"
-        if [ "$n" -eq 0 ]; then
-          echo "::error::no sibling pins read from $manifest"
-          exit 1
-        fi
-        echo "read $n sibling pins"
+        python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --emit-pins >> "$GITHUB_OUTPUT"
     - name: Checkout ALICE-Bamboo
       uses: actions/checkout@v5
       with:
@@ -80,3 +72,8 @@ runs:
         repository: ext-sakamoro/ALICE-Zip
         path: ALICE-Zip
         ref: ${{ steps.pins.outputs['ALICE-Zip'] }}
+    # 全 job で、checkout された HEAD が固定 commit と一致することを確かめる
+    # (ref が空で default branch を取った等は ここで fail する)
+    - name: Verify sibling HEADs
+      shell: bash
+      run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
