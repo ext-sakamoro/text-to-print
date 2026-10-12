@@ -33,7 +33,7 @@ jobs:
         run: cargo audit
 
   # clippy / test / doc need the six ALICE-* sibling repos side-by-side
-  # (matches the workspace path deps) Public Project-ALICE repos are
+  # (matches the workspace path deps) Public ext-sakamoro repos are
   # cloned unauthenticated; private ext-sakamoro repos require a PAT with
   # `contents: read` on the private repos to be set as the
   # `ALICE_ECO_TOKEN` secret Without the token the private-repo checkout
@@ -43,7 +43,7 @@ jobs:
   # ── ALICE_ECO_TOKEN 設定手順 ────────────────────────────
   # 1. https://github.com/settings/tokens?type=beta で Fine-grained PAT 発行
   #    - Resource owner: `ext-sakamoro`
-  #    - Repository access: `ext-sakamoro/ALICE-Bamboo` (最低限)
+  #    - Repository access: `ext-sakamoro/ALICE-Bamboo` と `ext-sakamoro/ALICE-Print` (非公開の sibling 2 件、両方が要る)
   #    - Repository permissions: `Contents: Read-only`
   # 2. https://github.com/ext-sakamoro/text-to-print/settings/secrets/actions
   #    に "New repository secret" で `ALICE_ECO_TOKEN` = 発行した PAT を登録
