@@ -14,8 +14,12 @@ CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout 
 - `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
   sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
   不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail
-- build が読む sibling は SDF / LOL / Zip / LLM / Physics / Bamboo / Print の 7 つ、`cargo fmt --all` はこれに加えて
-  ALICE-LOL の workspace member (alice-lol-robot) の path 依存 ALICE-Kinematics を読む 以前 checkout していた ALICE-View は不要だった
+- 必要な sibling は SDF / LOL / Zip / LLM / Physics / Bamboo / Print の 7 つで、以前 checkout していた ALICE-View と
+  ALICE-Kinematics は不要だった
+- `cargo fmt --all` を `cargo fmt` に変更 (`--all` は path 依存の sibling まで 1800 file 超を 1 回の rustfmt に渡し、
+  Windows の引数長の上限 (os error 206) に当たっていた sibling の fmt は各 repo の CI が見る)
+- `scripts/fmt_scope_check.py` を追加: rustfmt が検査した file の集合が workspace member の追跡済み `.rs` 全部 (現在 50) と
+  一致することを確かめる (漏れ・0 件は fail)  `--all` を外しても本 repo の検査範囲は変わらない
 - 固定した組で `Cargo.lock` を更新: alice-sdf 4.0.0 → 5.1.1 / alice-physics 1.4.0 → 2.3.0 / alice-det-math 0.3.1 → 0.4.0 /
   alice-lol-macro 0.2.0 → 0.2.1 / alice-zip 0.9.0 を追加
 - 固定 commit の更新は 1 つずつでなく組ごとに行う (全 SHA の差し替え → 解決 → build / test → `Cargo.lock` の更新)

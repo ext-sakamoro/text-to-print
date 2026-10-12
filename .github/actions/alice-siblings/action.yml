@@ -43,12 +43,6 @@ runs:
         path: ALICE-Bamboo
         ref: ${{ steps.pins.outputs['ALICE-Bamboo'] }}
         token: ${{ inputs.eco-token }}
-    - name: Checkout ALICE-Kinematics
-      uses: actions/checkout@v5
-      with:
-        repository: ext-sakamoro/ALICE-Kinematics
-        path: ALICE-Kinematics
-        ref: ${{ steps.pins.outputs['ALICE-Kinematics'] }}
     - name: Checkout ALICE-LLM
       uses: actions/checkout@v5
       with:

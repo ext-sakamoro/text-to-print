@@ -32,7 +32,8 @@ need cargo-deny "cargo install cargo-deny --locked"
 need cargo-machete "cargo install cargo-machete --locked"
 
 step "ci.yml / clippy-test-doc: cargo fmt --check"
-( export CARGO_TERM_COLOR="always"; cargo fmt --all -- --check )
+python3 scripts/fmt_scope_check.py --self-test
+python3 scripts/fmt_scope_check.py
 
 step "ci.yml / clippy-test-doc: cargo clippy (workspace, all targets)"
 relint

@@ -91,12 +91,17 @@ jobs:
         with:
           workspaces: text-to-print
 
-      # fmt を clippy と同 job に merge (2026-08-07): 独立 `fmt` job は
-      # workspace path deps (ALICE-Bamboo private) の checkout なしで
-      # Windows で `cargo fmt --all` が manifest 解決 fail していた
-      # ALICE-* 全て揃った状態なら fmt/clippy/test 全部素直に流れる
-      - name: cargo fmt --check
-        run: cargo fmt --all -- --check
+      # fmt は本 repo の package だけを見る (`--all` は path 依存の sibling 全体、
+      # 1800 file 超を 1 回の rustfmt に渡し、Windows で引数長の上限
+      # (os error 206) に当たる sibling の fmt は各 repo の CI が見る)
+      # 検査した file の集合が workspace member の追跡済み .rs 全部と一致することを
+      # 併せて assert する (member の脱落・0 件は fail、件数を log に出す)
+      - name: cargo fmt --check (本 repo の全 .rs を検査したことの確認つき)
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          "$PY" scripts/fmt_scope_check.py --self-test
+          "$PY" scripts/fmt_scope_check.py
 
       - name: cargo clippy (workspace, all targets)
         run: cargo clippy --workspace --all-targets -- -D warnings

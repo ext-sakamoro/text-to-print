@@ -12,9 +12,9 @@ text-to-print は ALICE-* を `../ALICE-Xxx` の path 依存で引く CI は sib
     4. composite action を使う job が 0 件 (検査が何も比較していない)
   cargo (`--no-cargo` で省略)
     5. `cargo metadata` が解決できない (sibling の欠落か版要求の不一致)
-    6. cargo の解決に出る sibling が siblings.toml に無い / siblings.toml に cargo が
-       参照しない sibling がある (集合は manifest を目で追わず cargo の出力から求める、
-       詳細は required_siblings)
+    6. cargo の解決に出る sibling が siblings.toml に無い / siblings.toml に解決に出ない
+       sibling がある (集合は manifest を目で追わず cargo の解決結果から求める:
+       optional の path 依存は有効化されない限り要らないため)
   `--verify-heads` (CI 用)
     7. checkout された各 sibling の HEAD が siblings.toml の commit と違う
 
@@ -60,66 +60,35 @@ def read_pins(root: Path) -> tuple[dict[str, str], list[str]]:
     return pins, errors
 
 
-def _metadata(manifest: Path, no_deps: bool) -> tuple[dict | None, str | None]:
-    cmd = ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(manifest)]
-    if no_deps:
-        cmd.append("--no-deps")
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
-    if proc.returncode != 0:
-        return None, f"{manifest}:\n{proc.stderr.strip() or f'cargo metadata exit {proc.returncode}'}"
-    return json.loads(proc.stdout), None
+def required_siblings(root: Path, siblings: Path) -> tuple[set[str], str | None]:
+    """cargo の解決結果に出る sibling repo 名の集合 (失敗時は error 文字列)
 
-
-def _sibling_of(path: Path, real_sib: Path, real_root: Path) -> str | None:
-    p = Path(os.path.realpath(path))
-    if p == real_root or real_root in p.parents:
-        return None
-    try:
-        return p.relative_to(real_sib).parts[0]
-    except ValueError:
-        return None
-
-
-def required_siblings(root: Path, siblings: Path) -> tuple[set[str], set[str], str | None]:
-    """cargo が読む sibling を求める (失敗時は error 文字列)
-
-    cargo は 2 通りの読み方をする
-      - build / test: root の解決結果に出る path package だけを読む (optional の path
-        依存は有効化されない限り読まない)
-      - `cargo fmt --all`: path 依存の package ごとに `cargo metadata --no-deps` を掛ける
-        その package が複数 member の workspace に属すると、全 member の path 依存
-        (optional を含む) の manifest まで読む (ALICE-LOL の alice-lol-robot →
-        ALICE-Kinematics で実測)
-    返り値は (解決結果に出る sibling, 上の 2 通りで参照されうる sibling)
-    前者は checkout から外せない集合、後者は「固定しても使われない」の判定に使う
-    どちらの読み方でも、存在しない sibling は cargo 自身の失敗として返る
+    optional の path 依存は有効化されない限り解決に出ず、checkout も要らない
+    (`cargo fmt --all` は path 依存の workspace の全 member まで読むが、CI の fmt は
+    本 repo の package だけを見る)
     """
+    proc = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(root / "Cargo.toml")],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        return set(), proc.stderr.strip() or f"cargo metadata exit {proc.returncode}"
     real_sib = Path(os.path.realpath(siblings))
     real_root = Path(os.path.realpath(root))
-    meta, err = _metadata(root / "Cargo.toml", no_deps=False)
-    if err is not None:
-        return set(), set(), err
-    resolved: set[str] = set()
-    manifests: list[Path] = []
-    for pkg in meta["packages"]:
+    need: set[str] = set()
+    for pkg in json.loads(proc.stdout)["packages"]:
         if pkg.get("source") is not None:
             continue  # registry / git の依存
-        name = _sibling_of(Path(pkg["manifest_path"]), real_sib, real_root)
-        if name is not None:
-            resolved.add(name)
-            manifests.append(Path(pkg["manifest_path"]))
-    referenced = set(resolved)
-    for manifest in manifests:
-        nd, err = _metadata(manifest, no_deps=True)
-        if err is not None:
-            return resolved, referenced, err
-        for pkg in nd["packages"]:
-            for dep in pkg["dependencies"]:
-                if dep.get("path"):
-                    name = _sibling_of(Path(dep["path"]), real_sib, real_root)
-                    if name is not None:
-                        referenced.add(name)
-    return resolved, referenced, None
+        mp = Path(os.path.realpath(pkg["manifest_path"]))
+        if mp.parent == real_root or real_root in mp.parents:
+            continue
+        try:
+            need.add(mp.relative_to(real_sib).parts[0])
+        except ValueError:
+            continue
+    return need, None
 
 
 def split_jobs(text: str) -> dict[str, str]:
@@ -186,7 +155,7 @@ def check(root: Path, siblings: Path, use_cargo: bool = True, heads: bool = Fals
     errors += st_errors
     need: set[str] = set()
     if use_cargo:
-        need, referenced, err = required_siblings(root, siblings)
+        need, err = required_siblings(root, siblings)
         if err is not None:
             errors.append(f"cargo metadata が失敗 (sibling の欠落か版要求の不一致):\n{err}")
         elif not need:
@@ -194,8 +163,8 @@ def check(root: Path, siblings: Path, use_cargo: bool = True, heads: bool = Fals
         else:
             if need - set(pins):
                 errors.append(f"cargo が読むのに {MANIFEST} に無い sibling: {', '.join(sorted(need - set(pins)))}")
-            if set(pins) - referenced:
-                errors.append(f"{MANIFEST} にあるが cargo が読まない sibling: {', '.join(sorted(set(pins) - referenced))}")
+            if set(pins) - need:
+                errors.append(f"{MANIFEST} にあるが cargo が読まない sibling: {', '.join(sorted(set(pins) - need))}")
     if heads:
         errors += verify_heads(siblings, pins)
 
@@ -241,10 +210,9 @@ def self_test() -> int:
         crate("ALICE-Z", "z")
         sha_a, sha_b = git_init("ALICE-A"), git_init("ALICE-B")
 
-        need, referenced, err = required_siblings(t / "app", t)
+        need, err = required_siblings(t / "app", t)
         assert err is None, err
         assert need == {"ALICE-A", "ALICE-B"}, need  # optional 未有効の Z は解決に出ない
-        assert referenced == {"ALICE-A", "ALICE-B", "ALICE-Z"}, referenced
 
         good_pins = f'[siblings]\nALICE-A = "{sha_a}"\nALICE-B = "{sha_b}"\n'
         good_action = "steps:\n  - with:\n      repository: o/ALICE-A\n  - with:\n      repository: o/ALICE-B\n"
