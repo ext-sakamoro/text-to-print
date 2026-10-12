@@ -18,6 +18,10 @@ text-to-print は ALICE-* を `../ALICE-Xxx` の path 依存で引く CI は sib
   `--verify-heads` (CI 用)
     7. checkout された各 sibling の HEAD が siblings.toml の commit と違う
 
+想定する範囲: repo と sibling の directory の中身、`.cargo/config.toml` の file (repo の中と親)
+対象外: CI の環境そのものによる差し替え (`CARGO_HOME` の config、`--config` を足す wrapper、
+環境変数での上書き) これらは workflow の定義 (review と静的な許可リスト) で扱う
+
 usage: ci_sibling_checkout_check.py [--root <repo>] [--siblings <dir>]
                                     [--no-cargo] [--verify-heads] [--self-test]
   --root      text-to-print の root (既定: この script の親の親)
@@ -98,6 +102,19 @@ def read_pins(root: Path) -> tuple[dict[str, str], list[str]]:
     return pins, errors
 
 
+def cargo_metadata(root: Path, locked: bool) -> subprocess.CompletedProcess:
+    """本 script の cargo の呼び出しは全てここを通す
+
+    cargo は `.cargo/config.toml` を「実行した directory とその親」から探す (`--manifest-path`
+    の位置ではない) build と同じく repo の root で実行しないと、repo の中の config
+    (`paths` / `[patch]`) を見落とす / 呼び出しごとに違う config を見る
+    """
+    cmd = ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(root / "Cargo.toml")]
+    if locked:
+        cmd.insert(4, "--locked")
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", cwd=root)
+
+
 def required_siblings(root: Path, siblings: Path) -> tuple[set[str], str | None]:
     """cargo の解決結果に出る sibling repo 名の集合 (失敗時は error 文字列)
 
@@ -105,12 +122,7 @@ def required_siblings(root: Path, siblings: Path) -> tuple[set[str], str | None]
     (`cargo fmt --all` は path 依存の workspace の全 member まで読むが、CI の fmt は
     本 repo の package だけを見る)
     """
-    proc = subprocess.run(
-        ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(root / "Cargo.toml")],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    proc = cargo_metadata(root, locked=False)
     if proc.returncode != 0:
         return set(), proc.stderr.strip() or f"cargo metadata exit {proc.returncode}"
     real_sib = Path(os.path.realpath(siblings))
@@ -362,13 +374,7 @@ def verify_resolution(root: Path, siblings: Path, pins: dict[str, str]) -> tuple
       - 照合した alice-* が 0 件なら fail
     """
     errors: list[str] = []
-    proc = subprocess.run(
-        ["cargo", "metadata", "--format-version", "1", "--locked", "--manifest-path", str(root / "Cargo.toml")],
-        capture_output=True, text=True, encoding="utf-8",
-        # cargo は `.cargo/config.toml` を「実行した directory とその親」から探す build と同じく
-        # repo の root で実行しないと、repo の中の config (paths / [patch]) を見落とす
-        cwd=root,
-    )
+    proc = cargo_metadata(root, locked=True)
     if proc.returncode != 0:
         return [f"cargo metadata --locked が失敗:\n{proc.stderr.strip()}"], 0
     return judge_resolution(json.loads(proc.stdout), root, siblings, pins)
@@ -614,6 +620,17 @@ def self_test() -> int:
         assert errs == [] and n == 2, (errs, n)
         crate("fork-b", "alice-b")
         # `.cargo/config.toml` の paths は path 依存も差し替える (repo の中と親 directory の両方)
+        # 2 つの cargo の呼び出しが同じ config を見る (呼び出し元の cwd に依らない)
+        w("app/.cargo/config.toml", f'paths = ["{(t / "fork-b").as_posix()}"]\n')
+        here = os.getcwd()
+        try:
+            os.chdir(tempfile.gettempdir())
+            need_cfg, err = required_siblings(t / "app", t)
+        finally:
+            os.chdir(here)
+        assert err is None, err
+        assert "fork-b" in need_cfg, f"required_siblings が repo の中の config を見ていない: {need_cfg}"
+        (t / "app/.cargo/config.toml").unlink()
         for cfg in ("app/.cargo/config.toml", ".cargo/config.toml"):
             w(cfg, f'paths = ["{(t / "fork-b").as_posix()}"]\n')
             assert verify_heads(t, pins_now) == [], "前提: sibling の tree は clean"
