@@ -24,8 +24,7 @@ pub const DEFAULT_CHECKOUT_ENDPOINT: &str =
 
 /// Enterprise inquiry destination (mailto:) opened by the "Contact for
 /// Enterprise" button in Settings Points to the extoria corporate contact
-/// address (44-alias aggregation, canonical B2B channel per
-/// `~/CLAUDE.md`)
+/// address (the canonical B2B channel)
 pub const ENTERPRISE_MAILTO: &str =
     "mailto:contact@extoria.co.jp?subject=text-to-print%20Enterprise%20plan";
 

@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MIN_REASON = 12
-SKIP_DIRS = {"target", ".git", ".claude", "tests", "node_modules"}
+SKIP_DIRS = {"target", "tests", "node_modules"}  # 加えて "." で始まる directory は全て走査しない
 EXEMPT_ATTRS = re.compile(r"no_mangle|export_name|wasm_bindgen|pyfunction|pyclass|pymethods|napi|uniffi")
 DEF_RE = re.compile(
     r"\bpub(?:\([^)]*\))?\s+"
@@ -436,7 +436,7 @@ def workspace_src_dirs(root: Path) -> list[Path]:
                     if not d.is_dir():
                         continue
                     rel = d.relative_to(root)
-                    if any(part in SKIP_DIRS for part in rel.parts) or any(rel.as_posix() == e or rel.match(e) for e in excl):
+                    if any(part in SKIP_DIRS or part.startswith(".") for part in rel.parts) or any(rel.as_posix() == e or rel.match(e) for e in excl):
                         continue
                     if (d / "src").is_dir() and (d / "src") not in dirs:
                         dirs.append(d / "src")
@@ -446,7 +446,7 @@ def workspace_src_dirs(root: Path) -> list[Path]:
 def rs_files(root: Path) -> list[Path]:
     out = []
     for p in root.rglob("*.rs"):
-        if any(part in SKIP_DIRS for part in p.relative_to(root).parts[:-1]):
+        if any(part in SKIP_DIRS or part.startswith(".") for part in p.relative_to(root).parts[:-1]):
             continue
         out.append(p)
     return sorted(out)

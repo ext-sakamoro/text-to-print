@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed — 配線ガードは "." で始まる directory を走査しない (2026-10-12)
+
+- `scripts/wiring_guard.py` の除外を個別の名前から「"." で始まる directory 全て」に変更 (追跡外の作業用 directory を拾わない)
+
 ### Changed — 回転した薄板の tight AABB が実寸に絞られる (ALICE-SDF `08582d5` の追従) (2026-10-03)
 
 ALICE-SDF の `compute_tight_aabb` が準位集合の bound を伝播するようになり、回転した薄板 (X 軸 45 度の 30 x 30 x 0.8 mm) の AABB が

@@ -2372,7 +2372,7 @@ mod tests {
     #[test]
     fn export_3mf_orientation_hint_for_table_shape() {
         // テーブル (脚 2 本 + 天板) は上下反転でサポートが消える → hint あり
-        // LOL の box3d は half_extents 指定 (ALICE-Bamboo CLAUDE.md § half_extents ルール)
+        // LOL の box3d は half_extents 指定 (各軸の全長の半分)
         let dir = tempfile::tempdir().unwrap();
         let lol = "union(union(translate(0, 0, 8.5, box3d(20, 10, 1.5)), translate(-18, 0, 5, box3d(2, 10, 5))), translate(18, 0, 5, box3d(2, 10, 5)))";
         let stats =
