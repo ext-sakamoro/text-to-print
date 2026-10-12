@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Changed — 空の形を誤りにする (2026-10-12)
+
+- **Behavior change:** 読めた LOL から作った mesh が空の時、空の mesh を返さずに `pipeline::EmptyMesh` の誤りにする (preview /
+  3MF の書き出し / 解析なしの書き出し)  形を包む箱を区間評価で絞れず探索の上限 (±500 mm) に張り付いた場合 (例: `polar_repeat`) と、
+  材料が無い場合 (引き算で全部消えた等) を分け、利用者向けの文 (ja / en) は `violation_text.json` の errors から
+
 ### Added — 解析なしの 3MF の書き出し (2026-10-12)
 
 - `pipeline::export_3mf_without_analysis`: 安全性 / overhang / DfAM / 向き探索 / 印刷可能性の解析をせずに 3MF だけを書く

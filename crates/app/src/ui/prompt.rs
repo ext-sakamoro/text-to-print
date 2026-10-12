@@ -869,7 +869,10 @@ fn start_generation_from_lol(
                         lol_preview = %lol_clone.chars().take(120).collect::<String>(),
                         "template mesh export failed"
                     );
-                    pipeline_error = Some(crate::i18n::T::prompt_fmt_template_gen_fail(e, lang));
+                    pipeline_error = Some(crate::i18n::T::prompt_fmt_template_gen_fail(
+                        pipeline_error_text(&e, lang),
+                        lang,
+                    ));
                     None
                 }
             };
@@ -1091,7 +1094,7 @@ fn start_generation(state: &mut AppState, lang: Lang) {
                         Ok(stats) => Some(stats),
                         Err(e) => {
                             tracing::error!(error = %e, "mesh export failed");
-                            pipeline_error = Some(format!("mesh export failed: {e}"));
+                            pipeline_error = Some(pipeline_error_text(&e, lang));
                             None
                         }
                     };
@@ -4724,6 +4727,16 @@ fn render_check_details(
         for note in &p.notes {
             ui.colored_label(ui.style().visuals.weak_text_color(), format!("  {note}"));
         }
+    }
+}
+
+/// 処理の誤りを利用者に見せる文にする 空の形 (`EmptyMesh`) は core の表の文 (ja / en)、それ以外は誤りの文
+fn pipeline_error_text(e: &anyhow::Error, lang: crate::i18n::Lang) -> String {
+    match e.downcast_ref::<text_to_print_core::pipeline::EmptyMesh>() {
+        Some(empty) => empty.message(text_to_print_core::violation::Lang::from_tag(
+            lang.as_bcp47(),
+        )),
+        None => format!("{e:#}"),
     }
 }
 

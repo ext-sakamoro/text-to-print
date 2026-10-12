@@ -1052,7 +1052,60 @@ const AABB_REMESH_MAX_GROWTH: usize = 6;
 ///
 /// # Errors
 /// 反復の上限まで広げても mesh が bounds に接したままのとき (欠損した mesh を黙って返さない)
+/// mesh が空のとき ([`EmptyMesh`]、空の mesh を黙って返さない)
 fn mesh_with_remesh(
+    sdf: &alice_sdf::SdfNode,
+    tight_min: Vec3,
+    tight_max: Vec3,
+    quality: Quality,
+    progress: &mut dyn crate::progress::Progress,
+) -> Result<(alice_sdf::mesh::Mesh, (Vec3, Vec3))> {
+    let (mesh, bounds) = mesh_with_remesh_inner(sdf, tight_min, tight_max, quality, progress)?;
+    if mesh.indices.is_empty() {
+        // 形を包む箱が探索の上限に張り付いた = 区間評価で範囲を絞れなかった
+        let limit = TightAabbConfig::preset_large().initial_half_size();
+        let aabb_pinned = tight_min
+            .to_array()
+            .iter()
+            .chain(tight_max.to_array().iter())
+            .any(|v| !v.is_finite() || v.abs() >= limit * 0.999);
+        return Err(EmptyMesh { aabb_pinned }.into());
+    }
+    Ok((mesh, bounds))
+}
+
+/// 読めた LOL から作った mesh が空だった
+///
+/// `aabb_pinned` は形を包む箱が探索の上限 (±500 mm) に張り付いたこと (区間評価で範囲を絞れない演算、
+/// 例 `polar_repeat` を含む) false は箱は求まったが中に材料が無かったこと
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmptyMesh {
+    /// 形を包む箱が探索の上限に張り付いた
+    pub aabb_pinned: bool,
+}
+
+impl EmptyMesh {
+    /// 利用者に見せる文 (ja / en、`data/violation_text.json` の errors)
+    #[must_use]
+    pub fn message(&self, lang: crate::violation::Lang) -> String {
+        let key = if self.aabb_pinned {
+            "empty_mesh_unbounded"
+        } else {
+            "empty_mesh_no_material"
+        };
+        crate::violation::error_text(key, lang).to_string()
+    }
+}
+
+impl std::fmt::Display for EmptyMesh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message(crate::violation::Lang::En))
+    }
+}
+
+impl std::error::Error for EmptyMesh {}
+
+fn mesh_with_remesh_inner(
     sdf: &alice_sdf::SdfNode,
     tight_min: Vec3,
     tight_max: Vec3,

@@ -268,6 +268,7 @@ struct Text {
     severity: BTreeMap<String, BTreeMap<String, String>>,
     header: BTreeMap<String, String>,
     details: BTreeMap<String, String>,
+    errors: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// 方針の表の 1 項目
@@ -384,6 +385,15 @@ fn annotations() -> &'static [Annotation] {
 #[must_use]
 pub fn header(lang: Lang) -> &'static str {
     &text().header[lang.key()]
+}
+
+/// 処理の誤りの利用者向けの文 (`data/violation_text.json` の errors)
+///
+/// # Panics
+/// 表に key が無い時 (試験 `every_error_text_has_ja_and_en` が先に止める)
+#[must_use]
+pub fn error_text(key: &str, lang: Lang) -> &'static str {
+    &text().errors[key][lang.key()]
 }
 
 /// 元の文字列を畳む欄の見出し
@@ -956,6 +966,18 @@ mod tests {
         )];
         annotate("tape_dispenser(76, 50, 3)", &mut v);
         assert!(v[0].intentional.is_none(), "位置の無い違反に注記は付かない");
+    }
+
+    #[test]
+    fn every_error_text_has_ja_and_en() {
+        let mut checked = 0;
+        for key in ["empty_mesh_unbounded", "empty_mesh_no_material"] {
+            for lang in [Lang::Ja, Lang::En] {
+                assert!(!error_text(key, lang).trim().is_empty(), "{key}");
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 4);
     }
 
     #[test]

@@ -167,5 +167,15 @@
   "details": {
     "ja": "詳細 (検査の結果)",
     "en": "Details (check output)"
+  },
+  "errors": {
+    "empty_mesh_unbounded": {
+      "ja": "形の大きさを求められず、形が空になりました 範囲を絞れない演算 (例: polar_repeat) が含まれています 別の書き方にしてください",
+      "en": "The size of the shape could not be determined, so the shape came out empty. It uses an operation whose extent cannot be bounded (for example polar_repeat). Please write it another way."
+    },
+    "empty_mesh_no_material": {
+      "ja": "形の中に材料が無く、形が空になりました (引き算で全部消えた、大きさが 0 など)",
+      "en": "The shape has no material, so it came out empty (for example everything was subtracted, or a size is 0)."
+    }
   }
 }
