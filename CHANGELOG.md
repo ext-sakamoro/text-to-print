@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Added — 解析なしの 3MF の書き出し (2026-10-12)
+
+- `pipeline::export_3mf_without_analysis`: 安全性 / overhang / DfAM / 向き探索 / 印刷可能性の解析をせずに 3MF だけを書く
+  `export_mesh` の 3MF と同じ mesh を同じ書き方で書く (同じ file 名なら同じ bytes を試験)  解析は書き出しの所要時間の
+  大半を占める (同梱 template で 3MF の書き出しの 5〜9 倍)  `ttp export --skip-analysis` (3MF のみ)
+
 ### Added — 形を作る処理の進み具合と中止 (2026-10-12)
 
 - `pipeline::preview_lol_to_mesh_with_progress` と `progress` module (`Phase` / `Progress` / `Weighted` / `Cancelled`)

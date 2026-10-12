@@ -8,7 +8,7 @@
 //! ```text
 //! ttp check    --lol <file|->                       # LOL を parse + safety + DfAM (export なし)
 //! ttp preview  --lol <file|-> [--quality preview|high|ultra] [--progress]   # 表示用の mesh の件数と digest
-//! ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra]
+//! ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra] [--skip-analysis]
 //! ttp validate --gcode <file> [--bed h2d|h2d-dual|x1c|a1-mini]
 //! ```
 //!
@@ -54,7 +54,7 @@ ttp — text-to-print headless CLI (JSON on stdout)
 
   ttp check    --lol <file|->
   ttp preview  --lol <file|-> [--quality preview|high|ultra] [--progress]
-  ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra]
+  ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra] [--skip-analysis]
   ttp validate --gcode <file> [--bed h2d|h2d-dual|x1c|a1-mini]
 
 exit codes: 0 ok / 1 error / 3 findings failed (check: DfAM fail or safety violation; validate: not ok)";
@@ -232,7 +232,17 @@ fn cmd_export(args: &[String]) -> Result<ExitCode, String> {
     let quality = parse_quality(flag(args, "--quality").unwrap_or("preview"))?;
     std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
 
-    let stats = export_mesh(&lol, &out, format, quality).map_err(|e| format!("{e:#}"))?;
+    // --skip-analysis: 3MF だけを書く (解析を待たない、同じ file 名なら同じ bytes)
+    let skip = args.iter().any(|a| a == "--skip-analysis");
+    let stats = if skip {
+        if !matches!(format, ExportFormat::ThreeMf) {
+            return Err("--skip-analysis は --format 3mf のみ".to_string());
+        }
+        text_to_print_core::pipeline::export_3mf_without_analysis(&lol, &out, quality)
+    } else {
+        export_mesh(&lol, &out, format, quality)
+    }
+    .map_err(|e| format!("{e:#}"))?;
     println!(
         "{}",
         serde_json::to_string_pretty(&stats_json(&stats)).map_err(|e| e.to_string())?

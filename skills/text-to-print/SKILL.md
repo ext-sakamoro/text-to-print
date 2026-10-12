@@ -81,8 +81,11 @@ export PATH="$PWD/target/release:$PATH"
    ttp export --lol part.lol --out ./out --format gcode                # direct print (H2D preset)
    ```
 
-   The JSON `path` is the artifact. 3MF carries the DfAM summary; G-code
-   carries layer count / filament / time.
+   The JSON `path` is the artifact. The JSON (not the 3MF file) carries the
+   DfAM summary; G-code carries layer count / filament / time. When you only
+   need the file (the analysis was already read from `ttp check`), add
+   `--skip-analysis` (3MF only): the same mesh and the same bytes, several
+   times faster.
 5. **Validate G-code** before any printer handoff (never skip):
 
    ```bash

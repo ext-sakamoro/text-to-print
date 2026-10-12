@@ -665,6 +665,69 @@ pub fn export_mesh(
     }
 }
 
+/// 3MF だけを書き出す (安全性 / overhang / DfAM / 向き探索 / 印刷可能性の解析をしない)
+///
+/// [`export_mesh`] の 3MF と同じ mesh を同じ書き方で書くので、同じ file 名なら同じ bytes になる
+/// (試験 `export_without_analysis_writes_the_same_bytes`) 解析の結果を使わない呼び出し側
+/// (共有シートに渡すだけの app) 向け 解析は書き出しの所要時間の大半を占める
+/// (同梱 template で 3MF の書き出しの 5〜9 倍、host で実測)
+///
+/// # Errors
+/// LOL を読めない / mesh を作れない / 書けない
+pub fn export_3mf_without_analysis(
+    lol_source: &str,
+    output_dir: &Path,
+    quality: Quality,
+) -> Result<MeshStats> {
+    let output_path = output_dir.join(format!(
+        "{}.{}",
+        uuid::Uuid::now_v7(),
+        ExportFormat::ThreeMf.extension()
+    ));
+    export_3mf_without_analysis_to(lol_source, &output_path, quality)
+}
+
+fn export_3mf_without_analysis_to(
+    lol_source: &str,
+    output_path: &Path,
+    quality: Quality,
+) -> Result<MeshStats> {
+    let sdf = alice_bamboo::lol_to_sdf(lol_source)
+        .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
+    let aabb = compute_tight_aabb_with_config(&sdf, &TightAabbConfig::preset_large());
+    let (mesh, _bounds) = mesh_with_remesh(
+        &sdf,
+        aabb.min,
+        aabb.max,
+        quality,
+        &mut crate::progress::NoProgress,
+    )?;
+    let mesh = repair_mesh(&mesh);
+    write_bambu_3mf(&mesh, output_path)?;
+    Ok(MeshStats {
+        vertex_count: mesh.vertices.len(),
+        triangle_count: mesh.indices.len() / 3,
+        path: output_path.to_string_lossy().into_owned(),
+        overhang_summary: None,
+        safety_summary: None,
+        dfam_summary: None,
+        printability_summary: None,
+        slice_summary: None,
+        violations: Vec::new(),
+        preview_mesh: Some(std::sync::Arc::new(mesh)),
+    })
+}
+
+/// Bambu template を埋め込んだ 3MF を書く (model 名は file 名の stem)
+fn write_bambu_3mf(mesh: &alice_sdf::mesh::Mesh, output_path: &Path) -> Result<()> {
+    let name = output_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("model");
+    export_bambu_3mf(mesh, output_path, name)
+        .map_err(|e| anyhow::anyhow!("Bambu 3MF export error: {e}"))
+}
+
 /// Preview-only LOL → Mesh path (Gallery Phase 3 preview stub 解除)
 ///
 /// Skips safety validation, overhang analysis, and 3MF export — returns
@@ -1262,12 +1325,7 @@ fn export_3mf_via_bamboo(
     // hand-crafted example は変換なしで既に Bambu Z-up と一致する
     //
     // Phase 5.4: Bambu template embedded 3MF (MakerWorld 対応)、素の 3MF から切替
-    let name = output_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("model");
-    export_bambu_3mf(&mesh, output_path, name)
-        .map_err(|e| anyhow::anyhow!("Bambu 3MF export error: {e}"))?;
+    write_bambu_3mf(&mesh, output_path)?;
 
     let preview_mesh = std::sync::Arc::new(mesh);
     Ok(MeshStats {
@@ -1920,6 +1978,38 @@ mod tests {
 
     fn contains(b: (Vec3, Vec3), p: Vec3) -> bool {
         p.cmpge(b.0).all() && p.cmple(b.1).all()
+    }
+
+    /// 解析なしの 3MF は、解析つきの書き出し (`export_mesh` の 3MF) と同じ file 名なら同じ bytes
+    /// (1 部品 / 回転して再メッシュ / 離れた部品 の 3 経路)
+    #[test]
+    fn export_without_analysis_writes_the_same_bytes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let mut compared = 0;
+        for lol in [
+            "box3d(5, 5, 2.5)",
+            "rotate(30, 0, 0, box3d(20, 20, 0.8))",
+            "union(sphere(3), translate(40, 0, 0, sphere(3)))",
+        ] {
+            let (pa, pb) = (a.join("model.3mf"), b.join("model.3mf"));
+            let full = export_3mf_via_bamboo(lol, &pa, Quality::Preview).expect(lol);
+            let lean = export_3mf_without_analysis_to(lol, &pb, Quality::Preview).expect(lol);
+            assert_eq!(full.triangle_count, lean.triangle_count, "{lol}");
+            let (ba, bb) = (std::fs::read(&pa).unwrap(), std::fs::read(&pb).unwrap());
+            assert!(!ba.is_empty());
+            assert!(
+                ba == bb,
+                "{lol}: 3MF の bytes が違う ({} vs {})",
+                ba.len(),
+                bb.len()
+            );
+            assert!(lean.dfam_summary.is_none() && lean.violations.is_empty());
+            compared += 1;
+        }
+        assert_eq!(compared, 3);
     }
 
     #[test]
