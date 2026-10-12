@@ -677,11 +677,30 @@ pub fn preview_lol_to_mesh(
     lol_source: &str,
     quality: Quality,
 ) -> Result<std::sync::Arc<alice_sdf::mesh::Mesh>> {
+    preview_lol_to_mesh_with_progress(lol_source, quality, &mut crate::progress::NoProgress)
+}
+
+/// [`preview_lol_to_mesh`] に進み具合の報告と中止を足したもの
+///
+/// 報告は処理に影響しない (同じ LOL からは報告の有無によらず同じ mesh) 受け手が中止を返すと
+/// [`crate::progress::Cancelled`] の誤りで終わり、途中の mesh は返さない
+///
+/// # Errors
+/// LOL を読めない / mesh を作れない / 中止された
+pub fn preview_lol_to_mesh_with_progress(
+    lol_source: &str,
+    quality: Quality,
+    progress: &mut dyn crate::progress::Progress,
+) -> Result<std::sync::Arc<alice_sdf::mesh::Mesh>> {
+    use crate::progress::{Phase, check};
+    check(progress.on_phase(Phase::Parse))?;
     let sdf = alice_bamboo::lol_to_sdf(lol_source)
         .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
+    check(progress.on_phase(Phase::Bounds))?;
     let aabb_config = TightAabbConfig::preset_large();
     let aabb = compute_tight_aabb_with_config(&sdf, &aabb_config);
-    let (mesh, _bounds) = mesh_with_remesh(&sdf, aabb.min, aabb.max, quality)?;
+    let (mesh, _bounds) = mesh_with_remesh(&sdf, aabb.min, aabb.max, quality, progress)?;
+    check(progress.on_phase(Phase::Repair))?;
     let mesh = repair_mesh(&mesh);
     Ok(std::sync::Arc::new(mesh))
 }
@@ -716,7 +735,8 @@ fn solid_units(
     rmin: Vec3,
     rmax: Vec3,
     evals: &mut usize,
-) -> Option<Vec<bool>> {
+    progress: &mut dyn crate::progress::Progress,
+) -> Result<Option<Vec<bool>>> {
     use alice_sdf::interval::{Vec3Interval, eval_interval};
     let n: u32 = 1 << SOLID_SEARCH_LEVELS;
     let nu = n as usize;
@@ -726,7 +746,11 @@ fn solid_units(
     while let Some((idx, size)) = stack.pop() {
         *evals += 1;
         if *evals > SOLID_SEARCH_BUDGET {
-            return None;
+            return Ok(None);
+        }
+        // 作業量は評価回数 / 上限 (上限は保守側の見積りなので、割合は実際より遅れて進む)
+        if (*evals).is_multiple_of(SOLID_SEARCH_REPORT_EVERY) {
+            crate::progress::check(progress.on_cells(*evals as u64, SOLID_SEARCH_BUDGET as u64))?;
         }
         let lo = rmin + unit * Vec3::new(idx[0] as f32, idx[1] as f32, idx[2] as f32);
         let hi = rmin
@@ -759,8 +783,11 @@ fn solid_units(
             }
         }
     }
-    Some(marked)
+    Ok(Some(marked))
 }
+
+/// 区間評価の何回ごとに進み具合を報告するか
+const SOLID_SEARCH_REPORT_EVERY: usize = 1024;
 
 /// 占有単位を 26 近傍の連結成分に分け、成分ごとの world 軸 AABB を返す
 fn unit_components(marked: &[bool], rmin: Vec3, rmax: Vec3) -> Vec<(Vec3, Vec3)> {
@@ -844,10 +871,15 @@ fn box_volume(b: (Vec3, Vec3)) -> f32 {
 /// (健全性は `eval_interval` の包含保証のみに依る)
 ///
 /// 評価回数が予算を超えたとき、領域が不正なときは `None` (呼び出し側は実測方式に退避する)
-fn solid_clusters(sdf: &alice_sdf::SdfNode, rmin: Vec3, rmax: Vec3) -> Option<Vec<(Vec3, Vec3)>> {
+fn solid_clusters(
+    sdf: &alice_sdf::SdfNode,
+    rmin: Vec3,
+    rmax: Vec3,
+    progress: &mut dyn crate::progress::Progress,
+) -> Result<Option<Vec<(Vec3, Vec3)>>> {
     let d = rmax - rmin;
     if !(d.is_finite() && d.min_element() > 0.0) {
-        return None;
+        return Ok(None);
     }
     fn refine(
         sdf: &alice_sdf::SdfNode,
@@ -855,22 +887,30 @@ fn solid_clusters(sdf: &alice_sdf::SdfNode, rmin: Vec3, rmax: Vec3) -> Option<Ve
         rmax: Vec3,
         depth: usize,
         evals: &mut usize,
-    ) -> Option<Vec<(Vec3, Vec3)>> {
-        let marked = solid_units(sdf, rmin, rmax, evals)?;
+        progress: &mut dyn crate::progress::Progress,
+    ) -> Result<Option<Vec<(Vec3, Vec3)>>> {
+        let Some(marked) = solid_units(sdf, rmin, rmax, evals, progress)? else {
+            return Ok(None);
+        };
         let comps = unit_components(&marked, rmin, rmax);
         let region = box_volume((rmin, rmax));
         let mut out = Vec::new();
         for c in comps {
             if depth < SOLID_SEARCH_MAX_REFINE && box_volume(c) < 0.5 * region {
-                out.extend(refine(sdf, c.0, c.1, depth + 1, evals)?);
+                let Some(inner) = refine(sdf, c.0, c.1, depth + 1, evals, progress)? else {
+                    return Ok(None);
+                };
+                out.extend(inner);
             } else {
                 out.push(c);
             }
         }
-        Some(out)
+        Ok(Some(out))
     }
     let mut evals = 0usize;
-    let boxes = refine(sdf, rmin, rmax, 0, &mut evals)?;
+    let Some(boxes) = refine(sdf, rmin, rmax, 0, &mut evals, progress)? else {
+        return Ok(None);
+    };
     let mut merged = merge_overlapping(boxes);
     if merged.len() > SOLID_SEARCH_MAX_CLUSTERS {
         let all = merged.iter().fold(
@@ -879,7 +919,7 @@ fn solid_clusters(sdf: &alice_sdf::SdfNode, rmin: Vec3, rmax: Vec3) -> Option<Ve
         );
         merged = vec![all];
     }
-    Some(merged)
+    Ok(Some(merged))
 }
 
 /// 成分ごとの AABB を専用の格子でメッシュして連結する (返す bounds は全成分の外接)
@@ -887,11 +927,14 @@ fn mesh_clusters(
     sdf: &alice_sdf::SdfNode,
     clusters: &[(Vec3, Vec3)],
     quality: Quality,
-) -> (alice_sdf::mesh::Mesh, (Vec3, Vec3)) {
+    progress: &mut dyn crate::progress::Progress,
+) -> Result<(alice_sdf::mesh::Mesh, (Vec3, Vec3))> {
     let pad = Vec3::splat(CLUSTER_PADDING_MM);
     let mut merged = alice_sdf::mesh::Mesh::new();
     let mut union = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
-    for &(cmin, cmax) in clusters {
+    for (i, &(cmin, cmax)) in clusters.iter().enumerate() {
+        // 作業量 = 済んだ部分 / 部分の数 (1 つの部分の meshing の中は数えられない)
+        crate::progress::check(progress.on_cells(i as u64, clusters.len() as u64))?;
         let (lo, hi) = (cmin - pad, cmax + pad);
         let d = cmax - cmin;
         let part = generate_mesh(
@@ -908,7 +951,7 @@ fn mesh_clusters(
             .extend(part.indices.iter().map(|&i| i + base));
         union = (union.0.min(lo), union.1.max(hi));
     }
-    (merged, union)
+    Ok((merged, union))
 }
 
 /// 再メッシュで bounds を広げる反復の上限 (毎回 extent を倍にし、1 回目の bounds で頭打ち)
@@ -936,7 +979,9 @@ fn mesh_with_remesh(
     tight_min: Vec3,
     tight_max: Vec3,
     quality: Quality,
+    progress: &mut dyn crate::progress::Progress,
 ) -> Result<(alice_sdf::mesh::Mesh, (Vec3, Vec3))> {
+    use crate::progress::{Phase, check};
     let padding = Vec3::splat(1.0);
     let (first_min, first_max) = (tight_min - padding, tight_max + padding);
     let dims = tight_max - tight_min;
@@ -946,13 +991,16 @@ fn mesh_with_remesh(
     // 単一成分で tight AABB が膨らんでいなければ従来どおり tight AABB で 1 回メッシュする
     // (通常の形状の出力は変えない)  それ以外 (回転で膨らむ / 離れた部品がある) は
     // 成分ごとに専用の格子でメッシュして連結する
-    if let Some(clusters) = solid_clusters(sdf, tight_min, tight_max) {
+    check(progress.on_phase(Phase::SolidSearch))?;
+    if let Some(clusters) = solid_clusters(sdf, tight_min, tight_max, progress)? {
         let unchanged = clusters.len() == 1
             && !aabb_significantly_inflated(tight_min, tight_max, clusters[0].0, clusters[0].1);
         if !clusters.is_empty() && !unchanged {
-            return Ok(mesh_clusters(sdf, &clusters, quality));
+            check(progress.on_phase(Phase::Mesh))?;
+            return mesh_clusters(sdf, &clusters, quality, progress);
         }
     }
+    check(progress.on_phase(Phase::Mesh))?;
     let mesh1 = generate_mesh(sdf, first_min, first_max, quality, use_dc);
     let Some((emp_min, emp_max)) = compute_empirical_aabb(&mesh1) else {
         return Ok((mesh1, (first_min, first_max)));
@@ -975,6 +1023,8 @@ fn mesh_with_remesh(
         "tight_aabb inflated → re-mesh at empirical bounds"
     );
     for round in 0..=AABB_REMESH_MAX_GROWTH {
+        // 作業量 = 済んだ再メッシュの回数 / 上限 (上限で数えるので実際より遅れて進む)
+        check(progress.on_cells(round as u64 + 1, AABB_REMESH_MAX_GROWTH as u64 + 2))?;
         let (lo_v, hi_v) = (Vec3::from_array(lo), Vec3::from_array(hi));
         let use_dc2 = should_use_dual_contouring((extent.x, extent.y, extent.z));
         let mesh = generate_mesh(sdf, lo_v, hi_v, quality, use_dc2);
@@ -1147,7 +1197,13 @@ fn export_3mf_via_bamboo(
     // `mesh_bounds` = 最終 mesh を作った bound 証明ベースの印刷可能性判定
     // (`printability_summary`) は「この bound の外は見ない」ので、mesh と同じ
     // bound を渡さないと形状の一部を検査しないことになる
-    let (mesh, mesh_bounds) = mesh_with_remesh(&sdf, aabb.min, aabb.max, quality)?;
+    let (mesh, mesh_bounds) = mesh_with_remesh(
+        &sdf,
+        aabb.min,
+        aabb.max,
+        quality,
+        &mut crate::progress::NoProgress,
+    )?;
     let mesh = repair_mesh(&mesh);
 
     let overhang_report = analyze_overhang(&mesh, &OverhangConfig::default());
@@ -1486,7 +1542,13 @@ fn printability_violations_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<crate::vio
     {
         return Vec::new();
     }
-    let Ok((mesh, bounds)) = mesh_with_remesh(sdf, aabb.min, aabb.max, Quality::Preview) else {
+    let Ok((mesh, bounds)) = mesh_with_remesh(
+        sdf,
+        aabb.min,
+        aabb.max,
+        Quality::Preview,
+        &mut crate::progress::NoProgress,
+    ) else {
         return Vec::new();
     };
     let mesh = repair_mesh(&mesh);
@@ -1866,7 +1928,9 @@ mod tests {
         for deg in [15.0_f32, 30.0, 45.0, 60.0] {
             let sdf = plate_tilted(deg);
             let (tmin, tmax) = tight_of(&sdf);
-            let clusters = solid_clusters(&sdf, tmin, tmax).expect("search within budget");
+            let clusters = solid_clusters(&sdf, tmin, tmax, &mut crate::progress::NoProgress)
+                .unwrap()
+                .expect("search within budget");
             let (s, c) = deg.to_radians().sin_cos();
             let mut checked = 0;
             for xi in 0..=6 {
@@ -1896,7 +1960,9 @@ mod tests {
         for deg in [15.0_f32, 30.0, 45.0, 60.0] {
             let sdf = plate_tilted(deg);
             let (tmin, tmax) = tight_of(&sdf);
-            let clusters = solid_clusters(&sdf, tmin, tmax).expect("within budget");
+            let clusters = solid_clusters(&sdf, tmin, tmax, &mut crate::progress::NoProgress)
+                .unwrap()
+                .expect("within budget");
             assert_eq!(clusters.len(), 1, "{deg}deg: 板は 1 成分のはず");
             let (cmin, cmax) = clusters[0];
             let (s, c) = deg.to_radians().sin_cos();
@@ -1925,7 +1991,9 @@ mod tests {
         let count = |lol: &str| {
             let sdf = parse(lol);
             let (tmin, tmax) = tight_of(&sdf);
-            solid_clusters(&sdf, tmin, tmax).expect("within budget")
+            solid_clusters(&sdf, tmin, tmax, &mut crate::progress::NoProgress)
+                .unwrap()
+                .expect("within budget")
         };
         let plate = "box3d(15.0, 15.0, 0.4)";
         // 薄板 + 120mm 離れた球 = 2 成分、球の成分は球 (中心 y=120、半径 3) を含む
@@ -1972,17 +2040,64 @@ mod tests {
     fn solid_units_gives_up_when_the_evaluation_budget_is_spent() {
         let sdf = plate_tilted(30.0);
         let mut evals = SOLID_SEARCH_BUDGET;
-        assert!(solid_units(&sdf, Vec3::splat(-20.0), Vec3::splat(20.0), &mut evals).is_none());
+        assert!(
+            solid_units(
+                &sdf,
+                Vec3::splat(-20.0),
+                Vec3::splat(20.0),
+                &mut evals,
+                &mut crate::progress::NoProgress
+            )
+            .unwrap()
+            .is_none()
+        );
         let mut fresh = 0;
-        assert!(solid_units(&sdf, Vec3::splat(-20.0), Vec3::splat(20.0), &mut fresh).is_some());
+        assert!(
+            solid_units(
+                &sdf,
+                Vec3::splat(-20.0),
+                Vec3::splat(20.0),
+                &mut fresh,
+                &mut crate::progress::NoProgress
+            )
+            .unwrap()
+            .is_some()
+        );
     }
 
     #[test]
     fn solid_clusters_rejects_a_degenerate_region() {
         let sdf = plate_tilted(30.0);
-        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::ZERO).is_none());
-        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::new(1.0, 0.0, 1.0)).is_none());
-        assert!(solid_clusters(&sdf, Vec3::ZERO, Vec3::splat(f32::NAN)).is_none());
+        assert!(
+            solid_clusters(
+                &sdf,
+                Vec3::ZERO,
+                Vec3::ZERO,
+                &mut crate::progress::NoProgress
+            )
+            .unwrap()
+            .is_none()
+        );
+        assert!(
+            solid_clusters(
+                &sdf,
+                Vec3::ZERO,
+                Vec3::new(1.0, 0.0, 1.0),
+                &mut crate::progress::NoProgress
+            )
+            .unwrap()
+            .is_none()
+        );
+        assert!(
+            solid_clusters(
+                &sdf,
+                Vec3::ZERO,
+                Vec3::splat(f32::NAN),
+                &mut crate::progress::NoProgress
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 
     #[test]
@@ -2029,9 +2144,17 @@ mod tests {
             alice_bamboo::lol_to_sdf("union(sphere(5.0), translate(40.0, 0.0, 0.0, sphere(5.0)))")
                 .expect("parse");
         let (tmin, tmax) = tight_of(&sdf);
-        let clusters = solid_clusters(&sdf, tmin, tmax).expect("within budget");
+        let clusters = solid_clusters(&sdf, tmin, tmax, &mut crate::progress::NoProgress)
+            .unwrap()
+            .expect("within budget");
         assert_eq!(clusters.len(), 2);
-        let (mesh, bounds) = mesh_clusters(&sdf, &clusters, Quality::Preview);
+        let (mesh, bounds) = mesh_clusters(
+            &sdf,
+            &clusters,
+            Quality::Preview,
+            &mut crate::progress::NoProgress,
+        )
+        .unwrap();
         assert!(
             mesh.indices
                 .iter()

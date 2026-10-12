@@ -7,6 +7,7 @@
 //!
 //! ```text
 //! ttp check    --lol <file|->                       # LOL を parse + safety + DfAM (export なし)
+//! ttp preview  --lol <file|-> [--quality preview|high|ultra] [--progress]   # 表示用の mesh の件数と digest
 //! ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra]
 //! ttp validate --gcode <file> [--bed h2d|h2d-dual|x1c|a1-mini]
 //! ```
@@ -30,6 +31,7 @@ fn main() -> ExitCode {
     };
     let result = match cmd {
         "check" => cmd_check(&args[1..]),
+        "preview" => cmd_preview(&args[1..]),
         "export" => cmd_export(&args[1..]),
         "validate" => cmd_validate(&args[1..]),
         "--help" | "-h" | "help" => {
@@ -51,6 +53,7 @@ const USAGE: &str = "\
 ttp — text-to-print headless CLI (JSON on stdout)
 
   ttp check    --lol <file|->
+  ttp preview  --lol <file|-> [--quality preview|high|ultra] [--progress]
   ttp export   --lol <file|-> --out <dir> [--format 3mf|stl|step|gcode] [--quality preview|high|ultra]
   ttp validate --gcode <file> [--bed h2d|h2d-dual|x1c|a1-mini]
 
@@ -154,6 +157,68 @@ fn cmd_check(args: &[String]) -> Result<ExitCode, String> {
     } else {
         ExitCode::from(3)
     })
+}
+
+// ---------------------------------------------------------------------------
+// preview
+// ---------------------------------------------------------------------------
+
+/// 表示用の mesh (app の preview と同じ処理) を作り、件数と digest を出す
+/// `--progress` は進み具合を 1 行 1 JSON で stderr に出す (段 / 全体の割合 / 段の中が数えられているか)
+fn cmd_preview(args: &[String]) -> Result<ExitCode, String> {
+    use std::ops::ControlFlow;
+    use text_to_print_core::pipeline::preview_lol_to_mesh_with_progress;
+    use text_to_print_core::progress::{NoProgress, PREVIEW_WEIGHTS, Weighted};
+
+    let lol = read_lol(flag(args, "--lol").ok_or("--lol <file|-> required")?)?;
+    let quality = parse_quality(flag(args, "--quality").unwrap_or("preview"))?;
+    let mesh = if args.iter().any(|a| a == "--progress") {
+        let mut w = Weighted::new(PREVIEW_WEIGHTS, |r| {
+            eprintln!(
+                "{}",
+                serde_json::json!({
+                    "phase": r.phase.key(),
+                    "overall": r.overall,
+                    "determinate": r.determinate,
+                    "finished": r.finished,
+                })
+            );
+            ControlFlow::Continue(())
+        });
+        let m = preview_lol_to_mesh_with_progress(&lol, quality, &mut w);
+        if m.is_ok() {
+            w.finish();
+        }
+        m
+    } else {
+        preview_lol_to_mesh_with_progress(&lol, quality, &mut NoProgress)
+    }
+    .map_err(|e| format!("{e:#}"))?;
+    let json = serde_json::json!({
+        "vertex_count": mesh.vertices.len(),
+        "triangle_count": mesh.indices.len() / 3,
+        "mesh_sha256": mesh_digest(&mesh),
+    });
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// 頂点の位置 (f32 の bits、little endian) と index の SHA-256
+fn mesh_digest(mesh: &alice_sdf::mesh::Mesh) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    for v in &mesh.vertices {
+        for c in v.position.to_array() {
+            h.update(c.to_bits().to_le_bytes());
+        }
+    }
+    for i in &mesh.indices {
+        h.update(i.to_le_bytes());
+    }
+    hex::encode(h.finalize())
 }
 
 // ---------------------------------------------------------------------------

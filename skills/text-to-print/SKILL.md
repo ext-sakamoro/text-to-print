@@ -62,6 +62,13 @@ export PATH="$PWD/target/release:$PATH"
 
    `fail_messages` are the retry-worthy ones; `notes` carry the undecided
    states. Report `undecided` to the user as undecided.
+
+   To see the mesh the app would show (without writing a file), run
+   `ttp preview --lol part.lol`: it prints `vertex_count`, `triangle_count`
+   and `mesh_sha256` (the same LOL gives the same digest). `--progress` adds
+   one JSON line per progress report on stderr (`phase`, `overall`,
+   `determinate`: false while a step cannot be counted, so `overall` waits
+   at the start of that phase instead of moving).
 3. **Repair the LOL, not the mesh.** Each `fail` message carries the measured
    value, the cited limit and a location. Thicken walls, enlarge holes,
    shorten spans (add a rib / chamfer), then re-run `check` until no `fail`

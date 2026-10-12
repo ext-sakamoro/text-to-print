@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### Added — 形を作る処理の進み具合と中止 (2026-10-12)
+
+- `pipeline::preview_lol_to_mesh_with_progress` と `progress` module (`Phase` / `Progress` / `Weighted` / `Cancelled`)
+  段 (読む / 箱 / 固体の探索 / mesh / 修復) と、段の中で実際に済んだ作業量 (固体の探索の区間評価の回数、成分ごとの mesh、
+  再メッシュの回数) を報告する  数えられない処理 (1 回の meshing / 修復の中) は段に入ったことだけを報告し、割合は進めない
+  全体の割合は段ごとの重み (同梱 template の実測の中央値) から作り、減らず、終わり (1.0) は 1 回だけ
+- 報告の受け手が中止を返すと `Cancelled` で終わり、途中の mesh は返さない  中止が効くのは次の報告の時点
+  (同梱 template では数えられない処理の最長が host で 3.2 秒、中央値 0.1 秒)
+- 報告の有無で mesh は変わらない (bytes で一致を試験)  `preview_lol_to_mesh` は報告なしで同じ処理を呼ぶ
+- `ttp preview --lol <file|-> [--quality …] [--progress]`: 表示用の mesh の頂点数・三角形数・digest (位置の bits と index の
+  SHA-256) を JSON で出す  `--progress` は進み具合を 1 行 1 JSON で stderr に出す
 ### Changed — 検査の結果を構造で返し、利用者には平易な文と対処を出す (2026-10-12)
 
 - **Behavior change:** desktop の生成後の統計欄は、検査の結果を「印刷の前に確認してください」の下に平易な文 (ja / en) と
