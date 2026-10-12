@@ -79,6 +79,13 @@ jobs:
       - name: Run cargo deny check all
         run: cargo deny --all-features check all
 
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
   unused-deps:
     name: cargo-machete (unused dependencies)
     runs-on: ubuntu-latest
@@ -106,6 +113,13 @@ jobs:
 
       - name: Run cargo machete
         run: cargo machete
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
 
   stub-guard:
     name: Stub / mock / dbg guard (grep)
@@ -194,6 +208,13 @@ jobs:
           path: text-to-print/coverage-summary.txt
           retention-days: 30
 
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
   semver-checks:
     name: cargo-semver-checks (API compat、informational)
     runs-on: ubuntu-latest
@@ -232,3 +253,10 @@ jobs:
             --workspace \
             --baseline-rev "HEAD~1" \
             || true
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only

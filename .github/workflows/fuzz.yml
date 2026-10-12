@@ -104,3 +104,10 @@ jobs:
           path: text-to-print/fuzz/artifacts/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 14
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only

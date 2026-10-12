@@ -40,12 +40,24 @@ ACTION_USE_RE = re.compile(r"uses:\s*\./(?:[\w.-]+/)?\.github/actions/alice-sibl
 JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PIN_LINE_RE = re.compile(r'^ALICE-[A-Za-z0-9-]+ = "[0-9a-f]{40}"$')
-# workflow 本文での sibling の参照: 「何か/ALICE-Xxx」(owner/repo・URL・式の owner・引用符を問わない)
-# と、clone / fetch 系の command と同じ行の ALICE-Xxx ⇒ どちらも固定 commit を迂回する
-# `../ALICE-Xxx` (checkout 済みの sibling を相対 path で使う) は許す
-REMOTE_REF_RE = re.compile(r"(?<![.\w])(?:[^\s/'\"]*[^\s/'\".])?/(ALICE-[A-Za-z0-9-]+)")
-FETCH_CMD_RE = re.compile(r"\b(?:git\s+(?:clone|fetch|submodule|remote|archive)|gh\s+repo\s+clone|curl|wget)\b")
-ALICE_NAME_RE = re.compile(r"ALICE-[A-Za-z0-9-]+")
+# workflow の許可リスト (sibling は composite action だけが checkout する)
+#   - `repository:` は書かない (書いてよい literal は ALLOWED_REPOSITORIES だけ、現在は無し)
+#   - repo を取得する command (git clone / fetch / pull / submodule / remote / archive、gh repo clone、
+#     gh api、svn) は書かない
+#   - curl / wget 等で GitHub から取る URL は literal に限り、ALICE の名前を含めない
+#   - `owner/ALICE-Xxx` 形の参照は大文字小文字を問わず不可 (`../ALICE-Xxx` の相対 path は可)
+# 綴りを列挙して禁じるのでなく、許す形だけを通す (値に `${{ }}` / `$` を含むものは一律不可)
+ALLOWED_REPOSITORIES: frozenset[str] = frozenset()
+LOCAL_ACTION_PATH = ".github/actions/alice-siblings"
+REPOSITORY_KEY_RE = re.compile(r"""(?i)^\s*(?:-\s*)?["']?repository["']?\s*:""")
+FETCH_CMD_RE = re.compile(
+    r"(?i)\bgit\b[^\n]*\b(?:clone|fetch|pull|submodule|remote|archive)\b"
+    r"|\bgh\s+(?:repo\s+clone|api)\b|\bsvn\s+(?:co|checkout|export)\b"
+)
+DOWNLOAD_RE = re.compile(r"(?i)\b(?:curl|wget|invoke-webrequest|iwr|invoke-restmethod|irm)\b")
+GITHUB_HOST_RE = re.compile(r"(?i)github\.com|githubusercontent\.com|codeload\.github")
+REMOTE_REF_RE = re.compile(r"(?i)(?<![.\w])(?:[^\s/'\"]*[^\s/'\".])?/(alice-[a-z0-9-]+)")
+ALICE_NAME_RE = re.compile(r"(?i)alice-[a-z0-9-]+")
 MANIFEST = Path(".github/siblings.toml")
 ACTION = Path(".github/actions/alice-siblings/action.yml")
 
@@ -142,39 +154,58 @@ def static_checks(root: Path, pins: dict[str, str]) -> tuple[list[str], int]:
     errors: list[str] = []
     errors += action_shape_errors(root / ACTION, pins)
     users = 0
+    examined = 0
     for wf in sorted((root / ".github/workflows").glob("*.y*ml")):
         text = wf.read_text(encoding="utf-8")
-        for lineno, name in remote_sibling_refs(text):
-            errors.append(
-                f"{wf.name}:{lineno} が sibling {name} を固定 commit を経ずに参照している "
-                f"— {ACTION.parent} を使う"
-            )
+        hits, steps = workflow_violations(text)
+        examined += steps
+        for lineno, reason in hits:
+            errors.append(f"{wf.name}:{lineno}: {reason}")
         for job, body in split_jobs(text).items():
             if ACTION_USE_RE.search(body):
                 users += 1
+                errors += job_end_errors(wf.name, job, body)
+    if examined == 0:
+        errors.append("workflow の step を 1 つも見ていない (検査が何も見ていない)")
     if users == 0:
         errors.append("composite action を使う job が 0 件 (検査が何も比較していない)")
     return errors, users
 
 
-def remote_sibling_refs(text: str) -> list[tuple[int, str]]:
-    """workflow 本文のうち、sibling を checkout / clone しうる参照 (行番号, 名前)
+def workflow_violations(text: str) -> tuple[list[tuple[int, str]], int]:
+    """workflow 本文の許可リスト違反 (行番号, 理由) と、見た step 数
 
-    YAML の書き方 (引用符 / `${{ }}` の owner / run の中の command) に依らないよう、
-    構文でなく本文の token で判定する 全行が対象 (`#` で始まる comment 行だけ除く)
+    `#` で始まる comment 行以外の全行が対象 (run の複数行 script も含む)
     """
     hits: list[tuple[int, str]] = []
+    steps = 0
     for i, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("#"):
             continue
-        for m in REMOTE_REF_RE.finditer(line):
-            start = m.start(1) - 1  # "/" の位置
-            if line[max(0, start - 2) : start] == "..":
-                continue  # ../ALICE-Xxx (checkout 済みの sibling)
-            hits.append((i, m.group(1)))
+        if re.match(r"^\s+-\s+(?:name|uses|run|id|if|with|shell)\b", line):
+            steps += 1
+        if REPOSITORY_KEY_RE.match(line):
+            value = line.split(":", 1)[1].strip().strip("'\"")
+            if value not in ALLOWED_REPOSITORIES:
+                hits.append((i, f"repository: の指定 ({value or '空'}) — sibling は composite action だけが checkout する"))
         if FETCH_CMD_RE.search(line):
-            hits.extend((i, n) for n in ALICE_NAME_RE.findall(line))
-    return sorted(set(hits))
+            hits.append((i, "repo を取得する command — workflow では使わない"))
+        if DOWNLOAD_RE.search(line) and GITHUB_HOST_RE.search(line):
+            if "$" in line or ALICE_NAME_RE.search(line):
+                hits.append((i, "GitHub からの download の URL が literal でない / ALICE の名前を含む"))
+        # 本 repo の composite action の path (literal 1 つだけ) は sibling の参照ではない
+        for m in REMOTE_REF_RE.finditer(line.replace(LOCAL_ACTION_PATH, "")):
+            hits.append((i, f"{m.group(1)} を owner/名前 の形で参照している"))
+    return sorted(set(hits)), steps
+
+
+def job_end_errors(wf: str, job: str, body: str) -> list[str]:
+    """composite action を使う job は、最後の step で HEAD を再照合する"""
+    steps = re.split(r"(?m)^      - ", body)
+    last = steps[-1] if len(steps) > 1 else ""
+    if "--heads-only" not in last:
+        return [f"{wf}:{job} の最後の step が sibling の HEAD 照合 (--heads-only) でない"]
+    return []
 
 
 def action_shape_errors(action: Path, pins: dict[str, str]) -> list[str]:
@@ -322,6 +353,8 @@ def self_test() -> int:
         good_wf = (
             "jobs:\n  build:\n    steps:\n      - uses: ./app/.github/actions/alice-siblings\n"
             "      - run: cp ../ALICE-A/target/x dist/x\n"
+            "      - run: wget -q https://github.com/o/tool/releases/download/v1/tool -O tool\n"
+            "      - run: x.py --heads-only\n"
             "  lint:\n    steps:\n      - run: true\n"
         )
 
@@ -353,16 +386,35 @@ def self_test() -> int:
             "直接 checkout": "      - with:\n          repository: o/ALICE-A\n",
             "引用符の repository": '      - with:\n          repository: "ext-sakamoro/ALICE-A"\n',
             "式の owner": "      - with:\n          repository: ${{ github.repository_owner }}/ALICE-A\n",
+            "小文字の名前": "      - with:\n          repository: ext-sakamoro/alice-a\n",
+            "matrix の名前": "    strategy:\n      matrix:\n        sib: [ALICE-A]\n    steps:\n      - with:\n          repository: ext-sakamoro/${{ matrix.sib }}\n",
+            "env の名前": "    env:\n      SIB: ALICE-A\n    steps:\n      - with:\n          repository: ${{ github.repository_owner }}/${{ env.SIB }}\n",
+            "本 repo 以外の repository (名前なし)": "      - with:\n          repository: someone/other\n",
             "run の git clone": "      - run: git clone https://github.com/ext-sakamoro/ALICE-A\n",
+            "run の shell 変数の clone": '      - run: |\n          n=ALICE-A\n          git clone "https://github.com/ext-sakamoro/$n" "../$n"\n',
+            "run の git -C fetch": "      - run: git -C ../ALICE-A fetch origin main\n",
             "run の gh repo clone": "      - run: gh repo clone ALICE-A\n",
             "run の ssh clone": "      - run: git clone git@github.com:ext-sakamoro/ALICE-A.git\n",
+            "run の curl (変数の URL)": '      - run: curl -L "https://codeload.github.com/o/$N/tar.gz/main" | tar xz\n',
+            "uses で sibling の action": "      - uses: ext-sakamoro/ALICE-A/.github/actions/x@main\n",
+            "uses で sibling の action (小文字)": "      - uses: ext-sakamoro/alice-a/.github/actions/x@main\n",
+            "run の curl (ALICE の URL)": "      - run: curl -L https://github.com/o/ALICE-A/archive/main.tar.gz | tar xz\n",
         }
         for label, step in bypasses.items():
-            setup(wf=good_wf + "  direct:\n    steps:\n" + step)
+            body = step if step.startswith("    ") and not step.startswith("      ") else "    steps:\n" + step
+            setup(wf=good_wf + "  direct:\n" + body)
             assert check(t / "app", t, use_cargo=False) == 1, f"{label} を検出しない"
 
         setup(wf="jobs:\n  lint:\n    steps:\n      - run: true\n")
         assert check(t / "app", t, use_cargo=False) == 1, "比較 0 件で fail しない"
+
+        setup(wf="jobs: {}\n")
+        st_errors, _ = static_checks(t / "app", read_pins(t / "app")[0])
+        assert any("step を 1 つも見ていない" in e for e in st_errors), "step を 1 つも見ていない時に fail しない"
+        assert workflow_violations(good_wf)[1] > 0
+
+        setup(wf=good_wf.replace("      - run: x.py --heads-only\n", ""))
+        assert check(t / "app", t, use_cargo=False) == 1, "job の最後の HEAD 再照合の欠落を検出しない"
 
         setup(pins=good_pins.replace(sha_b, sha_b[:7]))
         assert check(t / "app", t, use_cargo=False) == 1, "短縮 SHA を検出しない"
