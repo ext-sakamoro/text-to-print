@@ -13,6 +13,13 @@
 製品が実際に必要とする箇所 (外部 LLM の provider 名・model id、外部 agent 連携の
 plugin と skill、その test) だけを許可する それ以外の箇所には書かない
 
+走査対象: git が追跡している file と、追跡していないが ignore もされていない file
+(`git ls-files --cached --others --exclude-standard`) ⇒ commit 前の file も local / preflight で捕まえる
+
+想定する脅威: 人や agent が **うっかり** 名前を書くこと (大文字小文字・下線・camelCase・
+他の語への埋め込みを含む) 文字列の連結・unicode escape・base64 等で **意図して** 隠す
+書き方は対象外 (検出の規則を増やし続けても閉じないため、review で扱う)
+
 usage: vocab_lint.py [--root <repo>] [--print-allowlist] [--self-test]
   --print-allowlist  現在の該当箇所から ALLOWED の行を出力する (追加は review の上で)
 """
@@ -91,7 +98,7 @@ def hits_in(text: str, banned: frozenset[str]) -> list[tuple[int, str]]:
 
 def scan(root: Path, banned: frozenset[str]) -> tuple[Counter, list[tuple[str, int, str]], int]:
     files = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z"], capture_output=True, text=True, check=True
+        ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], capture_output=True, text=True, check=True
     ).stdout.split("\0")
     counts: Counter = Counter()
     where: list[tuple[str, int, str]] = []
@@ -197,6 +204,19 @@ def self_test() -> int:
             (t / "src/other.rs").unlink()
             git_add()
         assert check(t, fake, allowed) == 0
+
+        # 追跡していない (commit 前の) file も走査する ignore された file は対象外
+        w("notes/draft.md", "zorblax draft\n")
+        assert check(t, fake, allowed) == 1, "追跡していない file の token を検出しない"
+        w(".gitignore", "notes/\n")
+        git_add()
+        _, _, n_ignored = scan(t, fake)
+        allowed_with_ignore = dict(allowed)
+        assert check(t, fake, allowed_with_ignore) == 0, "ignore された file を走査した"
+        assert n_ignored == 4, n_ignored  # 3 file + .gitignore
+        (t / ".gitignore").unlink()
+        (t / "notes/draft.md").unlink()
+        git_add()
 
         empty = Path(tmp) / "empty"
         empty.mkdir()
