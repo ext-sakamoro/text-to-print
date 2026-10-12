@@ -303,6 +303,8 @@ pub struct Policy {
     pub band: PolicyValue,
     /// 測り直しで標本の点を含むとみなす余裕 \[mm\]
     pub discriminator_tolerance_mm: PolicyValue,
+    /// 誤差扱いに下げる前に確かめる周りの範囲 (limit に掛ける)
+    pub discriminator_neighbourhood_factor: PolicyValue,
     /// 種類ごとの限界と重大度
     pub kinds: BTreeMap<String, PolicyKind>,
 }
@@ -499,6 +501,49 @@ pub fn remeasure(sdf: &SdfNode, at: Vec3, reach: f32, tolerance: f32, gap: bool)
     2.0 * best.0
 }
 
+/// 標本の周りの同じ側の点が全て `limit` 以上に測り直されるか (誤差扱いに下げてよいか)
+///
+/// 半径 `radius` の球の中の格子 (各軸 `GRID` 点) のうち、標本から `tolerance` より離れていて、
+/// 同じ側 (`gap` なら空隙 `sdf > 0`、突起なら材料 `sdf < 0`) にある点を全て測り直す
+/// 1 点でも `limit` 未満なら false 調べる点が 2 点未満でも false (判断の材料が無い)
+///
+/// 標本 1 点だけで下げると、厚い部分との境の近く (tolerance 以内) の標本が厚い部分の幅を
+/// 読み、本物の薄い部分を下げてしまう 周りの全点を求めるので、入隅の近くの点が狭く読まれる
+/// 場合も下げない (下げ損ねは安全側: 警告が残るだけ)
+#[must_use]
+pub fn neighbourhood_is_wide(
+    sdf: &SdfNode,
+    at: Vec3,
+    radius: f32,
+    tolerance: f32,
+    limit: f32,
+    gap: bool,
+) -> bool {
+    const GRID: i32 = 5;
+    let sign = if gap { 1.0 } else { -1.0 };
+    let half = (GRID - 1) as f32 / 2.0;
+    let mut checked = 0;
+    for ix in 0..GRID {
+        for iy in 0..GRID {
+            for iz in 0..GRID {
+                let o = Vec3::new(ix as f32 - half, iy as f32 - half, iz as f32 - half) / half;
+                if o.length_squared() > 1.0 {
+                    continue;
+                }
+                let q = at + o * radius;
+                if q.distance(at) <= tolerance || sign * alice_sdf::eval(sdf, q) <= 0.0 {
+                    continue;
+                }
+                if remeasure(sdf, q, limit, tolerance, gap) < limit {
+                    return false;
+                }
+                checked += 1;
+            }
+        }
+    }
+    checked >= 2
+}
+
 /// 測る項目 (穴径 / 突起) の違反を作る 位置があれば測り直して重大度と確かさを決める
 #[must_use]
 pub fn measured_violation(
@@ -526,8 +571,24 @@ pub fn measured_violation(
         )),
         _ => None,
     };
+    // 誤差扱いに下げるのは、標本の点と、その周りの同じ側の点が全て limit 以上の時だけ
+    let wide_around = |l: f32| match (gap, location) {
+        (Some(gap), Some(at)) => neighbourhood_is_wide(
+            sdf,
+            at,
+            l * p.discriminator_neighbourhood_factor.value,
+            p.discriminator_tolerance_mm.value,
+            l,
+            gap,
+        ),
+        _ => false,
+    };
     let (severity, confidence) = match (remeasured, limit) {
-        (Some(r), Some(l)) if r >= l => (Severity::Info, Confidence::PossibleArtefact),
+        (Some(r), Some(l)) if r >= l && wide_around(l) => {
+            (Severity::Info, Confidence::PossibleArtefact)
+        }
+        // 標本の点は広いが周りに狭い所がある: 標本の値でなく元の測定で判断する
+        (Some(r), Some(l)) if r >= l => (p.severity(kind, measured), Confidence::Measured),
         (Some(r), _) => (p.severity(kind, Some(r)), Confidence::Measured),
         (None, _) => (p.severity(kind, measured), Confidence::Measured),
     };
@@ -724,9 +785,10 @@ mod tests {
         assert!((v.shown_measured().unwrap() - 1.5).abs() < 0.05);
     }
 
-    /// oracle: 幅 3mm の隙間で標本が 0.6 と読んだ場合は、測り直すと限界 2.0 を満たす
+    /// oracle: 幅 3mm の隙間の入隅 (床と壁の両方に近い点) で標本が 0.6 と読んだ場合
+    /// 標本の点も周りの同じ側の点も全て 3.0 に測り直されるので、誤差扱いに下げる
     #[test]
-    fn remeasure_marks_a_wide_gap_as_possible_artefact() {
+    fn wide_gap_sampled_at_a_corner_is_demoted() {
         // 壁 (内側 23) から 3mm 離れた角柱 (x 16..20)
         let s = sdf(
             "union(subtract(box3d(25, 25, 8), translate(0, 0, 5, box3d(23, 23, 8))), translate(18, 18, -0.5, box3d(2, 2, 2.5)))",
@@ -742,6 +804,74 @@ mod tests {
         // oracle: 柱 (x ≤ 20) と壁 (x = 23) の間 3.0mm
         assert!((v.remeasured.unwrap() - 3.0).abs() < 0.05, "{v:?}");
         assert_eq!(v.confidence, Confidence::PossibleArtefact);
+        assert_eq!(v.severity, Severity::Info);
+    }
+
+    /// 5c の指摘: 厚い土台 (厚さ 4) の上の薄い板 (幅 0.2) で、標本が土台の上面から tolerance の
+    /// 0.5 / 1 / 2 倍の高さにある時 標本 1 点の測り直しは土台の厚さを読みうるが、周りの点 (板の中) が
+    /// 狭いので下げない
+    #[test]
+    fn thin_fin_on_a_thick_base_is_never_demoted() {
+        // 土台 z ∈ [-4, 0]、板 x ∈ [-0.1, 0.1]、z ∈ [0, 6]
+        let s = sdf("union(box3d(10, 10, 2), translate(0, 0, 5, box3d(0.1, 10, 3)))");
+        let s = SdfNode::Translate {
+            child: std::sync::Arc::new(s),
+            offset: Vec3::new(0.0, 0.0, -2.0),
+        };
+        let tol = policy().discriminator_tolerance_mm.value;
+        let mut checked = 0;
+        for k in [0.5_f32, 1.0, 2.0] {
+            let at = Vec3::new(0.0, 0.0, k * tol);
+            let v = measured_violation(
+                &s,
+                Kind::FeatureTooSmall,
+                Some(0.2),
+                Some(at),
+                None,
+                String::new(),
+            );
+            assert_ne!(
+                v.confidence,
+                Confidence::PossibleArtefact,
+                "offset {k}×tol: {v:?}"
+            );
+            assert_eq!(v.severity, Severity::Blocking, "offset {k}×tol");
+            checked += 1;
+        }
+        assert_eq!(checked, 3);
+    }
+
+    /// 凸の角の薄いひれ (幅 0.2、箱の角から突き出す) も下げない
+    #[test]
+    fn thin_fin_at_a_convex_corner_is_never_demoted() {
+        let s = sdf("union(box3d(5, 5, 5), translate(5.5, 5.5, 0, box3d(0.5, 0.1, 5)))");
+        let at = Vec3::new(5.05, 5.5, 0.0);
+        let v = measured_violation(
+            &s,
+            Kind::FeatureTooSmall,
+            Some(0.2),
+            Some(at),
+            None,
+            String::new(),
+        );
+        assert_ne!(v.confidence, Confidence::PossibleArtefact, "{v:?}");
+    }
+
+    /// 平らな壁の脇の幅 3mm の隙間 (床から離れた高さ) の標本は、周りも全て 3mm なので下げる
+    #[test]
+    fn wide_gap_away_from_corners_is_demoted() {
+        let s = sdf(
+            "union(subtract(box3d(25, 25, 8), translate(0, 0, 5, box3d(23, 23, 8))), translate(18, 18, -0.5, box3d(2, 2, 6)))",
+        );
+        let v = measured_violation(
+            &s,
+            Kind::HoleTooSmall,
+            Some(0.6),
+            Some(Vec3::new(22.95, 18.0, 2.0)),
+            None,
+            String::new(),
+        );
+        assert_eq!(v.confidence, Confidence::PossibleArtefact, "{v:?}");
         assert_eq!(v.severity, Severity::Info);
     }
 

@@ -10,6 +10,11 @@
     "ours": true,
     "source": "測り直しでは、標本の点を (この距離の余裕で) 含む最も大きい内接球を探す 余裕は、標本が入隅の点 (どの大きい球にもちょうどは含まれない点) を読んだ時に、隙間の本当の幅の球に届くための最小限の値 (0.1mm で幅 1.5 / 3.0mm の隙間を 1.50 / 3.00 と測り直す、0.25mm 以上では隣の広い所の球まで拾い始める)"
   },
+  "discriminator_neighbourhood_factor": {
+    "value": 0.5,
+    "ours": true,
+    "source": "誤差扱いに下げる前に、標本の周り (半径 = limit × この値) の同じ側 (隙間なら空隙、突起なら材料) の点を全て測り直し、全てが limit 以上の時だけ下げる (標本の点 1 つだけで判断すると、厚い部分との境の近くの標本が本物の薄い部分を下げてしまう) 標本から tolerance 以内の点は除く"
+  },
   "kinds": {
     "wall_thin": { "limit_mm": 1.6, "severity": "by_band", "source": "FDM 0.4mm nozzle の最小の自立壁 (Hubs / Formlabs / HP / EOS design guides + ISO/ASTM 52910 §6.5/§6.7 の保守的な既定値、ALICE-Bamboo DfamConfig::for_process(Fdm) の min_unsupported_wall_mm)" },
     "wall_too_thin_everywhere": { "limit_mm": 1.6, "severity": "blocking", "source": "wall_thin と同じ限界 (erosion の証明: どこにも限界の厚さが無い)" },
