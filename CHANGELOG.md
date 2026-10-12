@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed — 配線ガードは "." で始まる directory を走査しない (2026-10-12)
+
+- `scripts/wiring_guard.py` の除外を個別の名前から「"." で始まる directory 全て」に変更 (追跡外の作業用 directory を拾わない)
+
 ### Changed — CI が ALICE-* sibling を固定 commit で checkout する (2026-10-12)
 
 CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout していたため、sibling 側で版を切り替えている途中

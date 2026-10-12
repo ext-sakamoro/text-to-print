@@ -67,12 +67,12 @@ gifsicle -O3 --lossy=80 -o docs/images/hero-optimized.gif docs/images/hero.gif
 
 ## 撮影時の注意
 
-- **個人情報 masking**: window title の user 名 (`ys@wainoMacBook-Air` 等)、Finder 側の path、開いてる別 tab の company name 等は capture 領域から外す
+- **個人情報 masking**: window title のユーザー名・ホスト名、Finder 側の path、開いてる別 tab の company name 等は capture 領域から外す
 - **light theme 統一**: dark mode / light mode 混在すると README 見た目がバラバラ 撮影時は macOS System Settings → Appearance で light に統一 (または全部 dark に統一)
 - **解像度**: Retina display 2x scale 撮影推奨 (2400×1500 相当)、README では GitHub が自動で responsive scale する
 - **filename 統一**: 上記 exact な file 名で置く README の埋込 markdown が壊れない
 
-## 私 (Claude) 側の作業 (user 撮影後)
+## 撮影後の作業
 
 1. `docs/images/*.png` (Ja + En 12 shot) / `docs/images/hero.mov` を confirm
 2. mov → gif 変換 (`ffmpeg` command 上記)
