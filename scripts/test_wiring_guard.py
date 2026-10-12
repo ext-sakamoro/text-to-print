@@ -208,6 +208,32 @@ class EmptyScan(unittest.TestCase):
         self.assertIn("empty_scan", kinds(wg.check(r)))
 
 
+class DotDirectories(unittest.TestCase):
+    """"." で始まる directory (追跡外の作業用 directory 等) は走査しない"""
+
+    def test_rs_files_under_a_dot_directory_are_not_scanned(self):
+        r = crate({
+            "src/lib.rs": LIB,
+            "src/a.rs": "pub fn x() {}\n",
+            "src/b.rs": "pub fn y() {}\n",
+            "src/.scratch/hidden.rs": "pub fn hidden_lonely() {}\n",
+            "src/visible/shown.rs": "pub fn shown_lonely() {}\n",
+        })
+        got = unwired(wg.check(r))
+        self.assertNotIn("hidden_lonely", got)
+        self.assertIn("shown_lonely", got)  # 対照: "." で始まらない directory は走査する
+
+    def test_a_dot_directory_member_of_the_workspace_is_not_scanned(self):
+        r = crate({
+            "Cargo.toml": '[workspace]\nmembers = ["crates/*"]\n',
+            "crates/real/src/lib.rs": "pub fn real_lonely() {}\n",
+            "crates/.scratch/src/lib.rs": "pub fn scratch_lonely() {}\n",
+        })
+        dirs = {d.relative_to(r).as_posix() for d in wg.workspace_src_dirs(r)}
+        self.assertIn("crates/real/src", dirs)
+        self.assertNotIn("crates/.scratch/src", dirs)
+
+
 def keys(vs, kind="unwired"):
     return {v.key for v in vs if v.kind == kind}
 
