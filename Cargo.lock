@@ -191,9 +191,9 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "904f96f5693c26a12ef191056c1114ffd796a68ffbf991a442cb5bbc15646ff7"
+checksum = "eef90265249a97cc0fac787cf918f62639991513c0219c33e1853de7f1a28a03"
 dependencies = [
  "bytemuck",
  "wide",
@@ -215,15 +215,18 @@ dependencies = [
 name = "alice-lol"
 version = "0.4.0"
 dependencies = [
+ "alice-det-math",
  "alice-lol-macro",
  "alice-sdf",
+ "alice-zip",
  "glam",
+ "sha2",
  "stacker",
 ]
 
 [[package]]
 name = "alice-lol-macro"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -232,9 +235,10 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "1.4.0"
+version = "2.3.0"
 dependencies = [
  "alice-det-math",
+ "sha2",
 ]
 
 [[package]]
@@ -251,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "4.0.0"
+version = "5.1.1"
 dependencies = [
  "alice-det-math",
  "bincode",
@@ -268,6 +272,17 @@ dependencies = [
  "thiserror 2.0.19",
  "wgpu",
  "wide",
+]
+
+[[package]]
+name = "alice-zip"
+version = "0.9.0"
+dependencies = [
+ "alice-det-math",
+ "libm",
+ "rand 0.8.7",
+ "rand_chacha 0.3.1",
+ "sha2",
 ]
 
 [[package]]
@@ -3148,6 +3163,12 @@ dependencies = [
  "cfg-if",
  "windows-link",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libp2p"

@@ -1,0 +1,28 @@
+# ALICE-* sibling の固定 commit
+#
+# text-to-print は ALICE-* を `../ALICE-Xxx` の path 依存で引く CI は以前 sibling の
+# default branch (main) をそのまま checkout していたため、sibling 側の版の切り替え
+# (例: alice-zip 0.10 と、それをまだ 0.9 で要求する alice-lol が同時に main に並ぶ
+# 期間) に text-to-print の CI が巻き込まれ、再現もできなかった
+#
+# 本 file の commit をそのまま checkout する (`.github/actions/alice-siblings`)
+#   - 載せる sibling の集合は `cargo metadata` の解決結果と一致させる
+#     (`scripts/ci_sibling_checkout_check.py` が過不足を fail にする)
+#   - 更新は 1 本ずつでなく集合ごと動かす: 全 commit を差し替え → `cargo metadata`
+#     が解決すること → build / test → `Cargo.lock` を同じ commit で更新 →
+#     出力 mesh の hash の変化を記録する
+#   - 値は 40 桁の commit SHA (branch 名や短縮 SHA は不可)
+
+[meta]
+updated = "2026-10-12"
+reason = "(ALICE-Kinematics は alice-lol-robot の path 依存で `cargo fmt --all` が読む) alice-zip 0.10 (alice-det-math 0.5) と、0.9 / 0.4 を要求する sibling が main に混在する期間の前で、互いに解決する最新の組"
+
+[siblings]
+ALICE-Bamboo = "6f08a4fdba59677d5925b572be3f63dad61d5aae"
+ALICE-Kinematics = "70cbd5abd0cb060e17bfdca715e82e32754e0822"
+ALICE-LLM = "cb78ec88320e34539688e7807bd45da5f51379e1"
+ALICE-LOL = "c3202f15e910b86921b4ad0b5a88bbb2ec81f10f"
+ALICE-Physics = "fa066f4ed7d90b9bfbcdb248e710088cf9b882ac"
+ALICE-Print = "efbabcf8c7bc4542d9a517066f4fbb04cd0e6f28"
+ALICE-SDF = "73e24c02c7e617aca47b1cf53b150dfe0dfeac77"
+ALICE-Zip = "13c79ba97e8d6dbff1320f958bed1a3877ddee08"

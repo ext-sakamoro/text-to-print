@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+### Changed — CI が ALICE-* sibling を固定 commit で checkout する (2026-10-12)
+
+CI は sibling (ALICE-SDF / ALICE-LOL など) の main をそのまま checkout していたため、sibling 側で版を切り替えている途中
+(alice-zip 0.10 と、それを 0.9 で要求する alice-lol が同時に main にある期間) に `cargo` の解決が失敗し、再現もできなかった
+- `.github/siblings.toml` に sibling ごとの commit SHA を置き、`.github/actions/alice-siblings` がその commit を checkout する
+  5 workflow (ci / fuzz / quality-deep / release / security-audit) の 8 job の重複していた checkout をこの action 1 つにまとめた
+- `scripts/ci_sibling_checkout_check.py` を追加 (ci.yml の Linux job と preflight)  `cargo metadata` の出力から実際に読む
+  sibling を求め、siblings.toml との過不足 / action との不一致 / workflow での直接 checkout / checkout された HEAD と固定 commit の
+  不一致 / 解決の失敗を fail にする  比較対象が 0 件のときも fail
+- build が読む sibling は SDF / LOL / Zip / LLM / Physics / Bamboo / Print の 7 つ、`cargo fmt --all` はこれに加えて
+  ALICE-LOL の workspace member (alice-lol-robot) の path 依存 ALICE-Kinematics を読む 以前 checkout していた ALICE-View は不要だった
+- 固定した組で `Cargo.lock` を更新: alice-sdf 4.0.0 → 5.1.1 / alice-physics 1.4.0 → 2.3.0 / alice-det-math 0.3.1 → 0.4.0 /
+  alice-lol-macro 0.2.0 → 0.2.1 / alice-zip 0.9.0 を追加
+- 固定 commit の更新は 1 つずつでなく組ごとに行う (全 SHA の差し替え → 解決 → build / test → `Cargo.lock` の更新)
+
 ### Changed — 回転した薄板の tight AABB が実寸に絞られる (ALICE-SDF `08582d5` の追従) (2026-10-03)
 
 ALICE-SDF の `compute_tight_aabb` が準位集合の bound を伝播するようになり、回転した薄板 (X 軸 45 度の 30 x 30 x 0.8 mm) の AABB が

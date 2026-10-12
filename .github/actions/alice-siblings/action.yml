@@ -1,0 +1,88 @@
+name: "ALICE sibling checkout (pinned)"
+description: |
+  Check out the ALICE-* sibling repos that text-to-print reads through
+  `../ALICE-Xxx` path dependencies, each at the exact commit listed in
+  `.github/siblings.toml`. The caller must have checked out this repo with
+  `path: text-to-print` so the siblings land next to it.
+
+  The list of checkout steps below must match the `[siblings]` table
+  (`scripts/ci_sibling_checkout_check.py` fails on any difference).
+
+inputs:
+  eco-token:
+    description: "Token with read access to the private siblings (ALICE-Bamboo / ALICE-Print)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Read sibling pins
+      id: pins
+      shell: bash
+      run: |
+        set -euo pipefail
+        # relative to $GITHUB_WORKSPACE (the default working directory), avoids
+        # Windows-style action_path in bash
+        manifest="text-to-print/.github/siblings.toml"
+        n=0
+        while IFS= read -r line; do
+          if [[ "$line" =~ ^(ALICE-[A-Za-z0-9-]+)\ *=\ *\"([0-9a-f]{40})\" ]]; then
+            echo "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+            n=$((n + 1))
+          fi
+        done < "$manifest"
+        if [ "$n" -eq 0 ]; then
+          echo "::error::no sibling pins read from $manifest"
+          exit 1
+        fi
+        echo "read $n sibling pins"
+    - name: Checkout ALICE-Bamboo
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Bamboo
+        path: ALICE-Bamboo
+        ref: ${{ steps.pins.outputs['ALICE-Bamboo'] }}
+        token: ${{ inputs.eco-token }}
+    - name: Checkout ALICE-Kinematics
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Kinematics
+        path: ALICE-Kinematics
+        ref: ${{ steps.pins.outputs['ALICE-Kinematics'] }}
+    - name: Checkout ALICE-LLM
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-LLM
+        path: ALICE-LLM
+        ref: ${{ steps.pins.outputs['ALICE-LLM'] }}
+    - name: Checkout ALICE-LOL
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-LOL
+        path: ALICE-LOL
+        ref: ${{ steps.pins.outputs['ALICE-LOL'] }}
+    - name: Checkout ALICE-Physics
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Physics
+        path: ALICE-Physics
+        ref: ${{ steps.pins.outputs['ALICE-Physics'] }}
+    - name: Checkout ALICE-Print
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Print
+        path: ALICE-Print
+        ref: ${{ steps.pins.outputs['ALICE-Print'] }}
+        token: ${{ inputs.eco-token }}
+    - name: Checkout ALICE-SDF
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-SDF
+        path: ALICE-SDF
+        ref: ${{ steps.pins.outputs['ALICE-SDF'] }}
+    - name: Checkout ALICE-Zip
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Zip
+        path: ALICE-Zip
+        ref: ${{ steps.pins.outputs['ALICE-Zip'] }}

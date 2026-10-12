@@ -50,40 +50,10 @@ jobs:
         with:
           path: text-to-print
           fetch-depth: 0
-      - uses: actions/checkout@v5
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
         with:
-          repository: ext-sakamoro/ALICE-SDF
-          path: ALICE-SDF
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-LOL
-          path: ALICE-LOL
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-View
-          path: ALICE-View
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-LLM
-          path: ALICE-LLM
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Physics
-          path: ALICE-Physics
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Kinematics
-          path: ALICE-Kinematics
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Bamboo
-          path: ALICE-Bamboo
-          token: ${{ secrets.ALICE_ECO_TOKEN }}
-      - uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Print
-          path: ALICE-Print
-          token: ${{ secrets.ALICE_ECO_TOKEN }}
+          eco-token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2

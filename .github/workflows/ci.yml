@@ -63,62 +63,23 @@ jobs:
         with:
           path: text-to-print
 
-      # ALICE ecosystem repos — canonical org は `ext-sakamoro`
-      # 5 public (SDF/LOL/View/LLM/Physics) + 1 private (Bamboo)
-      # 旧 `Project-ALICE/*` 参照は 2026-08-06 修正 (repo 存在せず 404、CI ずっと red)
-      - name: Checkout ALICE-SDF
-        uses: actions/checkout@v5
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
         with:
-          repository: ext-sakamoro/ALICE-SDF
-          path: ALICE-SDF
-      - name: Checkout ALICE-LOL
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-LOL
-          path: ALICE-LOL
-      - name: Checkout ALICE-View
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-View
-          path: ALICE-View
-      - name: Checkout ALICE-LLM
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-LLM
-          path: ALICE-LLM
-      - name: Checkout ALICE-Physics
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Physics
-          path: ALICE-Physics
-      # ALICE-LOL/alice-lol-robot が `../../ALICE-Kinematics` を default-on
-      # path dep で参照するため、ALICE-LOL 側 workspace 解決に必須
-      - name: Checkout ALICE-Kinematics
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Kinematics
-          path: ALICE-Kinematics
-
-      # Private repos (Bamboo / Print) — requires `ALICE_ECO_TOKEN` secret
-      # ALICE-Bamboo は alice-print を path dep で参照するので、両方
-      # checkout しないと workspace 解決が fail する PAT の Repository
-      # access は両 repo を include している必要あり
-      - name: Checkout ALICE-Bamboo (private)
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Bamboo
-          path: ALICE-Bamboo
-          token: ${{ secrets.ALICE_ECO_TOKEN }}
-      - name: Checkout ALICE-Print (private)
-        uses: actions/checkout@v5
-        with:
-          repository: ext-sakamoro/ALICE-Print
-          path: ALICE-Print
-          token: ${{ secrets.ALICE_ECO_TOKEN }}
+          eco-token: ${{ secrets.ALICE_ECO_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      # sibling の固定 commit (.github/siblings.toml) と、cargo が実際に読む sibling の
+      # 集合 / checkout された HEAD / 各 workflow の checkout を突き合わせる
+      # cargo metadata が解決しない組 (版要求の不一致) もここで落ちる
+      - name: sibling pins (検査器の試験 + 固定 commit と cargo の解決の突合)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 scripts/ci_sibling_checkout_check.py --self-test
+          python3 scripts/ci_sibling_checkout_check.py --verify-heads
 
       # Linux: keyring crate は libdbus-sys 経由で libdbus-1-dev を要求
       # (Secret Service backend) Windows/macOS は不要
