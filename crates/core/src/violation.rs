@@ -841,7 +841,8 @@ mod tests {
         assert_eq!(checked, 3);
     }
 
-    /// 凸の角の薄いひれ (幅 0.2、箱の角から突き出す) も下げない
+    /// 凸の角の薄いひれ (幅 0.2): 標本の点の測り直し自体が 0.2 (< limit) なので、周りの判定には
+    /// 届かない この試験が固定するのは remeasure の角での符号の扱い (材料側の内接球を取る) だけ
     #[test]
     fn thin_fin_at_a_convex_corner_is_never_demoted() {
         let s = sdf("union(box3d(5, 5, 5), translate(5.5, 5.5, 0, box3d(0.5, 0.1, 5)))");
@@ -855,6 +856,66 @@ mod tests {
             String::new(),
         );
         assert_ne!(v.confidence, Confidence::PossibleArtefact, "{v:?}");
+    }
+
+    /// 周りの判定そのものが下げを止める場合: 厚い箱 (半幅 5) の面 x = 5 に、凸の稜線 (y = 5) から 1mm の
+    /// 所で幅 0.2 の板が付いている 標本を面から 0.05 の所 (余裕の幅の中) に置くと、標本の点の測り直しは
+    /// 箱の中の球 (稜線までの 1mm で止まる、直径 2.0) を読んで limit 0.8 以上になる 下げないのは周りの点
+    /// (板の中、0.2) を見る判定のおかげ
+    #[test]
+    fn thin_fin_beside_a_convex_edge_is_kept_by_the_neighbourhood_gate() {
+        let s = sdf("union(box3d(5, 5, 5), translate(6, 4, 0, box3d(1, 0.1, 5)))");
+        let at = Vec3::new(5.05, 4.0, 0.0);
+        let limit = policy().limit(Kind::FeatureTooSmall).unwrap();
+        let tol = policy().discriminator_tolerance_mm.value;
+        let raw = remeasure(&s, at, limit, tol, false);
+        assert!(
+            raw >= limit,
+            "標本の点の測り直しが limit 未満だと周りの判定に届かない: {raw}"
+        );
+        let v = measured_violation(
+            &s,
+            Kind::FeatureTooSmall,
+            Some(0.2),
+            Some(at),
+            None,
+            String::new(),
+        );
+        assert_eq!(v.confidence, Confidence::Measured, "{v:?}");
+        assert_ne!(v.severity, Severity::Info);
+    }
+
+    /// 周りの同じ側の点が 2 点未満なら下げない (判断の材料が無い)
+    /// 材料の中の標本の +x 側 (距離 1.0 = 半径) にだけ大きい空洞 (半径 3、表面 x = 0.95) がある
+    /// 同じ側 (空隙) の格子点は (1, 0, 0) の 1 点だけで、その点の測り直しは空洞の直径 (6) を読む
+    #[test]
+    fn neighbourhood_with_fewer_than_two_points_does_not_demote() {
+        let one = sdf("subtract(box3d(20, 20, 20), translate(3.95, 0, 0, sphere(3)))");
+        let at = Vec3::ZERO;
+        assert!(
+            remeasure(&one, Vec3::new(1.0, 0.0, 0.0), 2.0, 0.1, true) >= 2.0,
+            "その 1 点は広い"
+        );
+        assert!(
+            !neighbourhood_is_wide(&one, at, 1.0, 0.1, 2.0, true),
+            "1 点で下げた"
+        );
+        // 同じ側の点が 0 点 (空隙の無い箱の中)
+        let none = sdf("box3d(20, 20, 20)");
+        assert!(
+            !neighbourhood_is_wide(&none, at, 1.0, 0.1, 2.0, true),
+            "0 点で下げた"
+        );
+        // 対照: 空洞を近づけて同じ側の点を増やすと下げる (判定が常に false ではない)
+        let many = sdf("subtract(box3d(20, 20, 20), translate(2.5, 0, 0, sphere(3)))");
+        assert!(neighbourhood_is_wide(
+            &many,
+            Vec3::new(0.5, 0.0, 0.0),
+            1.0,
+            0.1,
+            2.0,
+            true
+        ));
     }
 
     /// 平らな壁の脇の幅 3mm の隙間 (床から離れた高さ) の標本は、周りも全て 3mm なので下げる
