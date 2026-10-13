@@ -1,6 +1,6 @@
 name: Fuzz
 
-# canonical CI template: [[reference_alice_ci_canonical_template]]
+# ALICE-* 共通の CI 構成に従う
 # text-to-print 3 target: license base64 / manifest JSON / sha256 hex
 #
 # 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、

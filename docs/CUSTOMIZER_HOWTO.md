@@ -2,7 +2,7 @@
 
 ## この doc について
 
-text-to-print の **customizer 経路** (パラメータ入力可能な template) に新 archetype を追加する完全 step-by-step ガイド 4-layer に分けた実装 pattern + Gridfinity walkthrough + チェックリスト + 実装罠 catalog
+text-to-print の **customizer 経路** (パラメータ入力可能な template) に新 archetype を追加する完全 step-by-step ガイド 4-layer に分けた実装 pattern + Gridfinity walkthrough + チェックリスト + 実装時の注意点の一覧
 
 **対象読者**: text-to-print / ALICE-LOL に新機能追加する開発者 (自分、または将来の外部貢献者)
 
@@ -447,7 +447,7 @@ name_no_arg ::= ... | "xxx"  # 0 param (preset shortcut)
 
 ---
 
-## 罠 catalog (実装で踏んだ、再発予防)
+## 注意点の一覧 (実装時に判明したもの)
 
 ### 1. Cylinder Y-axis alignment (最重要、Phase B で pen_cup fix 事案)
 
@@ -583,8 +583,8 @@ or all-field 明示 (advanced field も全部書く)
 
 ## 参考リンク
 
-- **canonical spec 出典**: `~/ALICE-Bamboo/docs/patterns/*.md` (10 file、4,594 行)
-- **canonical scores**: `~/ALICE-Bamboo/pattern_scores.json`
+- **canonical spec 出典**: ALICE-Bamboo の `docs/patterns/*.md` (10 file、4,594 行)
+- **canonical scores**: ALICE-Bamboo の `pattern_scores.json`
 - **既存 pattern_sdf 実装**: `~/ALICE-LOL/alice-lol/src/stdlib/hardsurface/pattern_sdf.rs`
 - **既存 runtime_parser dispatch**: `~/ALICE-LOL/alice-lol/src/runtime_parser.rs` (Phase 5.1 + Phase B/B2 sections)
 - **CustomizerState + UI**: `~/text-to-print/crates/app/src/state.rs` + `crates/app/src/ui/prompt.rs`

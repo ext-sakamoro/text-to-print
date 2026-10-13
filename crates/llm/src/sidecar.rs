@@ -98,7 +98,7 @@ pub struct SidecarConfig {
     pub model_path: PathBuf,
     /// listen port (default 8000)
     pub port: u16,
-    /// `--hybrid` flag (CPU forward、Jetson 8GB / GPU 数値誤差回避用)
+    /// `--hybrid` flag (CPU forward、arm64 / 8 GiB 機 / GPU 数値誤差回避用)
     pub hybrid: bool,
     /// health check の poll 間隔
     pub health_poll_interval: Duration,

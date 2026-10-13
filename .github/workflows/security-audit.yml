@@ -1,6 +1,6 @@
 name: Security & Hygiene
 
-# canonical CI template: [[reference_alice_ci_canonical_template]]
+# ALICE-* 共通の CI 構成に従う
 # ALICE-SDF v1.7.7 (commit 5a6056a) を base に text-to-print 用に調整
 #
 # 補完的展開: audit job は既存 ci.yml (.cargo/audit.toml + informational_warnings)
@@ -11,7 +11,7 @@ name: Security & Hygiene
 # alice-physics / alice-llm を `license = "MIT OR Apache-2.0"` の空 crate として
 # 申告していたので、deny.toml の licenses.exceptions が CI では一度も評価されず、
 # alice-print / alice-lol とその transitive 依存も dep 木から消えていた
-# (ALICE-LOL a6ba9f7 / Physics 3472768 と同じ置換、Backlog 443)
+# (ALICE-LOL a6ba9f7 / Physics 3472768 と同じ置換)
 
 on:
   push:
@@ -127,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # canonical 罠 #9-b 準拠: STUB (uppercase) 明示のみ
+      # STUB (uppercase) の明示だけを検出する
       - name: Detect todo! / unimplemented! / panic!(STUB) in src/**
         run: |
           set -eo pipefail

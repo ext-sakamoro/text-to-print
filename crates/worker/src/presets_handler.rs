@@ -1,8 +1,7 @@
 //! `GET /api/presets` — text-to-print archetype preset library 配信 (Sprint X.1)
 //!
 //! 3-layer archetype library の Layer 1 (preset) を Cloudflare KV 経由で
-//! 全 user に startup sync させるための endpoint 詳細:
-//! `memory/project_text_to_print_archetype_library_architecture.md`
+//! 全 user に startup sync させるための endpoint
 //!
 //! ## 動作
 //!

@@ -308,7 +308,7 @@ pub async fn upload_share_payload(
 
 /// Maximum time a queued payload is retained before being discarded
 ///
-/// 24 h matches the tier discussion in `memory/text-to-print.md`
+/// 24 h matches the tier design
 /// (Stage 5 T5.2 opt-out toggle + offline queue TTL)
 pub const QUEUE_TTL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 

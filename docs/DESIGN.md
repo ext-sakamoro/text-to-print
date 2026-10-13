@@ -6,7 +6,7 @@ text-to-print（3Dバーチャルガランドウ）を SaaS からデスクト�
 
 ### 転換の理由
 
-- サーバー維持コスト（Railway / Mac mini / Cloudflare Tunnel）の排除
+- サーバー維持コスト（Railway / 常時稼働の自宅 server / Cloudflare Tunnel）の排除
 - Supabase / Stripe 依存の排除
 - ユーザーの GPU / CPU を活用したローカル推論
 - **ALICE P2P ネットワークのグローバル展開基盤**

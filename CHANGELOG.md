@@ -180,7 +180,7 @@ empirical の 0 厚軸は 1e-3 に floor) を境界値で検査する 7 本を `
 - **CI: `alice-stubs` (manifest-only stub) を廃止して実 sibling checkout に統一** (`security-audit.yml` 4 job / `fuzz.yml`) stub は AGPL の `alice-bamboo` / `alice-physics` / `alice-llm` を `license = "MIT OR Apache-2.0"` の空 crate として申告していたので、`deny.toml` の `licenses.exceptions` 4 件が **CI では一度も評価されず**、`alice-print` / `alice-lol` とその transitive 依存も dep 木から消えていた (ALICE-LOL `a6ba9f7` / Physics `3472768` と同じ置換)
 - **CI: node20 runtime の action を更新** — `actions/upload-artifact@v4` → v6 (6 箇所) / `download-artifact@v4` → v7 / `softprops/action-gh-release@v2` → v3 GitHub の node20 削除 (2026-09-23) で release workflow が落ちる前に追従 sibling は既に対応済 (SDF `ea09e88` / LOL `fbcc63a` / Bamboo `433ff59`)
 - **e2e_pipeline の assert を解析解 oracle に格上げ** 「ZIP として開ける / `<model` を含む」だけでなく、Bambu production extension の `p:path` 参照を辿って `3D/Objects/*.model` の mesh を読み戻し、(1) 頂点・三角形数が `MeshStats` と一致 (2) 符号付き体積が `sphere(10)` の 4/3πr³ と ±5% 一致 (3) 全無向エッジが 2 枚共有 = 水密 を検証 参照先 part の不在も検出する (Bambu Studio が開けない 3MF の早期検出)
-- **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU 速度都合、[feedback_text_to_print_grammar_off_intentional]) `crates/llm` に `alice-bamboo` 依存追加
+- **LOL grammar の copy 運用を廃止** `crates/llm/src/lol.gbnf` (手動 copy) を削除し、`grammar_lol::LOL_GBNF` は `alice_bamboo::LOL_GBNF` (= `alice_lol::LOL_GBNF`、feature 外 `include_str!`) の re-export に copy は ALICE-LOL 本体から 199 行 drift しており (comment / whitespace 厳格化、`program(...)` Intent wrapper なし)、逆に copy 側だけに product shortcut 65 個が足されて本体に upstream されていなかった (mechanical archetype 38 個はどちらにも無く、system prompt が案内するのに grammar ON だと emit 不能) → ALICE-LOL 側で 103 構文を canonical grammar に追加 + parser ⊆ grammar の drift guard test (`52e9834`) `enforce_lol_grammar` は default OFF のまま (iGPU での速度のため) `crates/llm` に `alice-bamboo` 依存追加
 - **`system_prompt.md`**: 「NO `//` comments, NO indent: max 1 space between tokens」を追記 (canonical grammar が comment / 連続 whitespace を拒否するため)、example の indent 除去、reminder 2 行を短縮して 4488 chars (4500 予算内)
 - `ROADMAP.md` P1-10 を実態に同期 (G-code export 配線済、ベッド配置変換 fix 反映)
 
@@ -225,7 +225,7 @@ README docs polish + Zenn 過去記事から print result 実写画像を回収
 
 - **Enterprise 問い合わせ先 email address 修正**: `enterprise@alicelaw.net`
   (実在せず、GAM `Service not applicable/Does not exist` 実測) →
-  `contact@extoria.co.jp` (44 alias 集約先の canonical 法人窓口) 5 hit
+  `contact@extoria.co.jp` (法人窓口) 5 hit
   修正 (README.md / README.ja.md / ROADMAP.md / settings.rs const /
   settings.rs test) tag `v0.1.0-beta.4` は published 直後に revert +
   同 tag で打ち直し

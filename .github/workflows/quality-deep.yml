@@ -15,7 +15,7 @@ name: Quality Deep
 # **判定を足したら `--re` にその関数名を足すこと** — 足さないと新しい判定経路は
 # 測定対象外のまま green に見える
 #
-# 罠 #22 (continue-on-error は compile error も green に潰す) に従い
+# continue-on-error は compile error も green に潰すので、それに従い
 # continue-on-error は使わない measurement の exit code (2 = missed、3 =
 # timeout) は受けてから中身で判定する
 
@@ -87,7 +87,7 @@ jobs:
           # 「何も測れていない」ので即 fail
           case $rc in 0 | 2 | 3) ;; *) echo "::error::cargo-mutants exit $rc (baseline red or usage error)"; exit $rc ;; esac
 
-      # 罠: `--output DIR` は DIR の **中に** mutants.out を作る 上で `--output`
+      # 注意: `--output DIR` は DIR の **中に** mutants.out を作る 上で `--output`
       # を渡していないので結果は workspace 直下の `mutants.out/` 「file が無い」を
       # 「生存 0」に読み替えないため、測定結果の不在は fail にする
       # (ALICE-LOL run 36325718354: gate が存在しない path を見て 4 shard 全部

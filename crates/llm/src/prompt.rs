@@ -292,7 +292,7 @@ mod tests {
     /// 事案背景: MiniCPM5-2B-Q4_K_M で unit normalize 後の「Ø50 h100 取手つき」
     /// prompt を投げた際、compound reasoning (cylinder body + handle attachment)
     /// で circular loop に陥り 3000 token budget 内に最終 DSL 未 emit 事案
-    /// (2026-09-12、[[success_alice_llm_llama_preq_matvec_oob_fix_minicpm5]] 続編)
+    /// (2026-09-12、llama の行列ベクトル積の範囲外読みの修正の続き)
     #[test]
     fn system_prompt_teaches_mug_pattern() {
         assert!(
