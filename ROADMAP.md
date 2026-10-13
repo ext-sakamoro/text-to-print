@@ -43,7 +43,7 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
 - ✅ **Preview resolution 128→96 (Bamboo canonical 準拠)** — Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs` 全 13 pattern 統一値 96) と揃える sample 数 128³=2.1M → 96³=885K = 2.4× 削減、mesh gen 大幅高速化 (SKADIS panel 25 分見込→5.3s = 285× speedup)
 
-- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別 session で ALICE-LOL runtime_parser に primitive 追加後に取り込み)
+- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別途 ALICE-LOL runtime_parser に primitive 追加後に取り込み)
 
 - ✅ **UI 経過時間表示** — `crates/app/src/state.rs::PhaseProgress` に `generation_start: Option<Instant>` + `elapsed()` method 追加 進捗 bar が 0% のまま LLM phase 待機中でも user が経過時間を確認可能 (旧: 「stuck か working か区別つかない」問題)
 
@@ -295,7 +295,7 @@ X post 2026-09-07 発信直後、demand data 収集中)
 - ✅ **cargo clippy --workspace -- -D warnings: 0 warnings**
 - ✅ **cargo check --target wasm32-unknown-unknown -p text-to-print-worker: green**
 
-#### Phase S3 (次々 session、~2h scope)
+#### Phase S3 (S2 の後、~2h scope)
 
 - [ ] Live mode 切替 (`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `RESEND_API_KEY` を live 版に差替)
 - [ ] Production `wrangler deploy` + custom domain (text-to-print.alicelaw.net) route 設定
@@ -374,7 +374,7 @@ P2-1〜P2-5 + P2-7 完了後:
 
 **受入基準**: template click → 数秒以内に mesh preview + 3MF file 生成、同じ template を N 回 click しても常に identical shape (SKADIS panel は 148 hole 全 canonical 再現、production 3MF と一致)
 
-#### Phase T2 (次 session、~2h scope): Placeholder + slider UI (D-3)
+#### Phase T2 (~2h scope): Placeholder + slider UI (D-3)
 
 - [ ] LOL DSL に `{width}` `{height}` 等 named placeholder を許可 (`stdlib::format!` 相当の変数展開)
 - [ ] template metadata に param 定義 (name, min, max, default, unit)
@@ -383,7 +383,7 @@ P2-1〜P2-5 + P2-7 完了後:
 
 **受入基準**: user が template 選択 + slider で寸法調整 → 実時間で preview 更新、3MF export で slider 値通りの mesh 出力
 
-#### Phase T3 (次 session、~1h scope): ALICE-Bamboo/examples の import
+#### Phase T3 (~1h scope): ALICE-Bamboo/examples の import
 
 - [ ] `~/ALICE-Bamboo/examples/skadis_sdf.rs` / `shopping_cart_coin.rs` / `wall-organizer` 系の hand-crafted LOL を text-to-print の template library に import
 - [ ] category を追加 (e.g., "SKADIS system", "実用品 (印刷実績あり)")
@@ -391,16 +391,16 @@ P2-1〜P2-5 + P2-7 完了後:
 
 **受入基準**: SKADIS panel / coin 等の proven LOL を text-to-print から 1 click で出力
 
-#### Phase T4 (次 session、~1h scope): History → template promote
+#### Phase T4 (~1h scope): History → template promote
 
 - [ ] History tab で過去生成 LOL を右クリック → 「マイテンプレートに追加」button
 - [ ] user 定義 template を db に永続 (profiles.custom_templates JSON column)
 - [ ] template category に「マイテンプレート」を追加、hardcoded 14 と並列表示
 - [ ] template 名編集 + 削除 UI
 
-**受入基準**: user 生成物 → template 化 → 別 session で再利用可能
+**受入基準**: user 生成物 → template 化 → 後で再利用可能
 
-### P2-7: datasets 拡大 + LOL primitive 網羅 audit script (別 session 実行想定)
+### P2-7: datasets 拡大 + LOL primitive 網羅 audit script (別途実行する想定)
 
 現状 523 sample を数千 sample に拡大 + LOL DSL 全 primitive カバレッジを systematic に verify
 
@@ -410,15 +410,15 @@ P2-1〜P2-5 + P2-7 完了後:
 
 **受入基準**: LOL DSL primitive カバレッジ 100% (全 primitive が最低 3 sample で登場) + sample 総数 2000+ + blind eval で MakerWorld 対応 3MF 生成成功率 90%+
 
-**別 session 実行注意**: 本タスクは Paperspace 課金 + 数時間の training + eval 手作業を含むので、時間 / 予算を確保してから着手する P2-1 (Stripe) と同じく separate execution 想定
+**別途実行の注意**: 本タスクは Paperspace 課金 + 数時間の training + eval 手作業を含むので、時間 / 予算を確保してから着手する P2-1 (Stripe) と同じく separate execution 想定
 
 ---
 
 ## 判断が要る design 案件
 
-以下は user 判断待ちで、この Roadmap の scope 内で決定してから着手する:
+以下は判断待ちで、この Roadmap の scope 内で決定してから着手する:
 
-1. **Paid tier の payment provider**: Stripe (実装 mature、手数料 3.6%) vs Paddle (Merchant of Record、税務対応込) vs LemonSqueezy vs 独自 (P2-1 で実装、判断は別 session で実行想定)
+1. **Paid tier の payment provider**: Stripe (実装 mature、手数料 3.6%) vs Paddle (Merchant of Record、税務対応込) vs LemonSqueezy vs 独自 (P2-1 で実装、判断は別途)
 2. **Bonsai27B GGUF 公開判断**: HF public か、Paid tier 専用か、そもそも撤去か
 3. **CF Workers 依存の範囲**: share endpoint + crash collector を CF に置く前提で確定するか、AWS / Vercel 等の alternative 検討
 4. **LoRA training 主体**: text-to-print 内 or ALICE-LLM 側 or 別 repo で分離
@@ -436,8 +436,8 @@ P2-1〜P2-5 + P2-7 完了後:
 | 2026-08-07 | **P2-1 Phase S2 完了** — worker checkout API を `plan` param に refactor + settings.rs License / Subscription UI 大幅拡張 (Upgrade to Pro / Enterprise mailto / Clear license / expiry 表示) 既存 `LICENSE_PUBLIC_KEY` + `apply_license` + DB `license_key` column を発見して再利用 (新規追加不要) test 244 → 253 pass |
 | 2026-08-07 | **CI 修正** — 4 job 全 green 化:  `cargo audit` は `.cargo/audit.toml` per-entry rationale 付き ignore list + Cargo.lock update で 12 vuln 解消 / `fmt` 独立 job 廃止して `clippy-test-doc` に merge (workspace path deps 解決 fail 回避) / `ALICE_ECO_TOKEN` GitHub secret 登録 (private ALICE-Bamboo checkout 通過) / Phase S2 追加 code の rustfmt 自動整形 |
 | 2026-08-07 | **end-to-end pipeline 完走まで到達** — LLM system_prompt を Z-up 慣習 + wedge example に刷新、`fix_prompt::LolParseError` variant で parse retry loop 完成、`max_retries` 1→2、HTTP timeout 180→300s、export silent Err bug 修正 実測 `スマホスタンド…` prompt で Bambu Studio 対応 3MF 完走 test 228 pass |
-| 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別 session で mesh 経路に refactor 予定) |
-| 2026-08-08 | **P2-8 追加** — Template アーキテクチャ再設計 議論 (現状 Japanese prompt + LLM 経路の非決定性 / 遅さ / 失敗リスクの問題共有) LLM は「novel な形状の探索」だけに使い、templates は alice-bamboo pipeline 直叩き (~1 秒、決定性 100%) にすべきという設計判断確定 Phase T1 (LOL DSL 化、本 session) / T2 (placeholder + slider UI) / T3 (ALICE-Bamboo/examples import) / T4 (history → template promote) の 4 phase に分割 |
+| 2026-08-08 | **3D preview を mesh renderer に置換** — WGSL raymarching (505 行 shader + 全 pipeline) → in-process wgpu mesh renderer + Phong lit + Z-up camera viewer と Bambu が同一 mesh を表示するので生成結果確認が信頼可能 `MeshStats.preview_mesh` field で pipeline → viewer データフロー統一 gallery タブの P2P SDF preview は一時 stub 化 (別途 mesh 経路に refactor 予定) |
+| 2026-08-08 | **P2-8 追加** — Template アーキテクチャ再設計 議論 (現状 Japanese prompt + LLM 経路の非決定性 / 遅さ / 失敗リスクの問題共有) LLM は「novel な形状の探索」だけに使い、templates は alice-bamboo pipeline 直叩き (~1 秒、決定性 100%) にすべきという設計判断確定 Phase T1 (LOL DSL 化、この変更) / T2 (placeholder + slider UI) / T3 (ALICE-Bamboo/examples import) / T4 (history → template promote) の 4 phase に分割 |
 | 2026-08-09 | **Phase T1.1-1.3 完了** — SKADIS panel canonical 化 3 段 fix (Y板厚 17mm→5mm bug + Stadium peg + connector/mount 148 hole 全再現) + pipeline aspect_ratio ベース DC/MC 判定 helper + Preview resolution 128→96 (SKADIS panel mesh gen 25 分見込→5.3s = 285x speedup) + TEMPLATE_CATEGORIES を ALICE-Bamboo/models 由来 9 items 2 カテゴリに刷新 + UI 経過時間表示 alice-lol lib test 226 pass / text-to-print workspace 232 pass |
 | 2026-08-10 | **CI green 化** — ALICE-LOL fmt fail (trailing comment 位置ずれ) + text-to-print rustdoc fail (wikilink → intra-doc link 誤解釈) 両方修正、両 CI success (ALICE-LOL 1m24s / text-to-print 5m45s) |
 | 2026-08-11 | **README / ROADMAP 更新** — Release スケジュール section (β 公開 / 本番公開 GA / 商用公開 v1.0.0 の 3 段区切り + 判断基準明示) 新設 + 2026-08-09 完了項目 6 個追加 + P2-8 Phase T1 チェックボックス更新 (14→9 items canonical) |
