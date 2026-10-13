@@ -21,6 +21,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import wiring_guard as wg  # noqa: E402
 
 
+def sum_cpu() -> float:
+    """User + system CPU seconds of this process and its finished children."""
+    import os
+
+    t = os.times()
+    return t.user + t.system + t.children_user + t.children_system
+
+
+def cpu_seconds_of(fn):
+    """Run fn() and return (its result, CPU seconds it spent)."""
+    t0 = sum_cpu()
+    out = fn()
+    return out, sum_cpu() - t0
+
+
 def crate(files: dict[str, str]) -> Path:
     root = Path(tempfile.mkdtemp(prefix="wiring-fixture-"))
     for rel, body in files.items():
@@ -491,19 +506,37 @@ class Robustness(unittest.TestCase):
         self.assertIn("ok", unwired(vs))
 
     def test_a_huge_file_finishes_quickly(self):
-        import time
-
         body = "".join(f"pub fn f{i}() {{ if true {{ g{i}(); }} }}\nfn g{i}() {{}}\n" for i in range(20000))
         r = crate({"src/lib.rs": LIB, "src/a.rs": body, "src/b.rs": "pub fn x() {}\n"})
-        # ⚠️ monotonic, not time(): wall clock steps (machine sleep, NTP) make a
-        # time-based gate report an elapsed time it never spent, and the failure
-        # looks like a performance regression rather than a clock jump. Measured
-        # on 2026-10-02: this assertion read 943 s while the whole 79-test suite
-        # finished in 4.7 s.
-        t0 = time.monotonic()
-        vs = wg.check(r)
-        self.assertLess(time.monotonic() - t0, 30)
+        # The bound is on the CPU time the check itself spends (user + system,
+        # this process and any children), not on elapsed wall time: wall time
+        # also counts other processes' load and clock steps (measured: 943 s read
+        # after a machine sleep on 2026-10-02, 31-33 s at load average 421 on
+        # 2026-10-13, while the check itself costs a few seconds of CPU).
+        vs, spent = cpu_seconds_of(lambda: wg.check(r))
+        self.assertLess(spent, 30)
         self.assertEqual(len([v for v in vs if v.kind == "unwired"]), 20001)
+
+    def test_the_timer_does_not_count_sleeping(self):
+        import time
+
+        _, spent = cpu_seconds_of(lambda: time.sleep(0.5))
+        self.assertLess(spent, 0.2)
+
+    def test_the_timer_counts_busy_cpu_so_a_slow_check_still_fails(self):
+        # mutant of the guard: a check that burns CPU must exceed a bound scaled
+        # to the busy time, so the gate keeps its teeth after the timer change
+        def slow_check():
+            t_end = sum_cpu() + 0.5
+            x = 0
+            while sum_cpu() < t_end:
+                x += 1
+            return x
+
+        _, spent = cpu_seconds_of(slow_check)
+        self.assertGreaterEqual(spent, 0.4)
+        with self.assertRaises(AssertionError):
+            self.assertLess(spent, 0.2)
 
     def test_a_pathological_header_without_a_terminator_does_not_hang(self):
         import time
