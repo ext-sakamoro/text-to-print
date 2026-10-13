@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Changed — CI の job に上限時間を付ける (2026-10-14)
+
+- CI: 全 workflow の 14 job に `timeout-minutes` を付けた (それぞれ最近の所要時間の 3〜5 倍、最低 10 分) これまで 1 job を除き上限が無く、止まった step が runner を GitHub の上限の 6 時間まで占有しえた `scripts/workflow_timeouts.py` が全 job の上限を検査し (job を 1 つも読めなければ失敗、検査器の試験 7 本)、CI の wiring-guard job と `scripts/preflight.sh` で走る
+- `scripts/test_wiring_guard.py`: 所要時間を CPU 時間で測る試験は、検査が戻った後にしか上限を読めないので、戻らない検査 (待ち続ける・回り続ける) を捕まえられなかった 検査を thread で走らせ、壁時計で 600 秒を超えたら失敗する上限 (`within_wall_backstop`) を足した 待ち続ける検査で失敗することを試験する
+
 ### Changed — 空の形を誤りにする (2026-10-12)
 
 - **Behavior change:** 読めた LOL から作った mesh が空の時、空の mesh を返さずに `pipeline::EmptyMesh` の誤りにする (preview /

@@ -44,6 +44,8 @@ step "ci.yml / clippy-test-doc: cargo doc (no deps)"
 
 step "ci.yml / wiring-guard: oracle + 新規の未配線 / 理由の無い dead_code が無い"
 python3 scripts/test_wiring_guard.py
+python3 scripts/test_workflow_timeouts.py
+python3 scripts/workflow_timeouts.py
 python3 scripts/wiring_guard.py
 
 step "ci.yml / wiring-guard: vocab-lint (許可リスト外の token が無い)"

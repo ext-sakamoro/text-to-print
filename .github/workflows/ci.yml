@@ -22,6 +22,7 @@ jobs:
   audit:
     name: cargo audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -54,6 +55,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: text-to-print
@@ -141,6 +143,7 @@ jobs:
   actionlint:
     name: actionlint (workflow YAML 検証)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - name: Run actionlint
@@ -157,6 +160,7 @@ jobs:
   wiring-guard:
     name: Wiring guard (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -170,6 +174,10 @@ jobs:
         run: python scripts/test_wiring_guard.py
       - name: wiring-guard (新規の未配線 / 理由の無い dead_code が無い)
         run: python scripts/wiring_guard.py
+      - name: workflow-timeouts (全 job に timeout-minutes がある、検査器の試験を含む)
+        run: |
+          python scripts/test_workflow_timeouts.py
+          python scripts/workflow_timeouts.py
       # 外部連携の名前は、製品が必要とする (file, token) の許可リストの中だけに置く
       - name: vocab-lint (検査器の試験 + 許可リスト外の token が無い)
         run: |
@@ -179,6 +187,7 @@ jobs:
   check-wasm-worker:
     name: check-wasm (crates/worker)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable

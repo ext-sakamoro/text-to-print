@@ -45,6 +45,7 @@ jobs:
             bin_name: text-to-print.exe
             sidecar_bin: alice-llm-server.exe
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     # macOS 署名 (Developer ID Application) と notarize は secret 設定済み時のみ実行
     # β 期間中は無署名 tar.gz を許容 (user は「右クリック → 開く」で warning bypass 可)
     # Apple Developer Program 加入 + secret 登録後は自動で signed build に切替
@@ -432,6 +433,7 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != 'true'
     permissions:
       contents: write

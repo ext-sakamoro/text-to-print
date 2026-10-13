@@ -36,6 +36,37 @@ def cpu_seconds_of(fn):
     return out, sum_cpu() - t0
 
 
+# A CPU-time bound is read only after fn() returns, so it cannot see a check that
+# never returns (a loop that waits, or one that spins forever). This backstop runs
+# fn() in a thread and fails once it has run this long on the wall clock, far above
+# any load seen (31-33 s at load average 421) and far below the job's timeout.
+WALL_BACKSTOP_S = 600
+
+
+def within_wall_backstop(fn, seconds: float = WALL_BACKSTOP_S):
+    """Run fn() in a thread; return its result, or raise AssertionError when it is
+    still running after `seconds` (the thread is a daemon and does not keep the
+    process alive)."""
+    import threading
+
+    box: dict[str, object] = {}
+
+    def target():
+        try:
+            box["out"] = fn()
+        except BaseException as e:  # re-raised in the caller
+            box["err"] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        raise AssertionError(f"still running after {seconds} s on the wall clock (a hang, not a slow check)")
+    if "err" in box:
+        raise box["err"]  # type: ignore[misc]
+    return box["out"]
+
+
 def crate(files: dict[str, str]) -> Path:
     root = Path(tempfile.mkdtemp(prefix="wiring-fixture-"))
     for rel, body in files.items():
@@ -513,7 +544,7 @@ class Robustness(unittest.TestCase):
         # also counts other processes' load and clock steps (measured: 943 s read
         # after a machine sleep on 2026-10-02, 31-33 s at load average 421 on
         # 2026-10-13, while the check itself costs a few seconds of CPU).
-        vs, spent = cpu_seconds_of(lambda: wg.check(r))
+        vs, spent = within_wall_backstop(lambda: cpu_seconds_of(lambda: wg.check(r)))
         self.assertLess(spent, 30)
         self.assertEqual(len([v for v in vs if v.kind == "unwired"]), 20001)
 
@@ -538,6 +569,20 @@ class Robustness(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.assertLess(spent, 0.2)
 
+    def test_the_wall_backstop_catches_a_check_that_never_returns(self):
+        # mutant of a hang: a check that waits forever passes no CPU-time bound,
+        # because the bound is only read after it returns
+        import threading
+
+        never = threading.Event()
+        with self.assertRaises(AssertionError):
+            within_wall_backstop(never.wait, seconds=0.3)
+
+    def test_the_wall_backstop_passes_results_and_errors_through(self):
+        self.assertEqual(within_wall_backstop(lambda: 7, seconds=5), 7)
+        with self.assertRaises(ValueError):
+            within_wall_backstop(lambda: int("x"), seconds=5)
+
     def test_a_pathological_header_without_a_terminator_does_not_hang(self):
         import time
 
@@ -548,7 +593,7 @@ class Robustness(unittest.TestCase):
         # on 2026-10-02: this assertion read 943 s while the whole 79-test suite
         # finished in 4.7 s.
         t0 = time.monotonic()
-        wg.check(r)
+        within_wall_backstop(lambda: wg.check(r))
         self.assertLess(time.monotonic() - t0, 30)
 
     def test_no_src_directory_is_an_empty_scan(self):
