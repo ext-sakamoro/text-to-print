@@ -1,5 +1,5 @@
 #!/bin/bash
-# Paperspace → Mac Mini GGUF転送 & デプロイ
+# Paperspace → ローカル推論機への GGUF 転送 & デプロイ
 #
 # 使い方:
 #   bash scripts/deploy_lora.sh <paperspace_fqdn> <paperspace_token>

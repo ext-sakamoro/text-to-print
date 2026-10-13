@@ -137,7 +137,7 @@ def main():
     print("\n=== Done ===")
     print(f"  LoRA adapter: {OUTPUT_DIR}/")
     print(f"  GGUF: {OUTPUT_DIR}_gguf/")
-    print(f"  Copy GGUF to Mac Mini: scp <paperspace>:{OUTPUT_DIR}_gguf/*.gguf ~/.text-to-print/models/")
+    print(f"  Copy GGUF to the local inference machine: scp <paperspace>:{OUTPUT_DIR}_gguf/*.gguf ~/.text-to-print/models/")
 
 
 if __name__ == "__main__":
