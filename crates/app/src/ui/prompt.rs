@@ -1300,8 +1300,6 @@ fn poll_results(ui: &egui::Ui, state: &mut AppState) {
 /// `state.presets: PresetsSnapshot` (Cloudflare Worker 経由の Layer 1 sync) を
 /// 直接読む dynamic 実装に refactor 起動時は bundled default (or local cache)、
 /// background で Cloudflare fetch 完了時に UI 自動更新
-///
-/// 詳細: memory `project_text_to_print_archetype_library_architecture.md`
 fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating: bool, lang: Lang) {
     ui.collapsing(crate::i18n::T::prompt_p049(lang), |ui| {
         ui.add_enabled_ui(!is_generating, |ui| {
