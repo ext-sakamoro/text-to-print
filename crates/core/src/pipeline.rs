@@ -525,7 +525,7 @@ impl Quality {
 
     /// Marching-cubes resolution used by the `alice_bamboo` 3MF pipeline.
     ///
-    /// Preview は Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs`
+    /// Preview は ALICE-Bamboo の pattern score 計算 (
     /// 全 13 pattern で `resolution: 96` 統一) と同じ 96 に揃え、大型 template
     /// (SKADIS panel 300×300 等) の mesh gen 時間を短縮 (128³ = 2.1M → 96³ = 885K、
     /// 2.4x sample 削減)
@@ -1254,7 +1254,7 @@ fn generate_mesh(
 /// - `aspect_ratio (= max_dim / min_dim) > 5.0`: 板状 / 棒状 (peg 穴等の小 feature を保存)
 /// - `min_dim <= 5.0mm`: 薄物 (Hermite data で watertight 保証)
 ///
-/// Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json`) の route 判定と一致
+/// ALICE-Bamboo の pattern score 表の route 判定と一致
 /// SKADIS panel 300×300 (bbox 312×17×312) は aspect 18.4 → DC 経路に落ちる
 fn should_use_dual_contouring(dims: (f32, f32, f32)) -> bool {
     let max_dim = dims.0.max(dims.1).max(dims.2);

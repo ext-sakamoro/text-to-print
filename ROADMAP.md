@@ -39,11 +39,11 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 
 - ✅ **SKADIS panel canonical 化 (Phase T1.1)** — ALICE-LOL `skadis_panel_sdf` の 3 段 fix: (1) Y 板厚 17mm bug (RoundedBox 6 面 inflate) を `Intersection { RoundedBox, Box3d Y-cutter }` で解消、Y=5mm 正確、X/Z corner fillet 保持 (2) Stadium peg 穴 (Box3d rectangle → 中央 Box + Y 軸 Cylinder × 2 半円 ends の Union、SKADIS_SPEC.md §1 準拠 5×15mm round 2.5) (3) connector 穴 44 個 + mount 穴 6 個追加 (production `models/wall-organizer/skadis-300x300/generate.py::get_conn_positions` / `_mount_positions` を Rust に port、Python 板 origin=左下 → Rust 板 origin=中央 座標変換) 実測 148 hole 全 visible (peg 98 + conn 44 + mount 6)、mesh gen 5292ms/238700 tri/overhang 2.1%/PLA 安全性 OK、Bambu production 3MF `skadis_panel_300x300.3mf` と shape 一致 alice-lol lib test 226 pass (skadis 12 tests all pass)
 
-- ✅ **pipeline aspect_ratio ベース DC/MC 判定 (Phase T1.2)** — `crates/core/src/pipeline.rs` の `use_dc = thickness_y < 5.0` (Y 軸単独) を `should_use_dual_contouring(dims)` helper (`aspect_ratio > 5.0 || min_dim <= 5.0`) に refactor SKADIS panel Y=17mm bug で MC 経路に落ちて Ø5mm peg 穴が MC 解像度不足 (X/Z cell 3.25mm) で消失した bug を根本予防 Bamboo canonical (`~/ALICE-Bamboo/pattern_scores.json` の `"route": "DC"/"MC"`) と実装 route 一致確認 新 test 4 個追加 (should_use_dc_for_flat_panel_shapes / thin_coins / mc_for_bulky / boundary at min_dim 5mm)
+- ✅ **pipeline aspect_ratio ベース DC/MC 判定 (Phase T1.2)** — `crates/core/src/pipeline.rs` の `use_dc = thickness_y < 5.0` (Y 軸単独) を `should_use_dual_contouring(dims)` helper (`aspect_ratio > 5.0 || min_dim <= 5.0`) に refactor SKADIS panel Y=17mm bug で MC 経路に落ちて Ø5mm peg 穴が MC 解像度不足 (X/Z cell 3.25mm) で消失した bug を根本予防 ALICE-Bamboo の pattern score 表 (`"route": "DC"/"MC"`) と実装 route 一致確認 新 test 4 個追加 (should_use_dc_for_flat_panel_shapes / thin_coins / mc_for_bulky / boundary at min_dim 5mm)
 
-- ✅ **Preview resolution 128→96 (Bamboo canonical 準拠)** — Bamboo canonical (`~/ALICE-Bamboo/examples/compute_pattern_scores.rs` 全 13 pattern 統一値 96) と揃える sample 数 128³=2.1M → 96³=885K = 2.4× 削減、mesh gen 大幅高速化 (SKADIS panel 25 分見込→5.3s = 285× speedup)
+- ✅ **Preview resolution 128→96 (Bamboo canonical 準拠)** — ALICE-Bamboo の pattern score 計算 (全 13 pattern 統一値 96) と揃える sample 数 128³=2.1M → 96³=885K = 2.4× 削減、mesh gen 大幅高速化 (SKADIS panel 25 分見込→5.3s = 285× speedup)
 
-- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL) を削除 → 9 items 2 カテゴリ (`~/ALICE-Bamboo/models/` 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別途 ALICE-LOL runtime_parser に primitive 追加後に取り込み)
+- ✅ **TEMPLATE_CATEGORIES ALICE-Bamboo canonical 刷新** — `crates/app/src/ui/prompt.rs` の 16 items (実用品/DIY/ゲーム 15 items が自作 LOL DSL) を削除 → 9 items 2 カテゴリ (ALICE-Bamboo の model 由来、runtime_parser Phase 5.1 高階 primitive 経由): 「実績品 Both 認証 (Sim 88 + UserFieldTest)」= コイン (100円) / SKADIS panel 300×300 / SKADIS フック S / SKADIS クリップ / SKADIS ゴムバンド 5 items、「実績品 UserFieldTest 認証 (実荷重合格)」= SKADIS フック J/L / SKADIS コンテナ / SKADIS シェルフ 4 items (`alice_lol::stdlib::pattern::registry::ALL` の 13 canonical pattern と 1:1、未対応 4 items = shelf_divider / wall_hook / gridfinity_bin / drawer_organizer は別途 ALICE-LOL runtime_parser に primitive 追加後に取り込み)
 
 - ✅ **UI 経過時間表示** — `crates/app/src/state.rs::PhaseProgress` に `generation_start: Option<Instant>` + `elapsed()` method 追加 進捗 bar が 0% のまま LLM phase 待機中でも user が経過時間を確認可能 (旧: 「stuck か working か区別つかない」問題)
 
@@ -385,7 +385,7 @@ P2-1〜P2-5 + P2-7 完了後:
 
 #### Phase T3 (~1h scope): ALICE-Bamboo/examples の import
 
-- [ ] `~/ALICE-Bamboo/examples/skadis_sdf.rs` / `shopping_cart_coin.rs` / `wall-organizer` 系の hand-crafted LOL を text-to-print の template library に import
+- [ ] ALICE-Bamboo の `skadis_sdf.rs` / `shopping_cart_coin.rs` / `wall-organizer` 系の hand-crafted LOL を text-to-print の template library に import
 - [ ] category を追加 (e.g., "SKADIS system", "実用品 (印刷実績あり)")
 - [ ] license note (originator: alice-bamboo/examples) を UI に添付
 
