@@ -27,7 +27,7 @@ target: **v1.0.0 商用出荷** (Paid tier + LoRA flywheel)
 - ✅ **CI: `alice-stubs` 廃止 → 実 sibling checkout** (`security-audit.yml` / `fuzz.yml`) stub が AGPL sibling を MIT と申告していたので `deny.toml` の exception が CI で一度も評価されていなかった (ALICE-* 横断の対応のうち text-to-print の分)
 - ✅ **CI: node20 action 8 箇所を更新 + `actionlint` job 追加 + `quality-deep.yml` (cargo-mutants) 追加** — 逸脱を push 時点で検知できる状態にし、判定の核の検出力 (生存変異 0) を gate にした
 
-### 2026-09-14 完了項目 (text-to-cad 吸収、[[reference-text-to-cad-absorption]])
+### 2026-09-14 完了項目 (text-to-cad 吸収)
 
 - ✅ **G-code 静的バリデータ + ベッド配置変換** (ALICE-Print `8b95624`) — `alice_print::validate` (移動 / 押出 / 温度 / 絶対 XYZ bounds、G90/G91 + M82/M83 + G92 E 追跡) を作った初回 e2e で **`slice_sdf` がモデル空間座標をそのまま出力していた** (Z 負値 = ベッド衝突) 事実を検出 → XY ベッド中央配置 + Z 底面着地 + purge/park を `SlicerConfig::bed` 由来に修正 H2D / A1 mini 両方で e2e `validate().ok`
 - ✅ **DfAM 測定 + 判定** (ALICE-Bamboo `57464cf` → text-to-print `c87c5dc`) — `alice_bamboo::dfam`: プロセス別限界表 5 種 / `measure`↔`compare` 分離 / p05 壁厚 (SDF sphere tracing) / **SDF 実測** 最小穴径 (囲われた外部距離場局所最大) ・ 突起 ・ 最大ブリッジ (板 anchored でない下向き面の連結成分 span) / `units_suspect` 3MF export で `MeshStats.dfam_summary`、Generate 画面に表示、`safety_check_lol` → LLM retry に wall / feature / hole の Fail を接続 (bridge / watertight は retry 対象外: 曲面で常時発火 / mesher の性質)
