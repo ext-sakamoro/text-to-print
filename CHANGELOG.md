@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Security — rustls を 0.23.46 にする (2026-10-15)
+
+- 依存の `rustls` を 0.23.45 から 0.23.46 にした (`Cargo.lock` のみ、要求は変えていない) RUSTSEC-2026-0346 / RUSTSEC-2026-0347 / RUSTSEC-2026-0348 / RUSTSEC-2026-0349 が 0.23.45 を対象にしており、cargo-deny の advisories の検査が失敗していた
+
 ### Changed — CI の job に上限時間を付ける (2026-10-14)
 
 - CI: 全 workflow の 14 job に `timeout-minutes` を付けた (それぞれ最近の所要時間の 3〜5 倍、最低 10 分) これまで 1 job を除き上限が無く、止まった step が runner を GitHub の上限の 6 時間まで占有しえた `scripts/workflow_timeouts.py` が全 job の上限を検査し (job を 1 つも読めなければ失敗、検査器の試験 7 本)、CI の wiring-guard job と `scripts/preflight.sh` で走る
