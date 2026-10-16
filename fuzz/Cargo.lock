@@ -37,9 +37,9 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef90265249a97cc0fac787cf918f62639991513c0219c33e1853de7f1a28a03"
+checksum = "2857e06dcc3838a2138f4c8ed7b30cf8515a223eeb6d5fbd068dd13d45cb4ff4"
 dependencies = [
  "bytemuck",
  "wide",
@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "alice-lol"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "alice-det-math",
  "alice-lol-macro",
@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "alice-lol-macro"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "alice-physics"
-version = "2.3.0"
+version = "3.1.0"
 dependencies = [
  "alice-det-math",
  "sha2",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "alice-sdf"
-version = "5.1.1"
+version = "6.1.0"
 dependencies = [
  "alice-det-math",
  "bincode",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "alice-zip"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "alice-det-math",
  "libm",
