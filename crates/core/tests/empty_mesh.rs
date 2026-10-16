@@ -1,8 +1,10 @@
 //! 読めた LOL から作った mesh が空の時は、空の mesh を黙って返さずに `EmptyMesh` の誤りにする
 //!
-//! fixture: `polar_repeat` は区間評価が緩く形を包む箱を絞れない (探索の上限 ±500 mm に張り付き、
-//! Preview の格子が形より粗くなって mesh が空になる) その演算の区間評価が直るまで、この形は
-//! 「範囲を求められない」の誤りになる 直ったら最初の試験が red になるので、別の fixture に替える
+//! fixture: `gyroid` は全空間に広がる面で、形を包む箱が無い (探索の上限 ±500 mm に張り付く)
+//! この大きさ (周期 3、厚み 1) では Preview の格子が面を捉えられず mesh が空になるので、
+//! 「範囲を求められない」の誤りになる (近い値の `gyroid(3, 0.5)` / `gyroid(6, 1)` も同じ)
+//! 以前の fixture の `polar_repeat` は alice-sdf 6.1.0 から解析的な外接箱を持つので書き出せる
+//! (`polar_repeat_is_bounded_and_exports`)
 
 use text_to_print_core::pipeline::{
     EmptyMesh, ExportFormat, Quality, export_3mf_without_analysis, export_mesh, preview_lol_to_mesh,
@@ -15,7 +17,7 @@ fn empty(e: &anyhow::Error) -> Option<EmptyMesh> {
 
 #[test]
 fn unbounded_shape_is_an_error_not_an_empty_mesh() {
-    let lol = "polar_repeat(6, translate(8, 0, 0, sphere(1.5)))";
+    let lol = "gyroid(3, 1)";
     let e = preview_lol_to_mesh(lol, Quality::Preview).expect_err("空の mesh を返した");
     assert_eq!(empty(&e), Some(EmptyMesh { aabb_pinned: true }), "{e}");
     let dir = tempfile::tempdir().unwrap();
@@ -29,6 +31,13 @@ fn unbounded_shape_is_an_error_not_an_empty_mesh() {
         0,
         "空の 3MF を書いた"
     );
+}
+
+#[test]
+fn polar_repeat_is_bounded_and_exports() {
+    let lol = "polar_repeat(6, translate(8, 0, 0, sphere(1.5)))";
+    let mesh = preview_lol_to_mesh(lol, Quality::Preview).expect("書き出せない");
+    assert!(!mesh.indices.is_empty(), "空の mesh");
 }
 
 #[test]

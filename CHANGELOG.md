@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Changed — ALICE-LOL 0.4.2 / ALICE-Physics 3.1.0 / ALICE-SDF 6.1.0 / ALICE-Zip 0.10.0 / ALICE-Bamboo に追従する (2026-10-17)
+
+- `.github/siblings.toml` の pin と Cargo.lock を ALICE-LOL 0.4.2 / ALICE-Physics 3.1.0 / ALICE-SDF 6.1.0 / ALICE-Zip 0.10.0 / ALICE-Bamboo 9ff48ee にした ALICE-Bamboo 9ff48ee がこの 4 つの版を要求するので 1 度に上げる (どれか 1 つだけでは依存が解決しない) text-to-print 側の code の変更は無い
+- `crates/core/tests/empty_mesh.rs`: 形を包む箱が求まらない形の fixture を `polar_repeat(6, translate(8, 0, 0, sphere(1.5)))` から `gyroid(3, 1)` に替えた ALICE-SDF 6.1.0 が `PolarRepeat` に解析的な外接箱を与えるようになり、その形は書き出せるようになった (それを確かめる試験 `polar_repeat_is_bounded_and_exports` を足した) 替わりの形は、ALICE-SDF 6.1.0 で解析的な外接箱を持たない演算を source から列挙し、LOL の 226 構文の最小の program を Preview で書き出して選んだ 箱の張り付きを判定しない変異で試験が落ちることを確かめた
+
 ### Changed — ALICE-LLM を 2.0.1 にする (2026-10-17)
 
 - 依存の ALICE-LLM を 1.6.0 から 2.0.1 にした (`.github/siblings.toml` の pin と Cargo.lock) text-to-print 側の code の変更は無い (workspace 全体の build と `text-to-print-llm` の試験 100 件、`tests/zip_oracle.rs` は通る)
