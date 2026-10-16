@@ -19,7 +19,7 @@ reason = "alice-zip 0.10 (alice-det-math 0.5) と、0.9 / 0.4 を要求する si
 
 [siblings]
 ALICE-Bamboo = "6f08a4fdba59677d5925b572be3f63dad61d5aae"
-ALICE-LLM = "cb78ec88320e34539688e7807bd45da5f51379e1"
+ALICE-LLM = "94dd5a3e7bb7d7c042fc900865145f9f59f24174"
 ALICE-LOL = "c3202f15e910b86921b4ad0b5a88bbb2ec81f10f"
 ALICE-Physics = "fa066f4ed7d90b9bfbcdb248e710088cf9b882ac"
 ALICE-Print = "efbabcf8c7bc4542d9a517066f4fbb04cd0e6f28"
