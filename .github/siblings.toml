@@ -18,10 +18,10 @@ updated = "2026-10-12"
 reason = "alice-zip 0.10 (alice-det-math 0.5) と、0.9 / 0.4 を要求する sibling が main に混在する期間の前で、互いに解決する最新の組"
 
 [siblings]
-ALICE-Bamboo = "9ff48ee48a77a681c4767bae4a2b387a827e65d6"
+ALICE-Bamboo = "6baf3d56515fafbe55c2c02e1e58a187b789a08d"
 ALICE-LLM = "94dd5a3e7bb7d7c042fc900865145f9f59f24174"
 ALICE-LOL = "c1bf5cf9b726f0fbb51b9bffc00be3c8dd868a84"
 ALICE-Physics = "0322727004a9971036599adc54b3fead96f7ed63"
-ALICE-Print = "efbabcf8c7bc4542d9a517066f4fbb04cd0e6f28"
+ALICE-Print = "3e5f9c030834c61f5bd7d5b41eaca69467c983e8"
 ALICE-SDF = "8b0eaed533c83a9c61a2563b4ca15d1a01785bd3"
 ALICE-Zip = "cf86299c96b1dd5960884350cc4bc6da33342f01"

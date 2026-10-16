@@ -96,7 +96,7 @@ fn every_archive_entry_matches_the_recorded_oracle() {
         let (mut places, mut values) = (0, Vec::new());
         for (i, want) in entries.iter().enumerate() {
             let mut file = archive.by_index(i).unwrap();
-            let name = file.name().to_string();
+            let name = file.name().unwrap().to_string();
             assert_eq!(
                 name,
                 want["name"].as_str().unwrap(),
@@ -207,7 +207,7 @@ fn every_entry_of_the_app_export_matches_the_recorded_oracle() {
         let (mut places, mut values) = (0, Vec::new());
         for (i, want) in entries.iter().enumerate() {
             let mut file = archive.by_index(i).unwrap();
-            let name = file.name().to_string();
+            let name = file.name().unwrap().to_string();
             assert_eq!(
                 name,
                 want["name"].as_str().unwrap(),
