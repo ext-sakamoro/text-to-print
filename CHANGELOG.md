@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Added — 3MF の archive の中身を記録した oracle と比べる試験 (2026-10-17)
+
+- `crates/core/tests/zip_oracle.rs`: 3 つの program (`crates/core/tests/fixtures/zip_oracle/*.lol`) を 3MF に書き出し、archive の entry ごとの名前・順序・圧縮方式・更新時刻・展開後の大きさ・中身の SHA-256 を記録 (`zip2.json`、zip 2.x の時点の書き出し) と比べる zip の library や書き出しを変えても中身が変わらないことを確かめるためのもので、圧縮後の byte は比べない (deflate の実装が違えば同じ中身でも byte が変わりうる) 書き出しは実行ごとに新しい UUID v7 を object の名前にするので、比べる前にその名前を伏せる 伏せるのは 1 つの archive に 1 種類の UUID が、記録した 5 か所 (model の Title、`Metadata/model_settings.config` の `name` 2 か所と `source_file`、`Metadata/plate_1.json` の `name`) にある時だけで、それ以外の場所や 2 種類目があれば失敗する app の書き出し (`export_mesh_with_metadata`、`manifest::embed_in_3mf` で archive を書き直し manifest を足す) も同じく `zip2_app.json` と比べる (17 entry、すべて無圧縮) 実行ごとの値 (作成時刻・所要時間・archive の hash・object 名からの id) を持つ `3D/3dmodel.model` と `Metadata/alice_manifest.json` は名前・順序・方式・時刻と構造だけを見て、他の entry は中身を比べる (object 名は 4 か所) 試験の歯: entry の順序・中身・圧縮方式・伏せる場所の数を記録で 1 つずつ変える、UUID の判定を緩める、のそれぞれで失敗する
+
 ### Security — rustls を 0.23.46 にする (2026-10-15)
 
 - 依存の `rustls` を 0.23.45 から 0.23.46 にした (`Cargo.lock` のみ、要求は変えていない) RUSTSEC-2026-0346 / RUSTSEC-2026-0347 / RUSTSEC-2026-0348 / RUSTSEC-2026-0349 が 0.23.45 を対象にしており、cargo-deny の advisories の検査が失敗していた

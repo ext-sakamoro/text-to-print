@@ -1,0 +1,1 @@
+subtract(cylinder(50.0, 2.5), polar_repeat(12, translate(36.0, 0.0, 0.0, cylinder(6.0, 4.0))))

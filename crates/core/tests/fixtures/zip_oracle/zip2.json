@@ -1,0 +1,728 @@
+{
+ "blend": [
+  {
+   "name": "[Content_Types].xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 375,
+   "sha256": "3abe745b54c9660c23346d7615561c1d231b398fe809e06239af54f755e524de",
+   "masked": 0
+  },
+  {
+   "name": "_rels/.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 686,
+   "sha256": "40f5f126ce3b5da868c99ec43fb7aca1b916d4390178e2b3be8e676618cee454",
+   "masked": 0
+  },
+  {
+   "name": "3D/3dmodel.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1125,
+   "sha256": "4aaab3c4842030a37a233d731c537849588352a951d657be54c1f1744da1ea7a",
+   "masked": 1
+  },
+  {
+   "name": "3D/_rels/3dmodel.model.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 275,
+   "sha256": "f5c7766e7b30c7beb09da75595eb63ef590e7d30002fd9c17721531de421a328",
+   "masked": 0
+  },
+  {
+   "name": "3D/Objects/object_1.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 4961348,
+   "sha256": "eee4b11349fa3e542bfe57930e952bc8d31d892952acc26230028ab9ed64be62",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/model_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1660,
+   "sha256": "54b74eb016744b2a43164f46345ed89f09ef12f5cf3a86c987fb1d14c227dc65",
+   "masked": 3
+  },
+  {
+   "name": "Metadata/slice_info.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 204,
+   "sha256": "10c5a34c9578c5065ae5ede83f11212320dc7be2ec0a80278052478d814d30fe",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/cut_information.xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 139,
+   "sha256": "f3d74f9df0e65dcb21f3392b309896fac8d83fd6abccf270b134ee25bb98287e",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 301,
+   "sha256": "aad1c9b951817457d85f269810b8e0f599546a96cf8b74b4c75e82af4e26281a",
+   "masked": 1
+  },
+  {
+   "name": "Metadata/filament_sequence.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 27,
+   "sha256": "8ce4379badaaa5aed9da0c30f865dff46957f2ad297da4f41d442b1742e94449",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/project_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 60606,
+   "sha256": "05e7f5bbc059994839e94fd85a8cd527393f001df230e49cb28c7de5598dc297",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 4593,
+   "sha256": "3c93dc95436d8dd7c5fadfaedb7e484785c71e89d11a9c30874ba31a3733647c",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1_small.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2046,
+   "sha256": "f3996d7d48e8a6cb466373ef35f397cccb88de7e45a564c159b1b0b38a8ea37b",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_no_light_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2471,
+   "sha256": "816dc10aef15a9fe12910b46d3a2c4c30dbb0fa4a0df478ccf0fec8dd13457bd",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/top_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1491,
+   "sha256": "2148dc894e1cb8ced2211d1ae12bed72b91ed73f3931c8d91ee417e04de62420",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/pick_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1259,
+   "sha256": "78a9286ad104b2bf7633b6fefc8a14eaa9a3b825d0b0e61a44719e47b9f5c37e",
+   "masked": 0
+  }
+ ],
+ "coaster": [
+  {
+   "name": "[Content_Types].xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 375,
+   "sha256": "3abe745b54c9660c23346d7615561c1d231b398fe809e06239af54f755e524de",
+   "masked": 0
+  },
+  {
+   "name": "_rels/.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 686,
+   "sha256": "40f5f126ce3b5da868c99ec43fb7aca1b916d4390178e2b3be8e676618cee454",
+   "masked": 0
+  },
+  {
+   "name": "3D/3dmodel.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1124,
+   "sha256": "3a92ef7041b285836cde4db9e86b50eab8f50b134b7a575988572570de9740cd",
+   "masked": 1
+  },
+  {
+   "name": "3D/_rels/3dmodel.model.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 275,
+   "sha256": "f5c7766e7b30c7beb09da75595eb63ef590e7d30002fd9c17721531de421a328",
+   "masked": 0
+  },
+  {
+   "name": "3D/Objects/object_1.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 11744846,
+   "sha256": "30b99964b3e0d118ff1f06adf5f6ed4f814f1d78037b6af4a3d5c2df6977fa0e",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/model_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1660,
+   "sha256": "adcd082a1b167ddd7bb9a84ccda7f50afb5c01f5faf89cf9d786fc2ba3d6e205",
+   "masked": 3
+  },
+  {
+   "name": "Metadata/slice_info.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 204,
+   "sha256": "10c5a34c9578c5065ae5ede83f11212320dc7be2ec0a80278052478d814d30fe",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/cut_information.xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 139,
+   "sha256": "f3d74f9df0e65dcb21f3392b309896fac8d83fd6abccf270b134ee25bb98287e",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 330,
+   "sha256": "d7da91f6a245ad2aecde0569084ec0639a370eee3cc0a1c4338837954e76b0ac",
+   "masked": 1
+  },
+  {
+   "name": "Metadata/filament_sequence.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 27,
+   "sha256": "8ce4379badaaa5aed9da0c30f865dff46957f2ad297da4f41d442b1742e94449",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/project_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 60606,
+   "sha256": "05e7f5bbc059994839e94fd85a8cd527393f001df230e49cb28c7de5598dc297",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 4593,
+   "sha256": "3c93dc95436d8dd7c5fadfaedb7e484785c71e89d11a9c30874ba31a3733647c",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1_small.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2046,
+   "sha256": "f3996d7d48e8a6cb466373ef35f397cccb88de7e45a564c159b1b0b38a8ea37b",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_no_light_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2471,
+   "sha256": "816dc10aef15a9fe12910b46d3a2c4c30dbb0fa4a0df478ccf0fec8dd13457bd",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/top_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1491,
+   "sha256": "2148dc894e1cb8ced2211d1ae12bed72b91ed73f3931c8d91ee417e04de62420",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/pick_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1259,
+   "sha256": "78a9286ad104b2bf7633b6fefc8a14eaa9a3b825d0b0e61a44719e47b9f5c37e",
+   "masked": 0
+  }
+ ],
+ "sphere": [
+  {
+   "name": "[Content_Types].xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 375,
+   "sha256": "3abe745b54c9660c23346d7615561c1d231b398fe809e06239af54f755e524de",
+   "masked": 0
+  },
+  {
+   "name": "_rels/.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 686,
+   "sha256": "40f5f126ce3b5da868c99ec43fb7aca1b916d4390178e2b3be8e676618cee454",
+   "masked": 0
+  },
+  {
+   "name": "3D/3dmodel.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1119,
+   "sha256": "166fb426e72082355df0f7500bf8cae6bc8b18140bde1ce8b0af269f4334c035",
+   "masked": 1
+  },
+  {
+   "name": "3D/_rels/3dmodel.model.rels",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 275,
+   "sha256": "f5c7766e7b30c7beb09da75595eb63ef590e7d30002fd9c17721531de421a328",
+   "masked": 0
+  },
+  {
+   "name": "3D/Objects/object_1.model",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 6122064,
+   "sha256": "23407ca3b9ddddc8b0d134083f3dbc61abfa604b5f02a55f7915497bd3082d7d",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/model_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1648,
+   "sha256": "42743fec6b3c7a6d3ea9a56b3f75b017a3fdbe3fe7d37ccc1e8b8394a7ee8faa",
+   "masked": 3
+  },
+  {
+   "name": "Metadata/slice_info.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 204,
+   "sha256": "10c5a34c9578c5065ae5ede83f11212320dc7be2ec0a80278052478d814d30fe",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/cut_information.xml",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 139,
+   "sha256": "f3d74f9df0e65dcb21f3392b309896fac8d83fd6abccf270b134ee25bb98287e",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 301,
+   "sha256": "31363dc3f0330c102632dae8df8f45fd699805fc1017a740a898823f4a5914cc",
+   "masked": 1
+  },
+  {
+   "name": "Metadata/filament_sequence.json",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 27,
+   "sha256": "8ce4379badaaa5aed9da0c30f865dff46957f2ad297da4f41d442b1742e94449",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/project_settings.config",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 60606,
+   "sha256": "05e7f5bbc059994839e94fd85a8cd527393f001df230e49cb28c7de5598dc297",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 4593,
+   "sha256": "3c93dc95436d8dd7c5fadfaedb7e484785c71e89d11a9c30874ba31a3733647c",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_1_small.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2046,
+   "sha256": "f3996d7d48e8a6cb466373ef35f397cccb88de7e45a564c159b1b0b38a8ea37b",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/plate_no_light_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 2471,
+   "sha256": "816dc10aef15a9fe12910b46d3a2c4c30dbb0fa4a0df478ccf0fec8dd13457bd",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/top_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1491,
+   "sha256": "2148dc894e1cb8ced2211d1ae12bed72b91ed73f3931c8d91ee417e04de62420",
+   "masked": 0
+  },
+  {
+   "name": "Metadata/pick_1.png",
+   "method": 8,
+   "modified": [
+    1980,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "size": 1259,
+   "sha256": "78a9286ad104b2bf7633b6fefc8a14eaa9a3b825d0b0e61a44719e47b9f5c37e",
+   "masked": 0
+  }
+ ]
+}
