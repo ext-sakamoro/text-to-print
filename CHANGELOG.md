@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Changed — ALICE-Bamboo / ALICE-Physics の pin を上げる (2026-10-17)
+
+- ALICE-Bamboo を 48b18b5 にした 3MF に埋める template (`scripts/bambu_h2d_template_project_settings.json`) が Windows の checkout で CRLF になり、Windows で build した 3MF の `Metadata/project_settings.config` だけ行数分 (1508 byte) 大きかった ALICE-Bamboo 側で `.gitattributes` (追跡する全 file を `eol=lf`、画像と 3MF は binary) と試験を足した版 (`tests/zip_oracle.rs` の windows-latest で検出)
+- ALICE-Physics を 4503f4f (浮動小数点の環境の検査を足した版、3.1.0 のまま) にした Cargo.lock は変わらない
+
 ### Changed — zip を 9 にする (2026-10-17)
 
 - workspace の `zip` を 2.x から 9 にした (2.x の版はすべて crates.io で yank されている) ALICE-Print 3e5f9c0 と ALICE-Bamboo 6baf3d5 も zip 9 で、各 entry の更新時刻を固定する (`.github/siblings.toml` の pin) Cargo.lock の zip は 9.0.4 の 1 版だけになった entry の名前を返す `name()` が `Result` を返すようになったので `manifest.rs` を合わせた
