@@ -199,7 +199,7 @@ pub fn embed_in_3mf(path: &Path, manifest: &AliceManifest) -> Result<()> {
     let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(archive.len() + 1);
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
-        let name = entry.name().to_string();
+        let name = entry.name()?.to_string();
         let mut data = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut data)?;
         entries.push((name, data));
@@ -210,8 +210,11 @@ pub fn embed_in_3mf(path: &Path, manifest: &AliceManifest) -> Result<()> {
     let out =
         std::fs::File::create(path).with_context(|| format!("recreate {}", path.display()))?;
     let mut writer = ZipWriter::new(std::io::BufWriter::new(out));
-    let options: SimpleFileOptions =
-        SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    // 各 entry の時刻は 1980-01-01 00:00:00 に固定する (zip の `time` feature が有効だと既定は
+    // 書き出した時刻になり、同じ program から別の archive ができる)
+    let options: SimpleFileOptions = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Stored)
+        .last_modified_time(zip::DateTime::default());
 
     for (name, mut data) in entries {
         if name == "3D/3dmodel.model" {
@@ -504,7 +507,7 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         let mut ar = ZipArchive::new(Cursor::new(bytes)).unwrap();
         let names: Vec<String> = (0..ar.len())
-            .map(|i| ar.by_index(i).unwrap().name().to_string())
+            .map(|i| ar.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
         assert!(names.contains(&"[Content_Types].xml".to_string()));
         assert!(names.contains(&"3D/3dmodel.model".to_string()));

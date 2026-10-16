@@ -38,6 +38,9 @@ path = "src/bin/ttp.rs"
 
 [dev-dependencies]
 tempfile = "3"
+# 試験の build だけ zip の `time` feature を有効にする: 有効だと entry の時刻の既定は書き出した時刻になるので、
+# 書き出す側が時刻を固定していなければ tests/zip_oracle.rs が落ちる
+zip = { workspace = true, features = ["time"] }
 
 # cargo-machete false-positive suppression
 # 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置

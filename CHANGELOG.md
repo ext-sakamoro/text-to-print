@@ -5,6 +5,11 @@
 
 ## [Unreleased]
 
+### Changed — zip を 9 にする (2026-10-17)
+
+- workspace の `zip` を 2.x から 9 にした (2.x の版はすべて crates.io で yank されている) ALICE-Print 3e5f9c0 と ALICE-Bamboo 6baf3d5 も zip 9 で、各 entry の更新時刻を固定する (`.github/siblings.toml` の pin) Cargo.lock の zip は 9.0.4 の 1 版だけになった entry の名前を返す `name()` が `Result` を返すようになったので `manifest.rs` を合わせた
+- `manifest::embed_in_3mf` は書き直す archive の各 entry の更新時刻を 1980-01-01 00:00:00 に固定する 今までは zip の既定に任せていて、zip の `time` feature が有効な build では書き出した時刻が入り、同じ program から別の archive ができた 試験の build は `crates/core` の dev-dependency で `time` を有効にするので、時刻を固定しなければ `tests/zip_oracle.rs` が落ちる (text-to-print 側と ALICE-Bamboo 側の固定をそれぞれ外すと、どちらも落ちることを確かめた) 通常の build の zip の feature は変わらない
+
 ### Changed — ALICE-LOL 0.4.2 / ALICE-Physics 3.1.0 / ALICE-SDF 6.1.0 / ALICE-Zip 0.10.0 / ALICE-Bamboo に追従する (2026-10-17)
 
 - `.github/siblings.toml` の pin と Cargo.lock を ALICE-LOL 0.4.2 / ALICE-Physics 3.1.0 / ALICE-SDF 6.1.0 / ALICE-Zip 0.10.0 / ALICE-Bamboo 9ff48ee にした ALICE-Bamboo 9ff48ee がこの 4 つの版を要求するので 1 度に上げる (どれか 1 つだけでは依存が解決しない) text-to-print 側の code の変更は無い
