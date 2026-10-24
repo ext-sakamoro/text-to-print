@@ -1,0 +1,104 @@
+name: "ALICE sibling checkout (pinned)"
+description: |
+  Check out the ALICE-* sibling repos that text-to-print reads through
+  `../ALICE-Xxx` path dependencies, each at the exact commit listed in
+  `.github/siblings.toml`. The caller must have checked out this repo with
+  `path: text-to-print` so the siblings land next to it.
+
+  The list of checkout steps below must match the `[siblings]` table
+  (`scripts/ci_sibling_checkout_check.py` fails on any difference).
+
+inputs:
+  bamboo-key:
+    description: "Read-only deploy key of ALICE-Bamboo (private)"
+    required: true
+  print-key:
+    description: "Read-only deploy key of ALICE-Print (private)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # pin は検査器 (scripts/ci_sibling_checkout_check.py) と同じ parser で読む
+    # manifest を 2 通りに解釈しないため (読めない綴りは検査器が fail にする)
+    - name: Set up Python (manifest reader)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Read sibling pins
+      id: pins
+      shell: bash
+      run: |
+        set -euo pipefail
+        python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --emit-pins >> "$GITHUB_OUTPUT"
+    - name: Checkout ALICE-Bamboo
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Bamboo
+        path: ALICE-Bamboo
+        ref: ${{ steps.pins.outputs['ALICE-Bamboo'] }}
+        # the key is written under the runner's temp directory for this step only
+        ssh-key: ${{ inputs.bamboo-key }}
+        persist-credentials: false
+    - name: Checkout ALICE-Crypto
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Crypto
+        path: ALICE-Crypto
+        ref: ${{ steps.pins.outputs['ALICE-Crypto'] }}
+    - name: Checkout ALICE-LLM
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-LLM
+        path: ALICE-LLM
+        ref: ${{ steps.pins.outputs['ALICE-LLM'] }}
+    - name: Checkout ALICE-LOL
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-LOL
+        path: ALICE-LOL
+        ref: ${{ steps.pins.outputs['ALICE-LOL'] }}
+    - name: Checkout ALICE-Physics
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Physics
+        path: ALICE-Physics
+        ref: ${{ steps.pins.outputs['ALICE-Physics'] }}
+    - name: Checkout ALICE-Print
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Print
+        path: ALICE-Print
+        ref: ${{ steps.pins.outputs['ALICE-Print'] }}
+        # the key is written under the runner's temp directory for this step only
+        ssh-key: ${{ inputs.print-key }}
+        persist-credentials: false
+    - name: Checkout ALICE-SDF
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-SDF
+        path: ALICE-SDF
+        ref: ${{ steps.pins.outputs['ALICE-SDF'] }}
+    - name: Checkout ALICE-Serial
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Serial
+        path: ALICE-Serial
+        ref: ${{ steps.pins.outputs['ALICE-Serial'] }}
+    - name: Checkout ALICE-Sign
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Sign
+        path: ALICE-Sign
+        ref: ${{ steps.pins.outputs['ALICE-Sign'] }}
+    - name: Checkout ALICE-Zip
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Zip
+        path: ALICE-Zip
+        ref: ${{ steps.pins.outputs['ALICE-Zip'] }}
+    # 全 job で、checkout された HEAD が固定 commit と一致することを確かめる
+    # (ref が空で default branch を取った等は ここで fail する)
+    - name: Verify sibling HEADs
+      shell: bash
+      run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only

@@ -1,0 +1,249 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Security audit (#40): scan Cargo.lock against the RustSec advisory
+  # database Runs quickly (<20s) — pure lockfile audit, no compile
+  #
+  # Uses `cargo audit` directly instead of `rustsec/audit-check@v2` so
+  # the ignore list in `.cargo/audit.toml` (with per-entry rationale)
+  # is respected identically to local `cargo audit` invocations Every
+  # entry there must document why the vulnerable dep is unavoidable
+  # (typically pinned by libp2p 0.54 / wgpu / ALICE-* upstreams)
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit (honours .cargo/audit.toml ignore list)
+        run: cargo audit
+
+  # clippy / test / doc need the six ALICE-* sibling repos side-by-side
+  # (matches the workspace path deps) Public repos are cloned
+  # unauthenticated; the private ALICE-Bamboo and ALICE-Print are read with
+  # their own read-only deploy keys (secrets `ALICE_DEPKEY_BAMBOO` /
+  # `ALICE_DEPKEY_PRINT`), each used only by its own checkout step
+  # Without a key that checkout step fails and the job is red
+  clippy-test-doc:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      - name: Checkout text-to-print
+        uses: actions/checkout@v5
+        with:
+          path: text-to-print
+
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # sibling の固定 commit (.github/siblings.toml) と、cargo が実際に読む sibling の
+      # 集合 / checkout された HEAD / 各 workflow の checkout を突き合わせる
+      # cargo metadata が解決しない組 (版要求の不一致) もここで落ちる
+      - name: sibling pins (検査器の試験 + 固定 commit と cargo の解決の突合)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 scripts/ci_sibling_checkout_check.py --self-test
+          python3 scripts/ci_sibling_checkout_check.py --verify-heads
+
+      # peer-to-peer 層 (libp2p) を戻さない 共有は HTTPS の Gallery だけ
+      - name: no peer-to-peer layer (libp2p が lock / manifest / source に無い)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 scripts/no_p2p_guard.py --self-test
+          python3 scripts/no_p2p_guard.py
+
+      # Linux: keyring crate は libdbus-sys 経由で libdbus-1-dev を要求
+      # (Secret Service backend) Windows/macOS は不要
+      - name: Install libdbus-1-dev (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            text-to-print
+            ALICE-LLM
+
+      # fmt は本 repo の package だけを見る (`--all` は path 依存の sibling 全体、
+      # 1800 file 超を 1 回の rustfmt に渡し、Windows で引数長の上限
+      # (os error 206) に当たる sibling の fmt は各 repo の CI が見る)
+      # 検査した file の集合が workspace member の追跡済み .rs 全部と一致することを
+      # 併せて assert する (member の脱落・0 件は fail、件数を log に出す)
+      - name: cargo fmt --check (本 repo の全 .rs を検査したことの確認つき)
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          "$PY" scripts/fmt_scope_check.py --self-test
+          "$PY" scripts/fmt_scope_check.py
+
+      - name: cargo clippy (workspace, all targets)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      # `--lib` だけだと crates/core/tests/e2e_pipeline.rs (text → LOL → mesh
+      # → 3MF の e2e) と crates/network/tests/share_schema.rs が compile され
+      # るだけで一度も走らない (2026-09-27 発覚)
+      - name: cargo test (workspace, all targets)
+        run: cargo test --locked --workspace --all-targets
+
+      # 同梱の sidecar (alice-llm-server) を固定 commit の ALICE-LLM から build し、app 役の
+      # process を SIGTERM / SIGKILL で止めた時に sidecar の process と port が残らないこと、
+      # 待ち受けが loopback であることを実 binary で確かめる (model は FIFO、読込で止まる)
+      - name: sidecar lifecycle (real alice-llm-server)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: scripts/sidecar_lifecycle_test.sh
+
+      - name: cargo doc (no deps)
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  # wasm32 build check for `crates/worker` (Cloudflare Workers upload backend)
+  #
+  # `crates/worker` は workspace から除外されている (wasm32-only + edition 2021)
+  # ため main clippy-test-doc job では検証されない この job が無いと deploy 直前
+  # まで壊れが surface しないので、fast wasm build check だけ実施する
+  #
+  # Ubuntu 単体で十分 (wasm target は OS 非依存) `wrangler deploy` は本 job で
+  # 実行せず、check pass 後に手動で trigger する運用
+  # workflow YAML 自体の検証 (canonical: ALICE-LOL / ALICE-SDF)
+  #
+  # 2026-09-28 追加: `actions/upload-artifact@v4` 等の node20 runtime action が
+  # 8 箇所残っていたのを push まで検知できなかった (GitHub の node20 削除は
+  # 2026-09-23) actionlint は deprecated runtime を error にするので、次からは
+  # push 時点で落ちる
+  actionlint:
+    name: actionlint (workflow YAML 検証)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          fail_level: error
+          reporter: github-check
+      # scripts/changed_paths.py decides whether the path-filtered workflows run (its own tests),
+      # then the trigger lint: no on.push paths off main, each pattern file equals its workflow's
+      # pull_request paths, the gate job needs every job
+      - name: Changed paths tests + trigger lint
+        run: |
+          python3 scripts/test_changed_paths.py
+          python3 scripts/changed_paths.py sync
+
+  # 配線ガード: 実装したが production から呼ばれていない pub item と、理由の無い
+  # allow(dead_code) の新規追加を止める (既存分は scripts/wiring-baseline.txt)
+  # 検査器自身が OS 依存で空振り / 異常終了しないよう 3 OS で動かす
+  # (検査対象 0 件は empty_scan で fail する)
+  # 限界: workspace から exclude された crates/worker の pub item は unwired の走査対象外
+  wiring-guard:
+    name: Wiring guard (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: wiring-guard oracle (検査器自身の試験)
+        run: python scripts/test_wiring_guard.py
+      - name: wiring-guard (新規の未配線 / 理由の無い dead_code が無い)
+        run: python scripts/wiring_guard.py
+      - name: workflow-timeouts (全 job に timeout-minutes がある、検査器の試験を含む)
+        run: |
+          python scripts/test_workflow_timeouts.py
+          python scripts/workflow_timeouts.py
+      # 外部連携の名前は、製品が必要とする (file, token) の許可リストの中だけに置く
+      - name: vocab-lint (検査器の試験 + 許可リスト外の token が無い)
+        run: |
+          python scripts/vocab_lint.py --self-test
+          python scripts/vocab_lint.py
+      # 画像は sRGB で、撮影・表示の環境の情報 (表示の profile、Exif、XMP) を持たない
+      - name: image-metadata (検査器の試験 + 追跡している PNG / JPEG に metadata が無い)
+        # bash: Windows の既定 (pwsh) では複数行の run の終了 code が最後の行のものになり、試験の失敗が隠れる
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/test_image_metadata_check.py
+          python scripts/image_metadata_check.py
+
+  check-wasm-worker:
+    name: check-wasm (crates/worker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout text-to-print
+        uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      # the Worker signs through crates/gallery-sign, which reads ALICE-Sign and
+      # ALICE-Serial as path dependencies
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print/crates/worker
+      - name: cargo check --target wasm32-unknown-unknown
+        working-directory: text-to-print/crates/worker
+        run: cargo check --locked --target wasm32-unknown-unknown --release
+      # the crate's unit tests (signature, validation, rate limit) run on the host;
+      # the gallery signature tests must be among them
+      - name: cargo test (host)
+        working-directory: text-to-print/crates/worker
+        run: |
+          set -o pipefail
+          cargo test --locked 2>&1 | tee test.log
+          grep -q "signature_scope_tests::a_changed_nickname_is_refused ... ok" test.log
+          grep -q "signature_scope_tests::bytes_moved_between_the_source_and_the_date_are_refused ... ok" test.log
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only

@@ -1,0 +1,20 @@
+{
+  "name": "text-to-print",
+  "owner": { "name": "ext-sakamoro" },
+  "interface": { "displayName": "text-to-print" },
+  "metadata": { "description": "Local text-to-3D-print skills (LOL DSL, DfAM check, G-code validation)." },
+  "description": "Local text-to-3D-print skills (LOL DSL, DfAM check, G-code validation).",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "text-to-print",
+      "source": "./",
+      "description": "Natural language → LOL DSL → DfAM-checked 3MF / STEP / G-code, fully local.",
+      "version": "0.1.0",
+      "author": { "name": "Moroya Sakamoto" },
+      "repository": "https://github.com/ext-sakamoro/text-to-print",
+      "category": "productivity",
+      "tags": ["3d-printing", "sdf", "dfam", "gcode"]
+    }
+  ]
+}

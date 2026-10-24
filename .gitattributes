@@ -1,0 +1,7 @@
+# system_prompt.md は byte 長 guardrail test (system_prompt_size_within_igpu_prefill_budget、
+# 4500 byte cap) を持つ Windows checkout の CRLF 変換で LF ×N byte 増を防ぐため
+# 明示 LF 強制 include_str! で binary 埋込時の byte 数を全 platform で一致させる
+crates/llm/src/system_prompt.md text eol=lf
+
+# LOL GBNF は grammar parser (Fsm::compile) が LF 前提でトークナイズするため明示
+crates/llm/src/lol.gbnf text eol=lf

@@ -1,0 +1,12 @@
+{
+  "name": "text-to-print",
+  "version": "0.1.0",
+  "description": "Natural language → LOL DSL → DfAM-checked 3MF / STEP / G-code, fully local.",
+  "author": {
+    "name": "Moroya Sakamoto",
+    "url": "https://github.com/ext-sakamoro"
+  },
+  "repository": "https://github.com/ext-sakamoro/text-to-print",
+  "keywords": ["3d-printing", "sdf", "lol-dsl", "dfam", "gcode", "bambu", "skills"],
+  "skills": "./skills/"
+}

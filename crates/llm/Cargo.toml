@@ -1,0 +1,45 @@
+[package]
+name = "text-to-print-llm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Stage 3-C: `gguf` feature drives EmbeddedBackend GGUF parsing + tokenizer
+# `parallel` enables rayon-backed matmul (~2× on desktop CPUs during prefill)
+# `grammar` (Stage 3-C.11) exposes GBNF parser + Fsm + mask_logits_by_grammar
+# so EmbeddedBackend can constrain LLM output to a formal grammar (LOL DSL)
+# `gpu` (Stage 3-C.12) pulls in wgpu + GpuEngine + GpuModel for hardware-
+# accelerated inference (Metal on macOS, Vulkan / DX12 elsewhere)
+alice-llm = { workspace = true, features = ["gguf", "parallel", "grammar", "gpu"] }
+# 2026-09-14: LOL grammar は alice-bamboo 経由の re-export (alice_lol::LOL_GBNF)
+# を参照 (以前は crates/llm/src/lol.gbnf の手動 copy で 199 行 drift した)
+alice-bamboo = { workspace = true }
+# Stage 3-C.7: mmap the GGUF file into the process address space so the
+# ~2.4 GB Qwen 3.5-4B / ~7 GB Bonsai payload doesn't inflate the resident
+# working set at load time Kernel pages in on demand during inference
+memmap2 = "0.9"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true, features = ["process", "rt-multi-thread", "fs", "io-util"] }
+# model files are checked against their pinned SHA-256 as they download
+alice-crypto = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio-stream = "0.1"
+# 2026-09-12: prompt.rs::normalize_units() で cm/m/inch → mm 変換 regex 用
+# (LLM に unit conversion を任せると 2-3B iGPU model で「5cm」→「5mm」と誤って解釈する例があった)
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"
+# a local HTTP server for the download tests
+tokio = { workspace = true, features = ["net", "macros", "io-util"] }
+
+# cargo-machete false-positive suppression
+# 現状 unused 検出 dep は将来使用予定 or feature-gated planning のため残置
+[package.metadata.cargo-machete]
+ignored = ["thiserror"]

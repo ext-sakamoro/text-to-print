@@ -1,0 +1,72 @@
+name: Semver checks
+
+# cargo-semver-checks over the workspace lib crates (text-to-print-core / -llm / -network),
+# compared with the previous commit; informational: a finding is a warning annotation.
+#
+# Runs only when started by hand (workflow_dispatch): no push, pull request or schedule
+# starts it, and it has no changes job and no gate. (It was a job in security-audit.yml.)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: "5"
+  CARGO_HTTP_MULTIPLEXING: "false"
+
+jobs:
+  semver-checks:
+    name: cargo-semver-checks (API compat、informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # text-to-print は private (publish=false 想定)、git baseline で比較
+    # informational: the step may fail and reports a warning; the job succeeds
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      # Real siblings (同 layout)
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+          fetch-depth: 0
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      # version 明示 pin: `@latest` は rustc MSRV を追いかけるので toolchain と
+      # 一緒に月次で bump する (ALICE-LOL 2026-09-14 事案)
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks@0.50.0
+
+      # workspace lib crate (text-to-print-core / -llm / -network) 対象
+      # publish=false crate は自動 skip
+      - name: Run cargo semver-checks
+        id: semver
+        continue-on-error: true
+        run: |
+          cargo semver-checks check-release \
+            --workspace \
+            --baseline-rev "HEAD~1"
+      - name: Report a semver-checks finding
+        if: steps.semver.outcome == 'failure'
+        run: echo "::warning title=semver-checks::cargo semver-checks reported a change or could not run; see the Run cargo semver-checks step"
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only

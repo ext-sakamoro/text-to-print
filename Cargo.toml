@@ -1,0 +1,88 @@
+[workspace]
+members = [
+    "crates/app",
+    "crates/core",
+    "crates/llm",
+    "crates/network",
+    "crates/gallery-sign",
+]
+# `crates/worker` is intentionally excluded from the default workspace so that
+# `cargo test`, `cargo clippy`, and desktop release builds don't try to
+# compile a wasm32-only crate. Build it with:
+#   cd crates/worker && wrangler dev      (invokes worker-build → wasm32)
+# or `cargo build --manifest-path crates/worker/Cargo.toml --target wasm32-unknown-unknown`
+exclude = ["crates/worker"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0-beta.4.1"
+edition = "2024"
+license = "LicenseRef-Proprietary"
+publish = false
+
+[workspace.dependencies]
+# ALICE ecosystem
+# Stage 4 (2026-08-01): alice-lol was removed as a direct dep — text-to-print
+# now consumes parse_lol / print_export / to_wgsl through alice-bamboo
+# re-exports (alice-bamboo has `wgsl` feature default-on so `to_wgsl` is
+# exposed uniformly)
+alice-sdf = { path = "../ALICE-SDF" }
+alice-llm = { path = "../ALICE-LLM", default-features = false }
+alice-bamboo = { path = "../ALICE-Bamboo" }
+alice-physics = { path = "../ALICE-Physics/crates/alice-physics" }
+# SHA-256 of downloaded model files (alice_crypto::sha256)
+alice-crypto = { path = "../ALICE-Crypto" }
+
+# GUI
+eframe = { version = "0.31", features = ["wgpu"] }
+egui = "0.31"
+
+# async
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# crypto
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+
+# logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# utils
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "2"
+directories = "6"
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+# 0.17 は Linux の portal を libdbus で直接呼ぶ (zbus / ashpd を引かない)
+# wayland feature は親 window の指定にしか使わないので外す (libwayland の link を避ける)
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+
+# BYO LLM (2026-08-23): OS Keychain integration for storing API keys
+# outside on-disk config so text-to-print never persists secrets to
+# ~/Library/Application Support / AppData Roaming
+# - macOS: Keychain Services
+# - Windows: Credential Manager
+# - Linux: Secret Service (libsecret) with `sync-secret-service` feature
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# internal
+text-to-print-core = { path = "crates/core" }
+text-to-print-llm = { path = "crates/llm" }
+text-to-print-network = { path = "crates/network" }
+text-to-print-gallery-sign = { path = "crates/gallery-sign" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

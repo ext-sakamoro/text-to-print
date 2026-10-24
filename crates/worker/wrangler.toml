@@ -1,0 +1,71 @@
+name = "text-to-print"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-01-01"
+account_id = "c2396e55b348a84b4d84096790d23b28"
+
+[build]
+# worker-build version は worker crate version と一致 (2026-08-21 実測):
+# worker 0.8 (Cargo.toml) には worker-build 0.8 が必要 (共通 workers-rs 0.8 リリース)
+# worker-build 0.8 が bundle する wasm-bindgen 0.2.126 と project 側 wasm-bindgen 一致
+command = "cargo install --locked worker-build@^0.8 2>/dev/null; worker-build --release"
+
+# Custom domain wiring is done via Cloudflare dashboard once the Worker is
+# deployed. Suggested route (owner must map after first deploy):
+#   text-to-print.alicelaw.net/api/* -> text-to-print worker
+# alicelaw.net is already Cloudflare-managed so the subdomain add is trivial.
+
+# D1 binding for SharePayload upload endpoint (POST /api/share)
+# Created 2026-08-21 via `wrangler d1 create text-to-print-shares` (APAC region)
+[[d1_databases]]
+binding = "SHARES_DB"
+database_name = "text-to-print-shares"
+database_id = "06b65563-a027-47a8-bdf9-4f4556206b11"
+
+# Gallery Phase 3 (2026-08-26): Cloudflare-relayed Gallery (list / publish /
+# delete) Endpoints `/api/gallery/{list,publish,:id}` in `gallery_handler.rs`
+# Provisioned 2026-08-28 via `wrangler d1 create text-to-print-gallery` (APAC region)
+[[d1_databases]]
+binding = "GALLERY_DB"
+database_name = "text-to-print-gallery"
+database_id = "e6d81f9a-717f-4c2a-a544-37cecf73c260"
+
+# KV binding for archetype preset library (Sprint X.1、Layer 1 sync)
+# Created 2026-08-21 via `wrangler kv namespace create PRESETS_KV`.
+# Seed / update:
+#   wrangler kv key put --binding=PRESETS_KV PRESETS_V1 --path src/default_presets.json
+# `GET /api/presets` reads from this KV; falls back to bundled `default_presets.json`
+# when KV empty or unset (β 初期でも app が動く保険)
+[[kv_namespaces]]
+binding = "PRESETS_KV"
+id = "7ea49e07f6204a0d84739d2bf35db3a7"
+
+[vars]
+# Salt for hashing client IP so raw IPs never touch storage (privacy).
+# Override in production via `wrangler secret put IP_HASH_SALT`.
+IP_HASH_SALT = "dev-salt-change-in-production"
+
+# Rate-limit tuning — see src/rate_limit.rs. Free-tier defaults suit a solo
+# desktop app; bump after real traffic data.
+PER_UUID_HOURLY = "10"
+PER_IP_HOURLY = "100"
+
+# ── Stripe integration (Phase S1) ───────────────────────────────────
+# Non-secret vars only. All 5 secrets below go through
+# `wrangler secret put NAME` after `wrangler login`. See
+# `docs/STRIPE_SETUP.md` for the full setup dance
+#
+#   STRIPE_SECRET_KEY         sk_test_... (Test) / sk_live_... (Live)
+#   STRIPE_WEBHOOK_SECRET     whsec_...  (from `stripe listen` or dashboard)
+#   LICENSE_SIGNING_KEY_HEX   64-char hex of Ed25519 secret (`gen-license-key`)
+#   RESEND_API_KEY            re_... (optional; if unset, email is logged only)
+#   PRICE_ID_PRO_MONTHLY      price_... (Pro monthly subscription)
+#   PRICE_ID_PRO_YEARLY       price_... (optional; Pro yearly subscription)
+#
+# Public / non-secret defaults — override per env by dropping in the
+# appropriate [env.production.vars] block once you have the domain
+
+# `Metadata/plate_no_light_1.png` 用 landing page が無くても 200 OK は返す
+# 想定 (静的 asset 追加は release blocker ではない)
+LICENSE_FROM_EMAIL = "no-reply@text-to-print.alicelaw.net"
+CHECKOUT_SUCCESS_URL = "https://text-to-print.alicelaw.net/checkout/success"
+CHECKOUT_CANCEL_URL = "https://text-to-print.alicelaw.net/checkout/cancel"

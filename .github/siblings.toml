@@ -1,0 +1,36 @@
+# ALICE-* sibling の固定 commit
+#
+# text-to-print は ALICE-* を `../ALICE-Xxx` の path 依存で引く CI は以前 sibling の
+# default branch (main) をそのまま checkout していたため、sibling 側の版の切り替え
+# (例: alice-zip 0.10 と、それをまだ 0.9 で要求する alice-lol が同時に main に並ぶ
+# 期間) に text-to-print の CI が巻き込まれ、再現もできなかった
+#
+# 本 file の commit をそのまま checkout する (`.github/actions/alice-siblings`)
+#   - 載せる sibling の集合は `cargo metadata` の解決結果と一致させる
+#     (`scripts/ci_sibling_checkout_check.py` が過不足を fail にする)
+#   - 更新は 1 本ずつでなく集合ごと動かす: 全 commit を差し替え → `cargo metadata`
+#     が解決すること → build / test → `Cargo.lock` を同じ commit で更新 →
+#     出力 mesh の hash の変化を記録する
+#   - 値は 40 桁の commit SHA (branch 名や短縮 SHA は不可)
+
+[meta]
+updated = "2026-10-25"
+reason = "ALICE-Print を MQTT を alice-mqtt に替えた commit 14f2d74 に移す ほかの sibling は前回と同じ"
+
+[siblings]
+ALICE-Bamboo = "c7d45a9e99747f617b0aa9b608b3fa4d7ffced34"
+ALICE-Crypto = "4ab0f0e6c1cba949c949add9d5aedc98e080a4be"
+ALICE-LLM = "3274a66f7ac17cc74693390e2a6ff06d5ed47758"
+ALICE-LOL = "bf2aeb521a97e50a8bcecf054e2ed3c8d9b2534e"
+ALICE-Physics = "d3f56c03bad5507338cd88bedf78fd2ae62c1a68"
+ALICE-Print = "14f2d74c9a26c52b55630fdf636ea62ad07b94e1"
+ALICE-SDF = "d573ac4f84b4fee43ee6b54a42962da1fd780ee9"
+ALICE-Serial = "16b34ebcaf3a195fe6500defb4d1e6002cb3d09d"
+ALICE-Sign = "86f188acc76fb48f819d080e70c0f6f6b0ca9d39"
+ALICE-Zip = "a59ba9c0bd511f036180a6f4092c4b99a286567c"
+
+# 非公開の sibling と、その read-only の deploy key を受ける composite action の input
+# (secret は ALICE_DEPKEY_<名前>、ほかの sibling の checkout は資格情報を受けない)
+[private]
+ALICE-Bamboo = "bamboo-key"
+ALICE-Print = "print-key"

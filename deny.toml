@@ -1,0 +1,130 @@
+# cargo-deny 設定 (v0.14+ schema)
+# ALICE-* 共通の CI 構成に従う
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+version = 2
+yanked = "deny"
+# text-to-print 側 CVE ignore の canonical は .cargo/audit.toml (ci.yml audit job 用)
+# 本 deny.toml と同期を保つ (両方 update する時は忘れず片側に反映)
+ignore = [
+    # zbus 4.4 (eframe 0.31 → egui-winit → accesskit_unix → atspi、Linux の読み上げ) 経由 (.cargo/audit.toml と同期)
+    "RUSTSEC-2026-0194",  # quick-xml v0.30 (zbus_xml 4.0)
+    "RUSTSEC-2026-0195",  # quick-xml DoS v0.30 (zbus_xml 4.0)
+    "RUSTSEC-2024-0436",  # paste unmaintained (pyo3-macros transitive)
+    "RUSTSEC-2026-0192",  # ttf-parser unmaintained (egui transitive)
+    # ALICE-* sibling transitive (.cargo/audit.toml と同期、2026-09-16)
+    "RUSTSEC-2025-0141",  # bincode 1.3 unmaintained (via alice-sdf → alice-bamboo、SDF / Physics deny.toml と同根拠、wire format 互換のため据置)
+    # 期限付きの保留 (scripts/advisory_holds.toml、scripts/advisory_hold_guard.py が版・経路・期限を照合する)
+    { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+    "MPL-2.0",
+    "OpenSSL",
+    # font licenses (egui/epaint transitive)
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "NCSA",
+    # webpki-roots (Mozilla CA cert bundle、Cloudflare Worker / rustls transitive)
+    "CDLA-Permissive-2.0",
+]
+
+# text-to-print 本体 (publish = false、LicenseRef-Proprietary) は公開しない
+# crate なので license 検査の対象から外す
+[licenses.private]
+ignore = true
+
+# ALICE ecosystem sibling crates (同一 author、path dep / crates.io dep)
+# 本体は proprietary の product として AGPL / proprietary sibling を link する
+# (owner が sibling の licensor なので Commercial の分岐を使う) 全外部依存を
+# 許容するのでなく、この 4 crate に限定した exception として明示
+[[licenses.exceptions]]
+name = "alice-physics"
+allow = ["AGPL-3.0-or-later"]
+
+# alice-physics 4.0 is a facade over alice-physics-core; both declare
+# AGPL-3.0-or-later OR LicenseRef-Commercial, so only -or-later is allowed
+[[licenses.exceptions]]
+name = "alice-physics-core"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+name = "alice-crypto"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-llm"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+name = "alice-bamboo"
+allow = ["AGPL-3.0-only"]
+
+[[licenses.exceptions]]
+name = "alice-print"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-serial"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-sign"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.clarify]]
+name = "ring"
+version = "*"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+version = "*"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]

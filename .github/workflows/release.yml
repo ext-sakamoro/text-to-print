@@ -1,0 +1,465 @@
+name: Release
+
+# Stage 10 T10.2 + T10.3 GitHub Actions release workflow with macOS
+# code signing + notarization Tag-triggered on `v*` (SemVer); manual
+# dispatch also supported for dry runs
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Skip GitHub Release upload (build/sign/notarize only)"
+        required: false
+        default: "false"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+            bin_name: text-to-print
+            sidecar_bin: alice-llm-server
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+            bin_name: text-to-print
+            sidecar_bin: alice-llm-server
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            bin_name: text-to-print
+            sidecar_bin: alice-llm-server
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            bin_name: text-to-print.exe
+            sidecar_bin: alice-llm-server.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # macOS 署名 (Developer ID Application) と notarize は secret 設定済み時のみ実行
+    # β 期間中は無署名 tar.gz を許容 (user は「右クリック → 開く」で warning bypass 可)
+    # Apple Developer Program 加入 + secret 登録後は自動で signed build に切替
+    env:
+      HAS_MACOS_SIGNING: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_B64 != '' && secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD != '' }}
+      HAS_MACOS_NOTARIZE: ${{ secrets.APPLE_P8_B64 != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' }}
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      - name: Checkout text-to-print
+        uses: actions/checkout@v5
+        with:
+          path: text-to-print
+
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      # keyring crate (BYO LLM API key の OS Keychain 保管) は Linux で
+      # libdbus-sys 経由で libdbus-1-dev を build-time に要求 ci.yml では
+      # c8a9730 (2026-08-23) で fix 済だったが release.yml に未反映で
+      # v0.1.0-beta.2 build fail した (2026-09-07)
+      - name: Install libdbus-1-dev (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+
+      - name: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }} --bin text-to-print
+
+      # === Sidecar bundling (Stage 3-A) ===
+      # Build `alice-llm-server` (OpenAI-compatible HTTP endpoint) and stage
+      # it next to the desktop binary Bundled layout lets sidecar.rs resolve
+      # the binary via `resolve_bin_path` -> exe-neighbor lookup without any
+      # user-side install (`crates/llm/src/sidecar.rs`)
+      #
+      # ALICE-LLM/rust-toolchain.toml で 1.92.0 pin されているため、外側の
+      # dtolnay/rust-toolchain@stable で入れた target は stable 側にしか反映
+      # されない pinned 1.92.0 側にも明示追加 (cross-compile x86_64-apple-darwin)
+      # 既 install 済み target なら rustup は no-op なので全 4 job で idempotent
+      - name: Ensure ALICE-LLM toolchain has target
+        shell: bash
+        working-directory: ALICE-LLM
+        run: rustup target add ${{ matrix.target }}
+      - name: Build alice-llm-server sidecar
+        shell: bash
+        working-directory: ALICE-LLM
+        run: cargo build --release --features server --bin alice-llm-server --target ${{ matrix.target }}
+
+      - name: Stage binary artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
+          # Stage sidecar next to desktop binary (bundled layout)
+          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "dist/${{ matrix.sidecar_bin }}"
+          # Mirror both binaries into target/release/ so cargo-deb / cargo-wix
+          # (which read from the profile dir without a --target flag) pick
+          # them up uniformly on every runner
+          mkdir -p target/release
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} target/release/${{ matrix.bin_name }}
+          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "target/release/${{ matrix.sidecar_bin }}"
+
+      # === macOS code signing + notarize (T10.3) ===
+      # Requires the following secrets to be set at the repository level:
+      #   DEVELOPER_ID_APPLICATION_CERT_B64  – base64 of the `.p12`
+      #   DEVELOPER_ID_APPLICATION_CERT_PASSWORD  – password for the `.p12`
+      #   APPLE_P8_B64  – base64 of the App Store Connect `.p8`
+      #   APPLE_KEY_ID  – e.g. `4P2YQS5RAT`
+      #   APPLE_ISSUER_ID  – UUID
+      # When any secret is missing the sign / notarize steps abort with a
+      # descriptive error This is the intentional signal that the workflow
+      # needs one-time DevOps setup (see `docs/RELEASE.md`)
+      - name: Import Developer ID Application certificate (macOS)
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_SIGNING == 'true'
+        env:
+          CERT_B64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_B64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -z "$CERT_B64" ] || [ -z "$CERT_PASSWORD" ]; then
+            echo "ERROR: DEVELOPER_ID_APPLICATION_CERT_B64 or _PASSWORD not set" >&2
+            echo "See docs/RELEASE.md §Secrets" >&2
+            exit 1
+          fi
+          echo "$CERT_B64" | base64 --decode > /tmp/developer-id.p12
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import /tmp/developer-id.p12 \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          # shellcheck disable=SC2046 disable=SC2016
+          # Appending existing user keychains to the search list requires
+          # word-splitting on the substituted output; each entry is a
+          # quoted path that we strip and pass as separate args
+          EXISTING_KEYCHAINS=$(security list-keychains -d user | tr -d '"' | xargs)
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          rm -f /tmp/developer-id.p12
+
+      - name: codesign binary (macOS)
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_SIGNING == 'true'
+        shell: bash
+        run: |
+          IDENTITY=$(security find-identity -v -p codesigning "$RUNNER_TEMP/build.keychain-db" \
+            | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+          if [ -z "$IDENTITY" ]; then
+            echo "ERROR: Developer ID Application identity not found in keychain" >&2
+            exit 1
+          fi
+          codesign --force --deep --timestamp --options runtime \
+            --sign "$IDENTITY" \
+            dist/${{ matrix.bin_name }}
+          codesign --verify --verbose dist/${{ matrix.bin_name }}
+          # Bundled sidecar must also be signed for notarization to succeed
+          codesign --force --deep --timestamp --options runtime \
+            --sign "$IDENTITY" \
+            dist/${{ matrix.sidecar_bin }}
+          codesign --verify --verbose dist/${{ matrix.sidecar_bin }}
+
+      - name: Package archive (macOS/Linux)
+        if: matrix.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          cd dist
+          tar czf ../text-to-print-${{ matrix.target }}.tar.gz ${{ matrix.bin_name }} ${{ matrix.sidecar_bin }}
+
+      - name: Package archive (Windows)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/${{ matrix.bin_name }},dist/${{ matrix.sidecar_bin }} -DestinationPath text-to-print-${{ matrix.target }}.zip
+
+      # === Windows .msi (#33 T10.4) via cargo-wix (WiX Toolset v3 wrapper) ===
+      # `[package.metadata.wix]` in crates/app/Cargo.toml drives per-arch
+      # `.msi` generation The `wix/main.wxs` template (checked in under
+      # crates/app/wix/) bundles both text-to-print.exe and the Stage 3-B
+      # alice-llm-server.exe sidecar as separate Components under the
+      # Binaries feature
+      #
+      # Authenticode signing is a follow-up: once a code-signing cert is
+      # issued by the DigiCert / SSL.com CA, run `signtool sign` on the
+      # produced .msi in the release workflow (see docs/RELEASE.md
+      # §Windows Authenticode)
+      - name: Install cargo-wix (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: cargo install cargo-wix --version ^0.3 --locked
+      - name: Build .msi installer (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          # github.ref_name は tag ref (例 "v0.1.0")、cargo-wix は SemVer `0.1.0`
+          # (v prefix 無し) を期待 v 付きで渡すと `unexpected character 'v'` で
+          # parse fail し target/wix 未生成 → 後段の Get-ChildItem が例外化
+          #
+          # MSI の ProductVersion は数値 4 field (major.minor.build.revision) しか
+          # 受けない cargo-wix はその 4 field 目への変換を自分で行うので、渡す値は
+          # **SemVer のまま**かつ **pre-release の数値成分が 1 個**でなければならない
+          # (2026-09-28 に 2 段で実測):
+          #   `0.1.0-beta.4.1` → Error "couldn't convert the prerelease components
+          #                      to an integer" (数値が 4 と 1 の 2 個、run 36418654823)
+          #   `0.1.0.401`      → Error[7] (Version) "unexpected character '.' after
+          #                      patch version number" (--install-version は semver
+          #                      crate で parse されるので 4 field は SemVer でない、
+          #                      run 36422468210)
+          # → 4 field を自分で作ってはいけない 数値成分を 1 個に畳んだ **SemVer** を
+          #   渡し、4 field 化は cargo-wix に任せる (cargo-wix 自身の推奨形
+          #   `1.2.3-prerelease.4` と一致)
+          #
+          # map 規則 (pre-release 付きの時のみ):
+          #   数値成分を上位から base-100 で畳む (n1*100 + n2、n2 既定 0)
+          #   非数値成分 (label) は順序を保って残す
+          #   `-beta.4` → `-beta.400` / `-beta.4.1` → `-beta.401` /
+          #   `-beta.5` → `-beta.500` / `-rc.1.2` → `-rc.102` で単調
+          #   成分は 2 個まで・各 99 以下 (cargo-wix が置く revision の上限 65535)
+          # GA tag (pre-release なし) は従来通り core をそのまま渡す
+          #
+          # 注: Windows Installer は ProductVersion の 4 field 目を upgrade 比較で
+          # 無視する ので beta 間の自動 upgrade 判定は元々効いていない (beta.4 の
+          # `0.1.0.4` も同様) 本 map はその既知制約を変えない
+          # source は tag push なら tag ref、workflow_dispatch (dry run) なら
+          # workspace の実 version tag 以外で固定の仮版数に落とすと、dry run が
+          # 本番と違う ProductVersion を検証することになるので Cargo.toml を読む
+          # (この時点の cwd は repo root、Push-Location は後段)
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $source = "${{ github.ref_name }}"
+            $origin = "tag ${{ github.ref_name }}"
+          } else {
+            $m = Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1
+            if ($null -eq $m) {
+              Write-Host "ERROR: could not read workspace.package.version from Cargo.toml"
+              exit 1
+            }
+            $source = $m.Matches[0].Groups[1].Value
+            $origin = "Cargo.toml (ref_type=${{ github.ref_type }})"
+          }
+          $semver = $source -replace '^v', ''
+          $parsed = [regex]::Match($semver, '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.\-]+))?(?:\+[0-9A-Za-z.\-]+)?$')
+          if (-not $parsed.Success) {
+            Write-Host "ERROR: '$source' is not SemVer — cannot derive an MSI ProductVersion"
+            exit 1
+          }
+          $core = "$($parsed.Groups[1].Value).$($parsed.Groups[2].Value).$($parsed.Groups[3].Value)"
+          $pre = $parsed.Groups[4].Value
+          if ([string]::IsNullOrEmpty($pre)) {
+            $version = $core
+          } else {
+            # SemVer の pre-release は dot 区切り識別子列 数値成分は「純粋に数字だけの
+            # 識別子」に限る (`beta4` は非数値成分、cargo-wix も同じ見方をする)
+            $parts = $pre -split '\.'
+            $nums = @($parts | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+            $labels = @($parts | Where-Object { $_ -notmatch '^\d+$' })
+            if ($nums.Count -lt 1 -or $nums.Count -gt 2) {
+              Write-Host "ERROR: pre-release '$pre' has $($nums.Count) numeric components — expected 1 or 2 (e.g. beta.4 / beta.4.1)"
+              exit 1
+            }
+            foreach ($n in $nums) {
+              if ($n -gt 99) {
+                Write-Host "ERROR: pre-release '$pre' has a numeric component over 99 — cannot fit the MSI revision field"
+                exit 1
+              }
+            }
+            $revision = $nums[0] * 100
+            if ($nums.Count -eq 2) { $revision += $nums[1] }
+            # 4 field は作らない SemVer のまま渡して cargo-wix に変換させる
+            if ($labels.Count -gt 0) {
+              $version = "$core-$($labels -join '.').$revision"
+            } else {
+              $version = "$core-$revision"
+            }
+          }
+          Write-Host "Using MSI version: $version (from $origin)"
+          # cargo wix の WiX light.exe は cwd を base directory として wxs 内の
+          # `Source='wix\License.rtf'` や `WixUILicenseRtf` value を解決する
+          # workflow default working-directory は text-to-print (parent) なので
+          # cwd から `wix\License.rtf` は不在 → LGHT0103 fail
+          # package root (crates/app) に一時 cd してから cargo wix run すれば
+          # `<crates/app>/wix/License.rtf` に正しく解決される
+          Push-Location crates/app
+          try {
+            # -p text-to-print 必須 (workspace root Cargo.toml が検出されるため
+            # package 指定なしだと "Workspace detected. Please pass a package name."
+            # で cargo wix が fail する)
+            cargo wix -p text-to-print --nocapture --no-build --install-version $version
+          } finally {
+            Pop-Location
+          }
+          # cargo wix の msi 出力先は workspace target dir 配下の wix/ subdir
+          # (crates/app/target/wix ではなく workspace-shared target/wix)
+          if (Test-Path target/wix) {
+            Get-ChildItem -Path target/wix -Filter "*.msi" | ForEach-Object { Copy-Item $_.FullName -Destination "text-to-print-${{ matrix.target }}.msi" }
+          } elseif (Test-Path crates/app/target/wix) {
+            Get-ChildItem -Path crates/app/target/wix -Filter "*.msi" | ForEach-Object { Copy-Item $_.FullName -Destination "text-to-print-${{ matrix.target }}.msi" }
+          } else {
+            Write-Host "ERROR: target/wix nor crates/app/target/wix directory created"
+            exit 1
+          }
+
+      # === Linux .deb (#34 T10.5) via cargo-deb ===
+      # `[package.metadata.deb]` in crates/app/Cargo.toml drives .deb
+      # generation for amd64 arm64 support is a follow-up (requires
+      # cross-compile toolchain)
+      - name: Install cargo-deb (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: cargo install cargo-deb --version ^2 --locked
+      - name: Build .deb package (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          cargo deb -p text-to-print --no-build --output "text-to-print-${{ matrix.target }}.deb"
+
+      # === Linux .AppImage (#34 T10.5) via linuxdeploy ===
+      # linuxdeploy bundles the binary + system libs into a portable
+      # .AppImage that runs on most modern Linux distros
+      - name: Build .AppImage (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+          chmod +x linuxdeploy
+          mkdir -p AppDir/usr/bin
+          cp dist/${{ matrix.bin_name }} AppDir/usr/bin/
+          # Bundle alice-llm-server sidecar next to the desktop binary so
+          # resolve_bin_path() finds it via exe-neighbor lookup
+          cp dist/${{ matrix.sidecar_bin }} AppDir/usr/bin/
+          cat > AppDir/text-to-print.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=text-to-print
+          Exec=text-to-print
+          Icon=text-to-print
+          Categories=Graphics;3DGraphics;
+          Terminal=false
+          EOF
+          # Placeholder icon: 1x1 transparent PNG (real branding TBD)
+          printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x01\x18\xed\xd4\xf6\x00\x00\x00\x00IEND\xaeB`\x82' > AppDir/text-to-print.png
+          NO_STRIP=true ./linuxdeploy --appdir AppDir --output appimage
+          mv text-to-print-*.AppImage "text-to-print-${{ matrix.target }}.AppImage" || true
+
+      # === macOS notarize archive + staple binary (T10.3) ===
+      - name: notarize archive (macOS)
+        if: startsWith(matrix.os, 'macos') && env.HAS_MACOS_NOTARIZE == 'true' && env.HAS_MACOS_SIGNING == 'true'
+        env:
+          APPLE_P8_B64: ${{ secrets.APPLE_P8_B64 }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+        shell: bash
+        run: |
+          if [ -z "$APPLE_P8_B64" ] || [ -z "$APPLE_KEY_ID" ] || [ -z "$APPLE_ISSUER_ID" ]; then
+            echo "ERROR: APPLE_P8_B64 / APPLE_KEY_ID / APPLE_ISSUER_ID missing" >&2
+            echo "See docs/RELEASE.md §Secrets" >&2
+            exit 1
+          fi
+          echo "$APPLE_P8_B64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool submit \
+            "text-to-print-${{ matrix.target }}.tar.gz" \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$APPLE_KEY_ID" \
+            --issuer "$APPLE_ISSUER_ID" \
+            --wait
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          # notarytool cannot staple .tar.gz directly Staple the individual
+          # binaries (desktop + sidecar) for offline verification, then
+          # repack for distribution
+          xcrun stapler staple dist/${{ matrix.bin_name }} || true
+          xcrun stapler staple dist/${{ matrix.sidecar_bin }} || true
+          rm -f "text-to-print-${{ matrix.target }}.tar.gz"
+          cd dist
+          tar czf "../text-to-print-${{ matrix.target }}.tar.gz" ${{ matrix.bin_name }} ${{ matrix.sidecar_bin }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: text-to-print-${{ matrix.target }}
+          path: text-to-print/text-to-print-${{ matrix.target }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+      - name: Upload Windows .msi artifact
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/upload-artifact@v6
+        with:
+          name: text-to-print-${{ matrix.target }}-msi
+          path: text-to-print/text-to-print-${{ matrix.target }}.msi
+          if-no-files-found: warn
+
+      - name: Upload Linux .deb artifact
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v6
+        with:
+          name: text-to-print-${{ matrix.target }}-deb
+          path: text-to-print/text-to-print-${{ matrix.target }}.deb
+          if-no-files-found: warn
+
+      - name: Upload Linux .AppImage artifact
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v6
+        with:
+          name: text-to-print-${{ matrix.target }}-appimage
+          path: text-to-print/text-to-print-${{ matrix.target }}.AppImage
+          if-no-files-found: warn
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+      - name: Flatten artifact directory
+        run: |
+          mkdir -p release-assets
+          find dist -type f \
+            \( -name '*.tar.gz' -o -name '*.zip' \
+               -o -name '*.msi' -o -name '*.deb' -o -name '*.AppImage' \) \
+            -exec cp {} release-assets/ \;
+          ls -la release-assets
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          # β / rc / alpha 系 tag は Pre-release として mark
+          # v0.1.0-beta.3 事案 (2026-09-08): softprops default false で
+          # GitHub UI 上の Pre-release マークが外れ、user 側で手動 flip 要
+          # 対応 前 β release との一貫性のため tag 名で自動判定
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') }}

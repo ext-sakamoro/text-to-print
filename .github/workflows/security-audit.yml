@@ -1,0 +1,303 @@
+name: Security & Hygiene
+
+# ALICE-* 共通の CI 構成に従う
+# ALICE-SDF v1.7.7 (commit 5a6056a) を base に text-to-print 用に調整
+#
+# 補完的展開: audit job は既存 ci.yml (.cargo/audit.toml + informational_warnings)
+# の方が sophisticated なため重複せず、以下 5 job のみを canonical として追加
+#
+# 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
+# ci.yml と同じ実 sibling checkout に統一 stub は AGPL の alice-bamboo /
+# alice-physics / alice-llm を `license = "MIT OR Apache-2.0"` の空 crate として
+# 申告していたので、deny.toml の licenses.exceptions が CI では一度も評価されず、
+# alice-print / alice-lol とその transitive 依存も dep 木から消えていた
+# (ALICE-LOL a6ba9f7 / Physics 3472768 と同じ置換)
+
+on:
+  push:
+    # no paths here: a branch created at a SHA another ref already has gets an empty
+    # diff from GitHub's filter and the run is skipped; the changes job below compares
+    # with merge-base(origin/main) instead (patterns: .github/paths/security-audit.txt)
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/Cargo.toml'
+      - 'Cargo.lock'
+      - '**/src/**'
+      - 'deny.toml'
+      - '.cargo/audit.toml'
+      - 'scripts/advisory_holds.toml'
+      - 'scripts/advisory_hold_guard.py'
+      - 'scripts/test_advisory_hold_guard.py'
+      - 'scripts/deny_exception_guard.py'
+      - 'scripts/test_deny_exception_guard.py'
+      - '.github/workflows/security-audit.yml'
+      - '.github/siblings.toml'
+      - '.github/actions/alice-siblings/**'
+      - 'scripts/changed_paths.py'
+      - '.github/paths/security-audit.txt'
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: "5"
+  CARGO_HTTP_MULTIPLEXING: "false"
+
+jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main),
+  # another push with before..after, a pull request with base...head; schedule and manual
+  # runs always run; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --base "$PR_BASE" --head "$PR_HEAD"
+          --patterns-file .github/paths/security-audit.txt
+
+  # audit は ci.yml 側 (.cargo/audit.toml で運用) 参照
+  # 本 workflow は 5 job で補完
+
+  deny:
+    name: cargo-deny (license + advisories + bans + sources)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      # Real siblings, same layout as ci.yml (8 repo: 6 public + Bamboo / Print
+      # private, each read with its own read-only deploy key) 実 dep 木でないと license / advisory を
+      # 一切見ていない green になる
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+
+      # deny.toml / .cargo/audit.toml の期限付きの保留 (scripts/advisory_holds.toml) を照合する
+      # 保留した版が lock から消えた / 依存元が増減した / 同じ crate の別の版が該当する /
+      # 期限を過ぎた / ignore と保留が食い違う、のどれでも fail (保留 0 件・lock 不在も fail)
+      - name: Advisory hold guard (tests, then the holds)
+        run: |
+          python3 scripts/test_advisory_hold_guard.py
+          python3 scripts/advisory_hold_guard.py
+
+      # each licence exception in deny.toml equals what the crate declares at the pinned
+      # sibling commits (an id it does not declare, an exception for a crate that is gone or
+      # that the global list already accepts, and an alice-* crate without the exception it
+      # needs all fail; nothing compared fails) a pin bump that brings a new licence names the
+      # exception to change in that commit
+      - name: Licence exceptions equal the declarations (tests, then the check)
+        run: |
+          python3 scripts/test_deny_exception_guard.py
+          python3 scripts/deny_exception_guard.py
+
+      - name: Run cargo deny check all
+        run: cargo deny --locked --all-features check all
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  unused-deps:
+    name: cargo-machete (unused dependencies)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      # Real siblings (同 layout) machete 自体は manifest しか見ないが、
+      # workspace 解決が sibling 不在で fail するため checkout は必須
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+      - uses: dtolnay/rust-toolchain@stable
+
+      # bnjbvr/cargo-machete@main は repo root で走るので、t2p を subdir に
+      # checkout する layout では使えない (ALICE-LOL a6ba9f7 と同じ置換)
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+
+      - name: Run cargo machete
+        run: cargo machete
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  stub-guard:
+    name: Stub / mock / dbg guard (grep)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      # STUB (uppercase) の明示だけを検出する
+      - name: Detect todo! / unimplemented! / panic!(STUB) in src/**
+        run: |
+          set -eo pipefail
+          hits=$(grep -rnE 'todo!\(|unimplemented!\(|panic!\([^)]*STUB' \
+            crates/ --include="*.rs" \
+            --exclude-dir=bin \
+            --exclude-dir=target \
+            || true)
+          if [ -n "$hits" ]; then
+            echo "❌ Stub / unimplemented / STUB panic detected in production path:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "✓ No todo! / unimplemented! / panic!(STUB) in crates/"
+
+      - name: Detect dbg!() residual
+        run: |
+          set -eo pipefail
+          hits=$(grep -rn 'dbg!(' crates/ --include="*.rs" \
+            --exclude-dir=target || true)
+          if [ -n "$hits" ]; then
+            echo "❌ dbg!() macro left in crates/:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "✓ No dbg!() in crates/"
+
+      - name: Detect TODO / FIXME / XXX / HACK (informational)
+        run: |
+          set -eo pipefail
+          hits=$(grep -rnE 'TODO|FIXME|XXX|HACK' crates/ --include="*.rs" \
+            --exclude-dir=target || true)
+          if [ -n "$hits" ]; then
+            echo "::warning::TODO/FIXME/XXX/HACK found (informational):"
+            echo "$hits" | head -50
+          else
+            echo "✓ No TODO/FIXME/XXX/HACK in crates/"
+          fi
+
+  coverage:
+    name: Coverage (cargo-llvm-cov、informational)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      # Real siblings (同 layout)
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      # keyring crate は libdbus-sys 経由で libdbus-1-dev を要求 (ci.yml と同じ)
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # informational (the tests gate in ci.yml): the step may fail, the job succeeds (the gate
+      # needs every job to) and a failure is a warning annotation; pipefail so it is not hidden by tee
+      - name: Run coverage
+        id: coverage
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo llvm-cov --workspace --lib --summary-only 2>&1 | tee coverage-summary.txt
+      - name: Report a failed coverage run
+        if: steps.coverage.outcome == 'failure'
+        run: echo "::warning title=coverage::cargo llvm-cov failed; see the Run coverage step and coverage-summary.txt"
+
+      - name: Upload coverage summary as artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-summary
+          path: text-to-print/coverage-summary.txt
+          retention-days: 30
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, deny, unused-deps, stub-guard, coverage]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

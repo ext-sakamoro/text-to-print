@@ -1,0 +1,89 @@
+[package]
+name = "text-to-print"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+authors = ["Moroya Sakamoto"]
+description = "Standalone desktop app: text prompt → LOL DSL → 3MF/STEP/G-code via embedded ALICE-LLM"
+homepage = "https://github.com/ext-sakamoro/text-to-print"
+repository = "https://github.com/ext-sakamoro/text-to-print"
+
+[[bin]]
+name = "text-to-print"
+path = "src/main.rs"
+
+# ---------------------------------------------------------------------------
+# Windows .msi packaging (#33 T10.4, cargo-wix)
+# ---------------------------------------------------------------------------
+# `cargo wix` (WiX Toolset v3 wrapper) reads this section to generate a
+# per-CPU-arch `.msi` installer The CI job under
+# `.github/workflows/release.yml` runs `cargo wix -p text-to-print
+# --nocapture` on the Windows runner
+#
+# Authenticode signing is a follow-up: once a code-signing cert is issued
+# by the DigiCert / SSL.com CA, run `signtool sign` on the produced .msi
+# in the release workflow (see docs/RELEASE.md §Windows Authenticode)
+[package.metadata.wix]
+upgrade-guid = "3E3D0E90-2C1E-45C7-8B34-1E2F65E4D6C9"
+path-guid    = "5A6F1B23-4EFC-4A6B-B34D-89CBE1120F41"
+
+# ---------------------------------------------------------------------------
+# Linux .deb packaging (#34 T10.5, cargo-deb)
+# ---------------------------------------------------------------------------
+# `cargo deb -p text-to-print` reads this section and produces
+# `target/debian/text-to-print_<version>-1_amd64.deb` The CI job under
+# `.github/workflows/release.yml` runs it on the Ubuntu runner
+[package.metadata.deb]
+maintainer = "Moroya Sakamoto"
+copyright = "2025-2026 Moroya Sakamoto"
+license-file = ["../../LICENSE-Proprietary", "0"]
+extended-description = """\
+text-to-print is a standalone desktop app that turns natural language into
+printable Bambu Lab 3MF files with an embedded small LLM Supports STEP
+export for CAD tools and direct G-code output"""
+section = "graphics"
+priority = "optional"
+assets = [
+    ["target/release/text-to-print", "usr/bin/text-to-print", "755"],
+    # Stage 3-A: bundled sidecar Release workflow copies
+    # `alice-llm-server` into `target/release/` before invoking `cargo deb`
+    ["target/release/alice-llm-server", "usr/bin/alice-llm-server", "755"],
+    ["../../README.md", "usr/share/doc/text-to-print/README.md", "644"],
+    ["../../LICENSE-Proprietary", "usr/share/doc/text-to-print/LICENSE-Proprietary", "644"],
+]
+depends = "$auto, libc6 (>= 2.31), libgcc-s1"
+
+[dependencies]
+text-to-print-core = { workspace = true }
+text-to-print-llm = { workspace = true }
+text-to-print-network = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
+rfd = { workspace = true }
+directories = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+open = "5"
+alice-bamboo = { workspace = true }
+# viewer.rs::auto_frame_from_sdf で tight_aabb::compute_tight_aabb_with_config
+# を直呼びして camera を LOL の AABB に合わせる用途 (alice-bamboo 経由
+# だと re-export されていない tight_aabb module に直接アクセス要)
+alice-sdf = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+sys-locale = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+wgpu = "24"
+egui-wgpu = "0.31"
+bytemuck = { version = "1", features = ["derive"] }
+glam = "0.29"
+
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,281 @@
+pub mod i18n;
+mod sdf;
+mod state;
+mod ui;
+mod updater;
+
+use anyhow::Result;
+use eframe::egui;
+use i18n::{Lang, resolve_lang};
+use state::AppState;
+use ui::gallery::GalleryState;
+use ui::prompt::PromptUiState;
+use ui::settings::SettingsState;
+use ui::viewer::SdfViewer;
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt().with_env_filter("info").init();
+
+    let data_dir = directories::ProjectDirs::from("net", "alicelaw", "text-to-print")
+        .map(|d: directories::ProjectDirs| d.data_dir().to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from(".text-to-print"));
+
+    std::fs::create_dir_all(&data_dir)?;
+
+    // Opt-in crash reporter (#36) Panic hook writes to
+    // `{data_dir}/crash_reports/{uuid}.json` when the opt-in sentinel
+    // (`{data_dir}/.crash_reports_enabled`) is present at panic time
+    // Users can toggle from the Settings tab
+    text_to_print_core::crash_report::install_panic_hook(
+        data_dir.clone(),
+        env!("CARGO_PKG_VERSION"),
+    );
+
+    // 署名用の ID (Gallery の公開 / 削除で使う) 通信は持たない
+    let identity = text_to_print_network::identity::Identity::load_or_create(&data_dir)?;
+    tracing::info!(did = %identity.did.id, "identity loaded");
+
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1200.0, 800.0])
+            .with_title("text-to-print — Text to 3D"),
+        renderer: eframe::Renderer::Wgpu,
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "text-to-print",
+        options,
+        Box::new(move |cc| {
+            configure_fonts(&cc.egui_ctx);
+
+            // Mesh preview リソースを wgpu レンダラーに登録
+            if let Some(render_state) = cc.wgpu_render_state.as_ref() {
+                let resources = sdf::MeshResources::init(render_state);
+                render_state
+                    .renderer
+                    .write()
+                    .callback_resources
+                    .insert(resources);
+            }
+
+            let render_state = cc.wgpu_render_state.clone();
+            Ok(Box::new(App::new(data_dir, render_state, identity)))
+        }),
+    )
+    .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    Ok(())
+}
+
+fn configure_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    let font_data = include_bytes!("../../../assets/NotoSansJP.ttf");
+    fonts.font_data.insert(
+        "NotoSansJP".to_owned(),
+        std::sync::Arc::new(egui::FontData::from_static(font_data)),
+    );
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "NotoSansJP".to_owned());
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("NotoSansJP".to_owned());
+
+    ctx.set_fonts(fonts);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Tab {
+    Generate,
+    Gallery,
+    History,
+    Settings,
+    About,
+}
+
+struct App {
+    state: AppState,
+    viewer: SdfViewer,
+    settings: SettingsState,
+    gallery: GalleryState,
+    prompt_ui: PromptUiState,
+    identity: text_to_print_network::identity::Identity,
+    lang: Lang,
+    update_checker: updater::UpdateChecker,
+    current_tab: Tab,
+    render_state: Option<egui_wgpu::RenderState>,
+}
+
+impl App {
+    fn new(
+        data_dir: std::path::PathBuf,
+        render_state: Option<egui_wgpu::RenderState>,
+        identity: text_to_print_network::identity::Identity,
+    ) -> Self {
+        let state = AppState::new(data_dir);
+        let update_checker = updater::UpdateChecker::start(&state.runtime);
+        let lang = resolve_lang(&state.lang_pref);
+        Self {
+            state,
+            viewer: SdfViewer::default(),
+            settings: SettingsState::default(),
+            gallery: GalleryState::default(),
+            prompt_ui: PromptUiState::default(),
+            identity,
+            lang,
+            update_checker,
+            current_tab: Tab::Generate,
+            render_state,
+        }
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_checker.poll();
+
+        // Re-resolve every frame so a Settings UI Lang change applies live
+        // Env `APP_LANG` lookup is cached via OnceLock; per-frame cost is
+        // one string match + one enum copy (negligible at 60 FPS)
+        self.lang = resolve_lang(&self.state.lang_pref);
+
+        if matches!(
+            self.state.generation_status,
+            state::GenerationStatus::Generating
+        ) {
+            ctx.request_repaint();
+        }
+
+        // Sync any newly-generated mesh from state into the GPU-side
+        // preview pipeline The viewer's `sync_with_state` bumps its own
+        // uploaded-version to avoid re-uploading every frame Also publish
+        // the shared camera handle so drag / scroll inside `viewer::show`
+        // can mutate it
+        if let Some(rs) = &self.render_state {
+            self.viewer.sync_with_state(&self.state, rs);
+            if let Some(res) = rs
+                .renderer
+                .read()
+                .callback_resources
+                .get::<sdf::MeshResources>()
+            {
+                ui::viewer::publish_camera(ctx, res.camera.clone());
+            }
+        }
+
+        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                let l = self.lang;
+                ui.selectable_value(&mut self.current_tab, Tab::Generate, i18n::T::generate(l));
+                ui.selectable_value(&mut self.current_tab, Tab::Gallery, i18n::T::gallery(l));
+                ui.selectable_value(&mut self.current_tab, Tab::History, i18n::T::history(l));
+                ui.selectable_value(&mut self.current_tab, Tab::Settings, i18n::T::settings(l));
+                ui.selectable_value(&mut self.current_tab, Tab::About, i18n::T::about(l));
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let usage = self.state.daily_usage();
+                    let limit = self.state.tier.limits().daily_generations;
+                    let label = if limit == u32::MAX {
+                        // v0.1.0-beta.1: 制限撤廃時は '4294967295' 表示を回避
+                        i18n::T::header_usage_uncapped(self.state.tier, usage, l)
+                    } else {
+                        format!("{:?} | {}/{}", self.state.tier, usage, limit)
+                    };
+                    ui.label(label);
+                });
+            });
+        });
+
+        // ステータスバー（下部）
+        egui::TopBottomPanel::bottom("statusbar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+
+                if let Some(info) = &self.update_checker.result
+                    && info.has_update
+                {
+                    ui.separator();
+                    ui.colored_label(
+                        ui.style().visuals.warn_fg_color,
+                        format!("v{} available", info.latest),
+                    );
+                    if ui.small_button("Download").clicked() {
+                        let _ = open::that(&info.download_url);
+                    }
+                }
+            });
+        });
+
+        match self.current_tab {
+            Tab::Generate => {
+                egui::SidePanel::left("prompt_panel")
+                    .default_width(350.0)
+                    .show(ctx, |ui| {
+                        ui::prompt::show(ui, &mut self.state, &mut self.prompt_ui, self.lang);
+                    });
+
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::viewer::show(
+                        ui,
+                        &self.state,
+                        &mut self.viewer,
+                        self.render_state.as_ref(),
+                        self.lang,
+                    );
+                });
+            }
+            Tab::Gallery => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::gallery::show(
+                        ui,
+                        &mut self.state,
+                        &self.identity,
+                        &mut self.viewer,
+                        &mut self.gallery,
+                        self.lang,
+                    );
+                });
+                // 案 A (2026-09-04): 「編集して再生成」で LOL を Generate tab
+                // に流し込み、実験機能 section を強制展開して user が即 edit 可
+                if let Some(lol) = self.gallery.edit_lol_pending.take() {
+                    self.state.prompt_input = lol;
+                    self.prompt_ui.force_open_experimental = true;
+                    self.current_tab = Tab::Generate;
+                }
+                if self.gallery.switch_to_viewer {
+                    self.gallery.switch_to_viewer = false;
+                    self.current_tab = Tab::Generate;
+                }
+            }
+            Tab::History => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::history::show(ui, &mut self.state, self.lang);
+                });
+            }
+            Tab::Settings => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::settings::show(ui, &mut self.state, &mut self.settings, self.lang);
+                });
+            }
+            Tab::About => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui::about::show(ui, self.lang);
+                });
+            }
+        }
+
+        // Gallery Phase 2: modal share-confirm dialog Overlays the
+        // current tab after all panels are drawn so it stays on top and
+        // can be triggered from any tab (currently only Generate but
+        // future flows may enqueue from History or Gallery too)
+        ui::share_confirm::show(ctx, &mut self.state, &self.identity, self.lang);
+    }
+}

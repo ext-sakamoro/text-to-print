@@ -1,0 +1,38 @@
+# cargo-audit config (RustSec advisory database policy)
+#
+# Read by `cargo audit` locally and by the `cargo-audit` invocation in
+# `.github/workflows/ci.yml`. Every entry in `ignore` must document why
+# it is safe / unavoidable for this project — plain `RUSTSEC-*` id
+# without a rationale is a code smell to be cleaned up in review.
+#
+# Re-audit checklist (run once per quarter):
+# 1. `cargo update` — pulls any transitive patches that landed since
+# 2. `cargo audit` — see which of the below have upstream fixes now
+# 3. Remove ignore entries whose fix is unblocked
+
+[advisories]
+
+# `unmaintained` / `unsound` advisories are still useful signals but not
+# outright vulnerabilities — surface them without failing the build
+informational_warnings = ["unmaintained", "unsound", "notice"]
+
+ignore = [
+    # ── zbus 4.4 chain (eframe 0.31 → egui-winit → accesskit_unix → atspi) ──
+    #
+    # Linux screen-reader support. Resolves with the eframe / egui upgrade.
+
+    "RUSTSEC-2026-0194",  # quick-xml v0.30      ← zbus_xml 4.0 ← zbus-lockstep ← atspi-common
+    "RUSTSEC-2026-0195",  # quick-xml v0.30      ← zbus_xml 4.0 ← zbus-lockstep ← atspi-common
+
+    # ── upstream ALICE-* / wgpu / egui font stack ───────────────────
+    #
+    # Not fixable from text-to-print alone — need upstream crate updates
+    # or replacement. Tracked upstream but not blocking release.
+
+    "RUSTSEC-2024-0436",  # paste v1.0       unmaintained, via metal → wgpu-hal 24 (GPU 必須)
+    "RUSTSEC-2025-0141",  # bincode v1.3     unmaintained, via alice-sdf → alice-bamboo
+    "RUSTSEC-2026-0192",  # ttf-parser v0.25 unmaintained, via egui / font stack
+    "RUSTSEC-2026-0186",  # memmap2 v0.9     unsound, via alice-llm (mmap GGUF pattern)
+    "RUSTSEC-2026-0190",  # anyhow v1.0.104  unsound Error::downcast_mut, wait for 1.0.105+
+    "RUSTSEC-2026-0221",  # event-listener   unsound !Send tag via StackSlot, zbus 4.4 (async-broadcast) chain
+]

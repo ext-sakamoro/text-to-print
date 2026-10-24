@@ -1,0 +1,143 @@
+# 公開の文の検査 (ALICE-Law public_text_check) の、この repo の設定
+# 製品の語 (Cloudflare Workers の backend と crate の path、筐体の preset の名前、
+# agent との連携の機能) だけを file ごとに件数を固定して許す
+[public-text]
+technical-paths = [".public-text.toml", ".github/workflows/ci.yml", "CHANGELOG.md", "Cargo.toml", "README.ja.md", "README.md", "crates/app/src/state.rs", "crates/app/src/ui/gallery.rs", "crates/app/src/ui/settings.rs", "crates/gallery-sign/Cargo.toml", "crates/llm/src/embedded_backend.rs", "crates/network/Cargo.toml", "crates/network/src/gallery_client.rs", "crates/network/src/presets_client.rs", "crates/network/src/share.rs", "crates/network/tests/gallery_requests.rs", "crates/network/tests/share_schema.rs", "docs/CUSTOMIZER_HOWTO.md", "docs/STRIPE_SETUP.md", "scripts/preflight.sh", "scripts/smoke_worker.sh", "scripts/wiring-baseline.txt"]
+
+[[public-text.allow]]
+path = "CHANGELOG.md"
+class = "agent process"
+count = 2
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "README.ja.md"
+class = "agent process"
+count = 2
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "README.md"
+class = "agent process"
+count = 2
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "crates/core/Cargo.toml"
+class = "agent process"
+count = 1
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "crates/core/src/bin/ttp.rs"
+class = "agent process"
+count = 2
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "scripts/ci_sibling_checkout_check.py"
+class = "agent process"
+count = 2
+why = "git の command の引数"
+
+[[public-text.allow]]
+path = "scripts/vocab_lint.py"
+class = "agent process"
+count = 1
+why = "語の検査器が許可の範囲を説明する文"
+
+[[public-text.allow]]
+path = "skills/text-to-print/SKILL.md"
+class = "agent process"
+count = 2
+why = "agent との連携の機能 (製品の機能)"
+
+[[public-text.allow]]
+path = "CHANGELOG.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "README.ja.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "README.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/app/src/default_presets.json"
+class = "device"
+count = 4
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/app/src/i18n.rs"
+class = "device"
+count = 22
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/app/src/state.rs"
+class = "device"
+count = 23
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/app/src/ui/prompt.rs"
+class = "device"
+count = 13
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/core/tests/fixtures/safety_messages_templates.json"
+class = "device"
+count = 7
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/core/tests/safety_report.rs"
+class = "device"
+count = 5
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/llm/src/grammar_lol.rs"
+class = "device"
+count = 1
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/llm/src/prompt.rs"
+class = "device"
+count = 1
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/llm/src/system_prompt.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "crates/worker/src/default_presets.json"
+class = "device"
+count = 21
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "docs/CUSTOMIZER_HOWTO.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
+
+[[public-text.allow]]
+path = "skills/text-to-print/references/lol-dsl-quickref.md"
+class = "device"
+count = 2
+why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"

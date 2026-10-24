@@ -1,0 +1,160 @@
+name: Fuzz
+
+# ALICE-* 共通の CI 構成に従う
+# text-to-print 3 target: license base64 / manifest JSON / sha256 hex
+#
+# 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
+# ci.yml と同じ実 sibling checkout に統一 stub は空 lib だったので fuzz が
+# 実 dep 木を一度も build していなかった (ALICE-LOL a6ba9f7 と同じ置換)
+
+on:
+  push:
+    # no paths here: a branch created at a SHA another ref already has gets an empty
+    # diff from GitHub's filter and the run is skipped; the changes job below compares
+    # with merge-base(origin/main) instead (patterns: .github/paths/fuzz.txt)
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/src/**'
+      - 'fuzz/**'
+      - '.github/workflows/fuzz.yml'
+      - '.github/siblings.toml'
+      - '.github/actions/alice-siblings/**'
+      - 'scripts/changed_paths.py'
+      - '.github/paths/fuzz.txt'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: 'Per-target fuzz duration (seconds)'
+        required: false
+        default: '60'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main),
+  # another push with before..after, a pull request with base...head; schedule and manual
+  # runs always run; any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --base "$PR_BASE" --head "$PR_HEAD"
+          --patterns-file .github/paths/fuzz.txt
+
+  fuzz:
+    name: Fuzz — ${{ matrix.target }}
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # a crash fails the job (it is a defect found, not a report to read later); crash inputs
+    # are kept as an artifact below
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_license_key_base64
+          - fuzz_manifest_json
+          - fuzz_sha256_hex
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      # Real siblings, same layout as ci.yml (8 repo: 6 public + Bamboo / Print
+      # private, each read with its own read-only deploy key)
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
+        uses: ./text-to-print/.github/actions/alice-siblings
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print/fuzz
+
+      # fuzz target は text-to-print-core (keyring → libdbus-sys) を link する
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Set fuzz duration
+        id: dur
+        run: |
+          DURATION="${{ github.event.inputs.duration_seconds }}"
+          if [ -z "$DURATION" ]; then
+            DURATION=60
+          fi
+          echo "seconds=$DURATION" >> "$GITHUB_OUTPUT"
+
+      - name: Run fuzz target (time-boxed)
+        run: |
+          cd fuzz
+          cargo +nightly fuzz run "${{ matrix.target }}" -- \
+            -max_total_time=${{ steps.dur.outputs.seconds }}
+
+      - name: Upload crash artifacts (if any)
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: text-to-print/fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
+      - name: Verify sibling HEADs (job end)
+        if: always()
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, fuzz]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

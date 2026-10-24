@@ -1,0 +1,15 @@
+[package]
+name = "text-to-print-gallery-sign"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The desktop client (crates/network) and the Worker (crates/worker, outside the
+# workspace) both build the signed messages from this crate, so the two sides can
+# not drift apart The ALICE siblings are path dependencies pinned in
+# .github/siblings.toml; the paths are written out because crates/worker can not
+# inherit workspace dependencies
+[dependencies]
+alice-sign = { path = "../../../ALICE-Sign" }
+alice-serial = { path = "../../../ALICE-Serial" }

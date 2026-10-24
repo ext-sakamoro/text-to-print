@@ -1,0 +1,4 @@
+{
+  "comment": "同梱 template の意図的な形 (例: テープを切る刃) の注記 call は LOL の最上位の関数名、kind は違反の種類、region は形の座標系の箱 [min, max] (mm) 違反の位置が region の中にある時だけ intentional として扱う (位置の無い違反には効かない) 追加は利用者との表の確認を経る",
+  "annotations": []
+}

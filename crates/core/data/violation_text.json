@@ -1,0 +1,181 @@
+{
+  "comment": "違反の利用者向けの文 (ja / en) desktop と iOS の両方がこの 1 つの表を使う {measured} {limit} {count} {note} は値に置き換える",
+  "kinds": {
+    "wall_thin": {
+      "ja": {
+        "title": "薄すぎる部分があります (最も薄い所 {measured} mm、目安 {limit} mm 以上)",
+        "action": "欠けやすくなります 縁や壁を厚くするか、角の丸みを小さくしてください"
+      },
+      "en": {
+        "title": "Some parts are too thin (thinnest {measured} mm, guideline {limit} mm or more)",
+        "action": "They may break easily. Make edges and walls thicker, or reduce the corner rounding."
+      }
+    },
+    "wall_too_thin_everywhere": {
+      "ja": {
+        "title": "形全体が薄すぎます (どこも {limit} mm 未満)",
+        "action": "印刷しても強度が出ません 全体を厚く、または大きくしてください"
+      },
+      "en": {
+        "title": "The whole shape is too thin (everywhere under {limit} mm)",
+        "action": "It will be too weak when printed. Make it thicker or larger."
+      }
+    },
+    "disconnected": {
+      "ja": {
+        "title": "形が 2 つ以上に分かれています",
+        "action": "1 つにつなげるか、別々に書き出してください"
+      },
+      "en": {
+        "title": "The shape is in two or more separate pieces",
+        "action": "Join the pieces, or export them separately."
+      }
+    },
+    "hole_too_small": {
+      "ja": {
+        "title": "狭すぎるすき間や穴があります (最も狭い所 {measured} mm、目安 {limit} mm 以上)",
+        "action": "印刷で埋まることがあります すき間や穴を広げてください"
+      },
+      "en": {
+        "title": "Some gaps or holes are too narrow (narrowest {measured} mm, guideline {limit} mm or more)",
+        "action": "They may fill in when printed. Widen the gaps or holes."
+      }
+    },
+    "feature_too_small": {
+      "ja": {
+        "title": "細かすぎる突起があります ({measured} mm、目安 {limit} mm 以上)",
+        "action": "印刷で形が出ないことがあります 突起を太くしてください"
+      },
+      "en": {
+        "title": "Some details are too fine ({measured} mm, guideline {limit} mm or more)",
+        "action": "They may not come out when printed. Make them thicker."
+      }
+    },
+    "warp_critical": {
+      "ja": {
+        "title": "大きく平たい形なので、反って失敗する可能性が高いです",
+        "action": "分割する、素材を PLA にする、囲いのあるプリンタを使うなどを検討してください"
+      },
+      "en": {
+        "title": "This large flat shape is very likely to warp and fail",
+        "action": "Consider splitting it, using PLA, or a printer with an enclosure."
+      }
+    },
+    "warp_high": {
+      "ja": {
+        "title": "大きく平たい形なので反りやすくなっています",
+        "action": "造形中に角が浮くことがあります ブリムを付ける、ベッドの温度を上げるなどを検討してください"
+      },
+      "en": {
+        "title": "Large flat shapes tend to warp",
+        "action": "Corners may lift during printing. Consider a brim or a hotter bed."
+      }
+    },
+    "warp_medium": {
+      "ja": {
+        "title": "少し反りやすい形です",
+        "action": "ブリムを付けると安心です"
+      },
+      "en": {
+        "title": "This shape may warp a little",
+        "action": "A brim helps."
+      }
+    },
+    "beam_overloaded": {
+      "ja": {
+        "title": "力がかかると壊れやすい形です",
+        "action": "力がかかる部分を太くしてください"
+      },
+      "en": {
+        "title": "The shape may break under load",
+        "action": "Make the load-bearing parts thicker."
+      }
+    },
+    "thermal_stress": {
+      "ja": {
+        "title": "冷えるときに内部に力が残りやすい形です",
+        "action": "造形室の温度を保つと反りや割れを減らせます"
+      },
+      "en": {
+        "title": "Stress may remain inside as it cools",
+        "action": "Keeping the print chamber warm reduces warping and cracking."
+      }
+    },
+    "thermal_near_tg": {
+      "ja": {
+        "title": "素材が柔らかくなる温度に注意が必要です",
+        "action": "熱い場所や日の当たる場所での使用は避けてください"
+      },
+      "en": {
+        "title": "Watch the softening temperature of the material",
+        "action": "Avoid using it in hot places or direct sunlight."
+      }
+    },
+    "lol_parse": {
+      "ja": {
+        "title": "LOL を読み取れません",
+        "action": "書き方を確認してください 原因は詳細にあります"
+      },
+      "en": {
+        "title": "The LOL could not be read",
+        "action": "Check the text. The cause is in the details."
+      }
+    },
+    "other": {
+      "ja": {
+        "title": "印刷に影響する可能性がある点があります",
+        "action": "詳細を確認してください"
+      },
+      "en": {
+        "title": "Something may affect printing",
+        "action": "See the details."
+      }
+    }
+  },
+  "notes": {
+    "possible_artefact": {
+      "ja": "測り方による誤差の可能性があります (測り直すと目安を満たしています)",
+      "en": "The measurement may be off here (re-measured, it meets the guideline)"
+    },
+    "remeasured": {
+      "ja": "測り直した値です (元の標本では {measured} mm)",
+      "en": "Re-measured value (the original sample said {measured} mm)"
+    },
+    "intentional": {
+      "ja": "意図した形です ({note})",
+      "en": "Intended shape ({note})"
+    }
+  },
+  "severity": {
+    "blocking": {
+      "ja": "印刷前に直してください",
+      "en": "Fix before printing"
+    },
+    "advisory": {
+      "ja": "確認してください",
+      "en": "Worth checking"
+    },
+    "info": {
+      "ja": "参考",
+      "en": "For information"
+    }
+  },
+  "header": {
+    "ja": "印刷の前に確認してください",
+    "en": "Check before printing"
+  },
+  "details": {
+    "ja": "詳細 (検査の結果)",
+    "en": "Details (check output)"
+  },
+  "errors": {
+    "empty_mesh_unbounded": {
+      "ja": "形の大きさを求められず、形が空になりました 範囲を絞れない演算 (例: polar_repeat) が含まれています 別の書き方にしてください",
+      "en": "The size of the shape could not be determined, so the shape came out empty. It uses an operation whose extent cannot be bounded (for example polar_repeat). Please write it another way."
+    },
+    "empty_mesh_no_material": {
+      "ja": "形の中に材料が無く、形が空になりました (引き算で全部消えた、大きさが 0 など)",
+      "en": "The shape has no material, so it came out empty (for example everything was subtracted, or a size is 0)."
+    }
+  }
+}
