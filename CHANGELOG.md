@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Fixed — licence を支払いが済んだ checkout にだけ、1 回だけ発行する (2026-10-25)
+
+- `checkout.session.completed` は `payment_status` が `paid` か `no_payment_required` の時だけ licence を発行する (`unpaid` の非同期決済は `checkout.session.async_payment_succeeded` で発行、`async_payment_failed` は記録だけ) これまでは決済の状態を見ずに発行していた
+- webhook の処理が失敗した event は処理済みに記録せず 500 を返す (Stripe が再送する) これまでは失敗も記録して 200 を返していたので、一時的な失敗で key が届かなかった
+- licence は発行の鍵 (`checkout:<session id>` / `subscription:<id>:<期間の終わり>`) ごとに 1 行 (migration `0005_license_issue_key.sql`)、再送では保存済みの key を送り直す licence の mail の送信の失敗は誤りとして返す
+
 ### Fixed — 有料の tier を起動のたびに licence key で決める (2026-10-25)
 
 - 起動時の tier は保存した licence key を署名と有効期限で検証し直して決める (これまでは貼り付けた時に 1 回だけ検証し、その後は profile の `tier` 列をそのまま使っていたので、期限を過ぎても有料の tier のままだった) 無効・期限切れの key は Free

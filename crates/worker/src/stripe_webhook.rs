@@ -115,6 +115,58 @@ pub struct StripeEventData {
     pub object: serde_json::Value,
 }
 
+/// What a completed checkout session allows
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutDecision {
+    /// paid, or no payment required: issue the licence now
+    Issue,
+    /// not paid yet (a delayed payment method): wait for
+    /// `checkout.session.async_payment_succeeded`
+    AwaitPayment,
+}
+
+/// `payment_status` `paid` or `no_payment_required` issues; anything else waits
+#[must_use]
+pub fn checkout_decision(session: &serde_json::Value) -> CheckoutDecision {
+    match session.get("payment_status").and_then(|v| v.as_str()) {
+        Some("paid" | "no_payment_required") => CheckoutDecision::Issue,
+        _ => CheckoutDecision::AwaitPayment,
+    }
+}
+
+/// `(record the event as processed, HTTP status)` for a handler outcome: a failure
+/// is not recorded and answers 500, so Stripe delivers the event again
+#[must_use]
+pub fn webhook_outcome(outcome: &Result<(), String>) -> (bool, u16) {
+    match outcome {
+        Ok(()) => (true, 200),
+        Err(_) => (false, 500),
+    }
+}
+
+/// The issuance key of the licence for one checkout session
+#[must_use]
+pub fn checkout_issue_key(session_id: &str) -> String {
+    format!("checkout:{session_id}")
+}
+
+/// The issuance key of the licence for one billing period of a subscription
+#[must_use]
+pub fn subscription_issue_key(subscription_id: &str, period_end_unix: i64) -> String {
+    format!("subscription:{subscription_id}:{period_end_unix}")
+}
+
+/// Store a licence under its issuance key; a second attempt with the same key
+/// leaves the first row as it is (`migrations/0005_license_issue_key.sql`)
+pub const INSERT_LICENSE_SQL: &str =
+    "INSERT INTO licenses (id, stripe_customer_id, license_key, tier, issued_at, expires_at, issue_key)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+     ON CONFLICT(issue_key) WHERE issue_key IS NOT NULL DO NOTHING";
+
+/// The licence stored under an issuance key (the one to deliver)
+pub const SELECT_ISSUED_LICENSE_SQL: &str =
+    "SELECT license_key FROM licenses WHERE issue_key = ?1";
+
 /// Map Stripe price id → tier granted (env-configured so ops can add
 /// new price ids without redeploying)
 ///
@@ -182,7 +234,22 @@ pub async fn handle(req: &mut Request, ctx: &RouteContext<()>) -> WorkerResult<R
 
     // 5. Dispatch
     let outcome = match event.event_type.as_str() {
-        "checkout.session.completed" => handle_checkout_session_completed(&ctx.env, &db, &event).await,
+        "checkout.session.completed" => {
+            if checkout_decision(&event.data.object) == CheckoutDecision::Issue {
+                handle_checkout_session_completed(&ctx.env, &db, &event).await
+            } else {
+                console_log!("stripe webhook: checkout {} not paid yet, waiting", event.id);
+                Ok(())
+            }
+        }
+        // a delayed payment settled: the session is now paid
+        "checkout.session.async_payment_succeeded" => {
+            handle_checkout_session_completed(&ctx.env, &db, &event).await
+        }
+        "checkout.session.async_payment_failed" => {
+            console_log!("stripe webhook: checkout {} payment failed, no licence", event.id);
+            Ok(())
+        }
         "customer.subscription.updated" => handle_subscription_updated(&ctx.env, &db, &event).await,
         "customer.subscription.deleted" => handle_subscription_deleted(&db, &event).await,
         other => {
@@ -191,26 +258,26 @@ pub async fn handle(req: &mut Request, ctx: &RouteContext<()>) -> WorkerResult<R
         }
     };
 
-    // 6. Record processed event (whether handler succeeded or not) so we
-    //    don't retry infinitely on a persistent bug — surface via logs
-    let now_iso = worker::Date::now().to_string();
-    db.prepare("INSERT INTO webhook_events (stripe_event_id, event_type, processed_at) VALUES (?, ?, ?)")
-        .bind(&[
-            event.id.clone().into(),
-            event.event_type.clone().into(),
-            now_iso.into(),
-        ])?
-        .run()
-        .await?;
-
-    match outcome {
-        Ok(()) => Response::ok("processed"),
-        Err(e) => {
-            console_log!("stripe webhook handler error ({}): {e}", event.event_type);
-            // 200 anyway so Stripe stops retrying — operator investigates via logs
-            Response::ok("logged")
-        }
+    // 6. Record the event only when the handler succeeded; a failure answers 500
+    //    so Stripe delivers it again (issuance is idempotent per issue_key, so a
+    //    retry after a partial success resends the stored key)
+    let (record, status) = webhook_outcome(&outcome);
+    if record {
+        let now_iso = worker::Date::now().to_string();
+        db.prepare("INSERT INTO webhook_events (stripe_event_id, event_type, processed_at) VALUES (?, ?, ?)")
+            .bind(&[
+                event.id.clone().into(),
+                event.event_type.clone().into(),
+                now_iso.into(),
+            ])?
+            .run()
+            .await?;
+        return Response::ok("processed");
     }
+    if let Err(e) = outcome {
+        console_log!("stripe webhook handler error ({}): {e}", event.event_type);
+    }
+    Response::error("handler failed, retry", status)
 }
 
 async fn handle_checkout_session_completed(
@@ -223,6 +290,11 @@ async fn handle_checkout_session_completed(
         .get("customer")
         .and_then(|v| v.as_str())
         .ok_or("checkout.session.completed missing customer id")?
+        .to_string();
+    let session_id = session
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or("checkout.session.completed missing session id")?
         .to_string();
     let email = session
         .get("customer_details")
@@ -266,7 +338,22 @@ async fn handle_checkout_session_completed(
     // 3 day grace); subscription.updated will re-issue with exact
     // current_period_end once Stripe sends that event (usually within
     // seconds after checkout.session.completed)
-    issue_and_deliver_license(env, db, &customer_id, &email, &tier, 33).await?;
+    let issuer = load_issuer(env)?;
+    let key = issuer
+        .issue(&tier, &customer_id, 33)
+        .map_err(|e| format!("license issue: {e}"))?;
+    let encoded = key.to_base64().map_err(|e| format!("license encode: {e}"))?;
+    let stored = store_license_once(
+        db,
+        &checkout_issue_key(&session_id),
+        &customer_id,
+        &encoded,
+        &tier,
+        &key.payload.issued_at,
+        &key.payload.expires_at,
+    )
+    .await?;
+    email::send_license_email(env, &email, &stored, &tier).await?;
 
     Ok(())
 }
@@ -350,8 +437,17 @@ async fn handle_subscription_updated(
             .issue_until(&tier, &customer_id, expires_at)
             .map_err(|e| format!("license issue: {e}"))?;
         let encoded = key.to_base64().map_err(|e| format!("license encode: {e}"))?;
-        insert_license(db, &customer_id, &encoded, &tier, &key.payload.issued_at, &expires_at).await?;
-        email::send_license_email(env, &email, &encoded, &tier).await;
+        let stored = store_license_once(
+            db,
+            &subscription_issue_key(&subscription_id, current_period_end_unix),
+            &customer_id,
+            &encoded,
+            &tier,
+            &key.payload.issued_at,
+            &expires_at,
+        )
+        .await?;
+        email::send_license_email(env, &email, &stored, &tier).await?;
     }
 
     Ok(())
@@ -432,59 +528,49 @@ async fn upsert_subscriber(
     Ok(())
 }
 
-async fn issue_and_deliver_license(
-    env: &Env,
+/// Store `license_key` under `issue_key` unless a licence is already stored there,
+/// and return the stored one (the key to deliver: a retry resends the first key)
+async fn store_license_once(
     db: &D1Database,
-    customer_id: &str,
-    email: &str,
-    tier: &str,
-    valid_days: i64,
-) -> Result<(), String> {
-    let issuer = load_issuer(env)?;
-    let key = issuer
-        .issue(tier, customer_id, valid_days)
-        .map_err(|e| format!("license issue: {e}"))?;
-    let encoded = key.to_base64().map_err(|e| format!("license encode: {e}"))?;
-    insert_license(
-        db,
-        customer_id,
-        &encoded,
-        tier,
-        &key.payload.issued_at,
-        &key.payload.expires_at,
-    )
-    .await?;
-    email::send_license_email(env, email, &encoded, tier).await;
-    Ok(())
-}
-
-async fn insert_license(
-    db: &D1Database,
+    issue_key: &str,
     customer_id: &str,
     license_key: &str,
     tier: &str,
     issued_at: &DateTime<Utc>,
     expires_at: &DateTime<Utc>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    db.prepare(
-        "INSERT INTO licenses (id, stripe_customer_id, license_key, tier, issued_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(&[
-        id.into(),
-        customer_id.into(),
-        license_key.into(),
-        tier.into(),
-        issued_at.to_rfc3339().into(),
-        expires_at.to_rfc3339().into(),
-    ])
-    .map_err(|e| format!("prepare: {e}"))?
-    .run()
-    .await
-    .map_err(|e| format!("insert license: {e}"))?;
-    Ok(())
+    db.prepare(INSERT_LICENSE_SQL)
+        .bind(&[
+            id.into(),
+            customer_id.into(),
+            license_key.into(),
+            tier.into(),
+            issued_at.to_rfc3339().into(),
+            expires_at.to_rfc3339().into(),
+            issue_key.into(),
+        ])
+        .map_err(|e| format!("prepare: {e}"))?
+        .run()
+        .await
+        .map_err(|e| format!("insert license: {e}"))?;
+    let row = db
+        .prepare(SELECT_ISSUED_LICENSE_SQL)
+        .bind(&[issue_key.into()])
+        .map_err(|e| format!("prepare: {e}"))?
+        .first::<serde_json::Value>(None)
+        .await
+        .map_err(|e| format!("select license: {e}"))?;
+    row.as_ref()
+        .and_then(|v| v.get("license_key"))
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .ok_or_else(|| format!("no licence stored under {issue_key}"))
 }
+
+#[cfg(test)]
+#[path = "webhook_issue_tests.rs"]
+mod webhook_issue_tests;
 
 #[cfg(test)]
 mod tests {

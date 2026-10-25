@@ -243,6 +243,8 @@ jobs:
           grep -q "signature_scope_tests::bytes_moved_between_the_source_and_the_date_are_refused ... ok" test.log
           grep -q "gallery_order_tests::a_post_dated_far_in_the_future_is_refused ... ok" test.log
           grep -q "gallery_order_tests::the_listing_is_ordered_by_the_time_the_worker_received_each_post ... ok" test.log
+          grep -q "webhook_issue_tests::a_retry_after_a_partial_success_resends_the_stored_key ... ok" test.log
+          grep -q "webhook_issue_tests::only_a_settled_checkout_issues_a_licence ... ok" test.log
       # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
       - name: Verify sibling HEADs (job end)
         if: always()

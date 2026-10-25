@@ -16,9 +16,10 @@
 use serde_json::json;
 use worker::{console_log, Env, Fetch, Headers, Method, Request, RequestInit};
 
-/// Never returns Err — email failures must not roll back the license
-/// issuance (the operator can always redeliver from the D1 row)
-pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &str) {
+/// `Err` when the configured send fails, so the webhook answers 500 and Stripe
+/// retries; issuance is idempotent, so the retry resends the same stored key
+/// Without `RESEND_API_KEY` it logs and returns `Ok` (the row is in D1)
+pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &str) -> Result<(), String> {
     let api_key = match env.secret("RESEND_API_KEY").ok().map(|v| v.to_string()) {
         Some(k) if !k.is_empty() => k,
         _ => {
@@ -26,7 +27,7 @@ pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &s
                 "[email stub] would send license to {to} tier={tier} key_len={}",
                 license_key.len()
             );
-            return;
+            return Ok(());
         }
     };
     let from = env
@@ -39,19 +40,16 @@ pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &s
     let payload = match serde_json::to_string(&body) {
         Ok(s) => s,
         Err(e) => {
-            console_log!("[email] failed to serialize body: {e}");
-            return;
+            return Err(format!("[email] failed to serialize body: {e}"));
         }
     };
 
     let mut headers = Headers::new();
     if headers.set("Authorization", &format!("Bearer {api_key}")).is_err() {
-        console_log!("[email] failed to set Authorization header");
-        return;
+        return Err("[email] failed to set Authorization header".to_string());
     }
     if headers.set("Content-Type", "application/json").is_err() {
-        console_log!("[email] failed to set Content-Type header");
-        return;
+        return Err("[email] failed to set Content-Type header".to_string());
     }
 
     let mut init = RequestInit::new();
@@ -62,8 +60,7 @@ pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &s
     let req = match Request::new_with_init("https://api.resend.com/emails", &init) {
         Ok(r) => r,
         Err(e) => {
-            console_log!("[email] failed to build request: {e}");
-            return;
+            return Err(format!("[email] failed to build request: {e}"));
         }
     };
 
@@ -72,12 +69,12 @@ pub async fn send_license_email(env: &Env, to: &str, license_key: &str, tier: &s
             let status = resp.status_code();
             if !(200..300).contains(&status) {
                 let text = resp.text().await.unwrap_or_default();
-                console_log!("[email] resend api {status}: {text}");
-            } else {
-                console_log!("[email] license delivered to {to} tier={tier}");
+                return Err(format!("[email] resend api {status}: {text}"));
             }
+            console_log!("[email] license delivered to {to} tier={tier}");
+            Ok(())
         }
-        Err(e) => console_log!("[email] resend fetch error: {e}"),
+        Err(e) => Err(format!("[email] resend fetch error: {e}")),
     }
 }
 
