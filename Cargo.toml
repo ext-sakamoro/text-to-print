@@ -32,6 +32,7 @@ alice-bamboo = { path = "../ALICE-Bamboo" }
 alice-physics = { path = "../ALICE-Physics/crates/alice-physics" }
 # SHA-256 of downloaded model files (alice_crypto::sha256)
 alice-crypto = { path = "../ALICE-Crypto" }
+alice-browser-secure = { path = "../ALICE-Browser-Secure" }
 
 # GUI
 eframe = { version = "0.31", features = ["wgpu"] }

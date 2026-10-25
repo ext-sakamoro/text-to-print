@@ -1436,6 +1436,11 @@ async fn fetch_and_open_checkout(
         .json()
         .await
         .map_err(|e| format!("{}: {e}", T::settings_response_parse_fail(lang)))?;
+    // only open Stripe's own hosted checkout page, never an arbitrary URL from
+    // a tampered backend response
+    crate::url_guard::checkout_allow_list()
+        .check(&parsed.url)
+        .map_err(|rej| format!("{}: {rej:?}", T::settings_url_not_allowed(lang)))?;
     open::that(&parsed.url)
         .map_err(|e| format!("{}: {e}", T::settings_browser_launch_fail(lang)))?;
     Ok(parsed.url)

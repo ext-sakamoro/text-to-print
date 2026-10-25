@@ -72,6 +72,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 open = "5"
 alice-bamboo = { workspace = true }
+alice-browser-secure = { workspace = true }
 # viewer.rs::auto_frame_from_sdf で tight_aabb::compute_tight_aabb_with_config
 # を直呼びして camera を LOL の AABB に合わせる用途 (alice-bamboo 経由
 # だと re-export されていない tight_aabb module に直接アクセス要)

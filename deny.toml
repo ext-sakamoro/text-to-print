@@ -75,6 +75,10 @@ name = "alice-crypto"
 allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
+name = "alice-browser-secure"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
 name = "alice-llm"
 allow = ["AGPL-3.0-or-later"]
 

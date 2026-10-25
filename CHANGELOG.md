@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Security — ブラウザで開く URL を allow-list で確かめる (2026-10-25)
+
+- checkout (Stripe) と updater (GitHub release) で browser に開く URL を alice-browser-secure の `UrlAllowList` で確かめてから開く checkout は `https` + host `checkout.stripe.com`、updater は `https` + `github.com` の `/ext-sakamoro/text-to-print/releases` 配下だけを許す userinfo / 既定でない port / 非 https / `.`・`..` / percent-encode した区切り / 似せた host は拒むので、改竄された応答が任意の URL を開けない
+
 ### Added — SQL を組み立てていないことを CI で確かめる (2026-10-25)
 
 - `scripts/sql_binding_check.py`: query に SQL を渡す呼び出し (execute / prepare / query_row 等) の第 1 引数が文字列 literal か UPPER_CASE の const であることを `crates/core/src/db.rs` と worker の handler で検査する format! / 連結 / 実行時に組んだ変数なら失敗する (検査 0 件も失敗) 検査器自身の試験つき CI の wiring-guard と preflight で実行する

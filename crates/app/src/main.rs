@@ -3,6 +3,7 @@ mod sdf;
 mod state;
 mod ui;
 mod updater;
+mod url_guard;
 
 use anyhow::Result;
 use eframe::egui;
@@ -208,7 +209,21 @@ impl eframe::App for App {
                         format!("v{} available", info.latest),
                     );
                     if ui.small_button("Download").clicked() {
-                        let _ = open::that(&info.download_url);
+                        // only open this product's own release page, never an
+                        // arbitrary URL from a tampered update response
+                        match url_guard::updater_allow_list().check(&info.download_url) {
+                            Ok(_) => {
+                                let _ = open::that(&info.download_url);
+                            }
+                            Err(rej) => {
+                                tracing::warn!(
+                                    target: "updater",
+                                    url = %info.download_url,
+                                    ?rej,
+                                    "refused to open update URL outside the allow-list"
+                                );
+                            }
+                        }
                     }
                 }
             });

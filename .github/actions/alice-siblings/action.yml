@@ -40,6 +40,12 @@ runs:
         # the key is written under the runner's temp directory for this step only
         ssh-key: ${{ inputs.bamboo-key }}
         persist-credentials: false
+    - name: Checkout ALICE-Browser-Secure
+      uses: actions/checkout@v5
+      with:
+        repository: ext-sakamoro/ALICE-Browser-Secure
+        path: ALICE-Browser-Secure
+        ref: ${{ steps.pins.outputs['ALICE-Browser-Secure'] }}
     - name: Checkout ALICE-Crypto
       uses: actions/checkout@v5
       with:

@@ -19,6 +19,7 @@ reason = "ALICE-Print を MQTT を alice-mqtt に替えた commit 14f2d74 に移
 
 [siblings]
 ALICE-Bamboo = "c7d45a9e99747f617b0aa9b608b3fa4d7ffced34"
+ALICE-Browser-Secure = "dc6f9fff24471e3e5cb02553ab9d840b76f301de"
 ALICE-Crypto = "4ab0f0e6c1cba949c949add9d5aedc98e080a4be"
 ALICE-LLM = "3274a66f7ac17cc74693390e2a6ff06d5ed47758"
 ALICE-LOL = "bf2aeb521a97e50a8bcecf054e2ed3c8d9b2534e"

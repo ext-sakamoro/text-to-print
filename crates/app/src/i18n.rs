@@ -1368,6 +1368,12 @@ impl T {
             Lang::En => "Browser launch failed",
         }
     }
+    pub fn settings_url_not_allowed(l: Lang) -> &'static str {
+        match l {
+            Lang::Ja => "許可されていない URL のため開きません",
+            Lang::En => "Refused to open a URL outside the allow-list",
+        }
+    }
 
     // ─── settings.rs: extra section headers / labels (Phase 2) ────
     pub fn settings_heading(l: Lang) -> &'static str {
