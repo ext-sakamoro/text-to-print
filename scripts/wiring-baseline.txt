@@ -131,6 +131,5 @@ unwired crates/llm/src/embedded_backend.rs::execution_mode
 unwired crates/llm/src/embedded_backend.rs::load_with_mode
 unwired crates/llm/src/grammar_lol.rs::parse_lol_grammar
 unwired crates/llm/src/openai_compat_backend.rs::from_preset
-unwired crates/llm/src/sidecar.rs::chat_endpoint
 unwired crates/llm/src/sidecar.rs::config
 unwired crates/llm/src/sidecar.rs::shutdown

@@ -406,7 +406,7 @@ fn show_sidecar_status(ui: &mut Ui, state: &AppState, lang: Lang) {
             ui.ctx().request_repaint();
             ui.add_space(4.0);
         }
-        SidecarStatus::Running => {
+        SidecarStatus::Running { .. } => {
             // 通常運用時は非表示
         }
         SidecarStatus::Error(msg) => {

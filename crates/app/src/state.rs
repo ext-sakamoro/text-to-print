@@ -2899,34 +2899,12 @@ impl AppState {
         }
 
         // sidecar auto-spawn: model DL 完了を待ってから `alice-llm-server` を起動
-        // 2026-08-07: preferred port 8000 は user 環境で Python HTTP server 等が
-        // 良く塞ぐため、事前 free port scan 済 chosen port は LlmConfig の
-        // endpoint も同期更新 client → sidecar 疎通が確実になる
-        // 2026-08-23: preferred port は Settings → Network から user 変更可
-        //   優先度: TTP_SIDECAR_PORT env → DB profiles.sidecar_port → default 8000
+        // sidecar は ephemeral port (0) で bind し、実際の address を stdout から
+        // 読む (SidecarStatus::Running がその endpoint を運ぶ) client はその
+        // endpoint を使うので、固定 port を予約しない (先に握った別 process を
+        // 自分の sidecar と取り違えない) llm_config.endpoint の初期値は placeholder
         let (sidecar_tx, sidecar_rx) = tokio::sync::watch::channel(SidecarStatus::Waiting);
-        let default_llm_config = LlmConfig::default();
-        let preferred_port = std::env::var("TTP_SIDECAR_PORT")
-            .ok()
-            .and_then(|s| s.parse::<u16>().ok())
-            .or_else(|| db.get_sidecar_port(&profile_id).ok())
-            .unwrap_or_else(|| default_sidecar_port(&default_llm_config.endpoint));
-        let chosen_port =
-            text_to_print_llm::sidecar::find_free_port_starting_at(preferred_port, 16)
-                .unwrap_or(preferred_port);
-        let llm_config = if chosen_port == preferred_port {
-            default_llm_config
-        } else {
-            tracing::info!(
-                preferred = preferred_port,
-                chosen = chosen_port,
-                "sidecar preferred port in use, endpoint updated"
-            );
-            LlmConfig {
-                endpoint: format!("http://127.0.0.1:{chosen_port}/v1/chat/completions"),
-                ..default_llm_config
-            }
-        };
+        let llm_config = LlmConfig::default();
         {
             let models_dir_for_sidecar = models_dir.clone();
             let mut model_progress_rx = progress_rx.clone();
@@ -2953,7 +2931,7 @@ impl AppState {
                         return;
                     }
                 };
-                text_to_print_llm::sidecar::run_auto_spawn(model, chosen_port, sidecar_tx).await;
+                text_to_print_llm::sidecar::run_auto_spawn(model, sidecar_tx).await;
             });
         }
         // Sidecar warm-up: healthy 検知後に background で dummy 1-token
@@ -2962,18 +2940,19 @@ impl AppState {
         // fire-and-forget、失敗は log のみ (実 request 時に retry される)
         {
             let mut sidecar_rx_for_warmup = sidecar_rx.clone();
-            let endpoint = llm_config.endpoint.clone();
             let model_id = llm_config.model_choice.model_id().to_string();
             runtime.spawn(async move {
-                // Running になるまで待つ
-                loop {
-                    if sidecar_rx_for_warmup.borrow().is_running() {
-                        break;
+                // Running (実際に bind した endpoint 付き) になるまで待つ
+                let endpoint = loop {
+                    if let SidecarStatus::Running { endpoint } =
+                        &*sidecar_rx_for_warmup.borrow_and_update()
+                    {
+                        break endpoint.clone();
                     }
                     if sidecar_rx_for_warmup.changed().await.is_err() {
                         return;
                     }
-                }
+                };
                 tracing::info!("sidecar warm-up starting (background dummy request)");
                 let started = std::time::Instant::now();
                 let client = reqwest::Client::builder()
@@ -3394,34 +3373,34 @@ impl AppState {
     pub fn active_backend(&self) -> text_to_print_llm::backend_kind::LlmBackend {
         use text_to_print_llm::backend_kind::LlmBackend;
         match self.backend_kind {
-            BackendKind::Sidecar => LlmBackend::Sidecar(self.llm_config.clone()),
+            BackendKind::Sidecar => LlmBackend::Sidecar(self.sidecar_config()),
             BackendKind::Embedded => {
                 let backend = self.embedded.lock().ok().and_then(|g| g.clone());
                 match backend {
                     Some(b) => LlmBackend::Embedded(b),
-                    None => LlmBackend::Sidecar(self.llm_config.clone()),
+                    None => LlmBackend::Sidecar(self.sidecar_config()),
                 }
             }
             BackendKind::OpenAiCompat => {
                 let backend = self.openai_compat.lock().ok().and_then(|g| g.clone());
                 match backend {
                     Some(b) => LlmBackend::OpenAiCompat(b),
-                    None => LlmBackend::Sidecar(self.llm_config.clone()),
+                    None => LlmBackend::Sidecar(self.sidecar_config()),
                 }
             }
         }
     }
-}
 
-/// `http://host:PORT/...` の PORT を抽出、失敗時は 8000
-fn default_sidecar_port(endpoint: &str) -> u16 {
-    endpoint
-        .split("://")
-        .nth(1)
-        .and_then(|s| s.split('/').next())
-        .and_then(|host_port| host_port.rsplit(':').next())
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8000)
+    /// The sidecar client config, with the endpoint set to the address the
+    /// sidecar actually bound (from [`SidecarStatus::Running`]) when it is up;
+    /// otherwise the placeholder default (no request is made before Running)
+    fn sidecar_config(&self) -> LlmConfig {
+        let mut cfg = self.llm_config.clone();
+        if let SidecarStatus::Running { endpoint } = &*self.sidecar_status.borrow() {
+            cfg.endpoint = endpoint.clone();
+        }
+        cfg
+    }
 }
 
 /// Startup path で BYO LLM (OpenAiCompat) slot を DB + Keychain から restore
@@ -3822,28 +3801,9 @@ mod tests {
         SockDividerUiState, SocketRailUiState, SpiceRackUiState, StickyNoteUiState,
         StorageBoxUiState, SwatchHolderUiState, TapeDispenserUiState, TissueBoxCoverUiState,
         TokenWellUiState, ToothbrushHolderUiState, TpHolderUiState, UnderDeskMountUiState,
-        UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState, default_sidecar_port,
+        UtensilCaddyUiState, WrapHolderUiState, WrenchHolderUiState,
     };
     use std::time::Duration;
-
-    #[test]
-    fn port_from_localhost_endpoint() {
-        assert_eq!(
-            default_sidecar_port("http://localhost:8000/v1/chat/completions"),
-            8000
-        );
-        assert_eq!(
-            default_sidecar_port("http://127.0.0.1:12345/v1/chat/completions"),
-            12345
-        );
-    }
-
-    #[test]
-    fn port_defaults_when_missing() {
-        assert_eq!(default_sidecar_port("http://localhost/v1/x"), 8000);
-        assert_eq!(default_sidecar_port(""), 8000);
-        assert_eq!(default_sidecar_port("garbage"), 8000);
-    }
 
     // ────────────────────────────────────────────────────────
     // Generation phase state-machine tests
