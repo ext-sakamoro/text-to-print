@@ -314,7 +314,9 @@ scripts/train_lora.py --config configs/lora_qwen3_5_4b.yaml
 
 ## ライセンス
 
-Copyright (c) 2025-2026 Moroya Sakamoto All rights reserved (ライセンスの許諾なし、`LICENSE-Proprietary` 参照) 変更前に公開した版は公開時のライセンス (MIT) のまま 第三者の component はそれぞれのライセンスに従う assets と学習データは `datasets/` 配下の個別 `LICENSE` file を参照
+`LicenseRef-Proprietary` 条文は [LICENSE-Proprietary](LICENSE-Proprietary)
+
+Enquiries: https://extoria.co.jp/
 
 ## 関連リポジトリ
 

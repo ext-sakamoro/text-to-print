@@ -1,10 +1,8 @@
-Copyright (c) 2025-2026 Moroya Sakamoto. All rights reserved.
+SPDX-License-Identifier: LicenseRef-Proprietary
 
-The source code of text-to-print is made visible for reference only. No
-license is granted: you may not use, copy, modify, merge, publish,
-distribute, sublicense or sell it, in whole or in part, without the prior
-written permission of the copyright holder.
+Copyright (c) 2026 Moroya Sakamoto. All rights reserved.
 
-Versions released before this notice keep the license they were released
-under. Third-party components, and the assets and training data under
-`datasets/`, remain under their own licenses.
+This software is proprietary. Its source is published for reading only. No
+license to use, copy, modify, distribute or sublicense it, in whole or in
+part, is granted, except by a separate written agreement with the copyright
+holder.
