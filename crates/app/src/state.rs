@@ -2819,7 +2819,14 @@ impl AppState {
         let db = Database::open(&db_path).expect("failed to open database");
 
         let profile_id = load_or_create_profile_id(&data_dir);
-        let tier = db.get_or_create_profile(&profile_id).unwrap_or(Tier::Free);
+        // the tier comes from the stored licence key, verified again now (signature
+        // and expiry); an expired or invalid key is Free
+        let tier = text_to_print_core::license::LicenseVerifier::new(
+            &crate::ui::settings::LICENSE_PUBLIC_KEY,
+        )
+        .ok()
+        .and_then(|v| db.load_tier(&profile_id, &v, chrono::Utc::now()).ok())
+        .unwrap_or(Tier::Free);
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
         let nickname = db.get_nickname(&profile_id).unwrap_or_default();
         let gallery_auto_share = db.get_gallery_auto_share(&profile_id).unwrap_or(false);
@@ -4828,7 +4835,7 @@ mod share_opt_out_tests {
         let mut compared = 0;
         for which in [ShareOptOut::AutoPublish, ShareOptOut::LoraShare] {
             let db = Database::open(std::path::Path::new(":memory:")).unwrap();
-            db.get_or_create_profile("p").unwrap();
+            db.ensure_profile("p").unwrap();
             db.set_gallery_auto_share("p", true).unwrap();
             db.set_share_lol_dsl("p", true).unwrap();
             let dir = tempfile::tempdir().unwrap();
@@ -4875,7 +4882,7 @@ mod share_opt_out_tests {
         let db_path = dir.path().join("t.db");
         {
             let db = Database::open(&db_path).unwrap();
-            db.get_or_create_profile("p").unwrap();
+            db.ensure_profile("p").unwrap();
             db.set_gallery_auto_share("p", true).unwrap();
         }
         let mut perms = std::fs::metadata(&db_path).unwrap().permissions();

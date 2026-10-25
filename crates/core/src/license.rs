@@ -1,8 +1,6 @@
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{
-    PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, Signature, Signer, SigningKey, Verifier, VerifyingKey,
-};
+use ed25519_dalek::{PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::tier::Tier;
@@ -19,6 +17,18 @@ pub struct LicensePayload {
 pub struct LicenseKey {
     pub payload: LicensePayload,
     pub signature: Vec<u8>,
+    /// The payload bytes the signature covers, exactly as issued or as received
+    /// (empty for a key built by hand, which then verifies against nothing)
+    #[serde(skip)]
+    pub signed_payload: Vec<u8>,
+}
+
+/// The wire form of a key: the payload is kept as the bytes it arrived as
+#[derive(Serialize, Deserialize)]
+struct LicenseKeyWire<'a> {
+    #[serde(borrow)]
+    payload: &'a serde_json::value::RawValue,
+    signature: Vec<u8>,
 }
 
 /// ライセンス発行者（サーバー側 / CLI で使用）
@@ -75,19 +85,22 @@ impl LicenseIssuer {
         Ok(LicenseKey {
             payload,
             signature: signature.to_bytes().to_vec(),
+            signed_payload: payload_bytes,
         })
     }
 }
 
 /// ライセンス検証器（アプリ側で使用）
 pub struct LicenseVerifier {
-    public_key: VerifyingKey,
+    public_key: [u8; PUBLIC_KEY_LENGTH],
 }
 
 impl LicenseVerifier {
     pub fn new(public_key_bytes: &[u8; PUBLIC_KEY_LENGTH]) -> Result<Self> {
+        // refuse bytes that are not a curve point here rather than at every verify
+        VerifyingKey::from_bytes(public_key_bytes)?;
         Ok(Self {
-            public_key: VerifyingKey::from_bytes(public_key_bytes)?,
+            public_key: *public_key_bytes,
         })
     }
 
@@ -102,38 +115,74 @@ impl LicenseVerifier {
         Self::new(&bytes)
     }
 
-    pub fn verify<'k>(&self, key: &'k LicenseKey) -> Result<&'k LicensePayload> {
-        let payload_bytes = serde_json::to_vec(&key.payload)?;
+    /// [`Self::verify_at`] with the system clock
+    pub fn verify(&self, key: &LicenseKey) -> Result<LicensePayload> {
+        self.verify_at(key, Utc::now())
+    }
 
-        if key.signature.len() != SIGNATURE_LENGTH {
-            bail!("invalid signature length");
+    /// The payload read from the signed bytes, if the signature is a strict Ed25519
+    /// signature (alice-sign `verify_strict`) of the payload bytes exactly as issued
+    /// or received, and `now` is not after its `expires_at` (`key.payload` is not
+    /// trusted: a changed field there is not what was signed)
+    pub fn verify_at(&self, key: &LicenseKey, now: DateTime<Utc>) -> Result<LicensePayload> {
+        let sig_bytes: [u8; SIGNATURE_LENGTH] = key
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid signature length"))?;
+        if !alice_sign::PublicKey(self.public_key)
+            .verify_strict(&key.signed_payload, &alice_sign::Signature(sig_bytes))
+        {
+            bail!("license signature does not verify");
         }
-        let sig_bytes: [u8; SIGNATURE_LENGTH] = key.signature[..SIGNATURE_LENGTH].try_into()?;
-        let signature = Signature::from_bytes(&sig_bytes);
-
-        self.public_key.verify(&payload_bytes, &signature)?;
-
-        if Utc::now() > key.payload.expires_at {
+        let payload: LicensePayload = serde_json::from_slice(&key.signed_payload)?;
+        if now > payload.expires_at {
             bail!("license expired");
         }
-
-        Ok(&key.payload)
+        Ok(payload)
     }
 }
 
 impl LicenseKey {
+    /// The base64 of `{"payload": <the signed payload bytes>, "signature": [...]}`
     pub fn to_base64(&self) -> Result<String> {
         use base64::Engine;
-        let bytes = serde_json::to_vec(self)?;
+        let payload = std::str::from_utf8(&self.signed_payload)
+            .ok()
+            .and_then(|s| serde_json::value::RawValue::from_string(s.to_owned()).ok())
+            .context("the key has no signed payload bytes")?;
+        let bytes = serde_json::to_vec(&LicenseKeyWire {
+            payload: &payload,
+            signature: self.signature.clone(),
+        })?;
         Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
     }
 
+    /// Decode a key, keeping the payload bytes it carries for [`LicenseVerifier::verify_at`]
     pub fn from_base64(encoded: &str) -> Result<Self> {
         use base64::Engine;
         let bytes = base64::engine::general_purpose::STANDARD.decode(encoded.trim())?;
-        let key: Self = serde_json::from_slice(&bytes)?;
-        Ok(key)
+        let wire: LicenseKeyWire<'_> = serde_json::from_slice(&bytes)?;
+        let payload: LicensePayload = serde_json::from_str(wire.payload.get())?;
+        Ok(Self {
+            payload,
+            signature: wire.signature,
+            signed_payload: wire.payload.get().as_bytes().to_vec(),
+        })
     }
+}
+
+/// The tier a stored key (base64, as saved with the profile) gives at `now`: the
+/// payload's tier if the key verifies and has not expired, otherwise Free
+#[must_use]
+pub fn tier_of_stored_key(stored: &str, verifier: &LicenseVerifier, now: DateTime<Utc>) -> Tier {
+    if stored.trim().is_empty() {
+        return Tier::Free;
+    }
+    LicenseKey::from_base64(stored)
+        .ok()
+        .and_then(|key| verifier.verify_at(&key, now).ok().map(|p| p.tier))
+        .unwrap_or(Tier::Free)
 }
 
 #[cfg(test)]
@@ -178,11 +227,33 @@ mod tests {
     #[test]
     fn tampered_payload_rejects() {
         let issuer = LicenseIssuer::generate();
+        let verifier = LicenseVerifier::new(&issuer.public_key_bytes()).unwrap();
+        // a field changed in memory is not what was signed: the signed tier is returned
         let mut key = issuer.issue(Tier::Free, "user", 30).unwrap();
         key.payload.tier = Tier::Enterprise;
-
-        let verifier = LicenseVerifier::new(&issuer.public_key_bytes()).unwrap();
-        assert!(verifier.verify(&key).is_err());
+        assert_eq!(verifier.verify(&key).unwrap().tier, Tier::Free);
+        // a field changed in the encoded key is refused
+        use base64::Engine;
+        let json = String::from_utf8(
+            base64::engine::general_purpose::STANDARD
+                .decode(
+                    issuer
+                        .issue(Tier::Free, "user", 30)
+                        .unwrap()
+                        .to_base64()
+                        .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(json.contains("\"tier\":\"Free\""));
+        let forged = base64::engine::general_purpose::STANDARD
+            .encode(json.replace("\"tier\":\"Free\"", "\"tier\":\"Enterprise\""));
+        assert!(
+            verifier
+                .verify(&LicenseKey::from_base64(&forged).unwrap())
+                .is_err()
+        );
     }
 
     #[test]
@@ -204,6 +275,7 @@ mod tests {
                 expires_at: Utc::now() + chrono::Duration::days(30),
             },
             signature: vec![0u8; 10],
+            signed_payload: Vec::new(),
         };
         let issuer = LicenseIssuer::generate();
         let verifier = LicenseVerifier::new(&issuer.public_key_bytes()).unwrap();

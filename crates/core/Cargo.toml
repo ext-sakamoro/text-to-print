@@ -15,7 +15,9 @@ rusqlite = { workspace = true }
 ed25519-dalek = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
+# strict Ed25519 verification of licence keys
+alice-sign = { path = "../../../ALICE-Sign" }
 uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }

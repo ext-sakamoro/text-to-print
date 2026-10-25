@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Fixed — 有料の tier を起動のたびに licence key で決める (2026-10-25)
+
+- 起動時の tier は保存した licence key を署名と有効期限で検証し直して決める (これまでは貼り付けた時に 1 回だけ検証し、その後は profile の `tier` 列をそのまま使っていたので、期限を過ぎても有料の tier のままだった) 無効・期限切れの key は Free
+- 署名は受け取った payload の byte 列そのものに対する厳密な Ed25519 (alice-sign の `verify_strict`) で検証する (payload を直列化し直した byte 列では検証しない) 返す payload も署名された byte 列から読む 発行済みの key はそのまま通る
+- `LicenseVerifier::verify_at(key, now)` と `license::tier_of_stored_key` と `Database::load_tier` を足した `verify` は payload を値で返す
+
 ### Fixed — gallery の並び順を worker が受け取った時刻で決める (2026-10-25)
 
 - 一覧は `received_at` (worker が付ける時刻) の新しい順 (著者が署名した `created_at` で並べていたので、未来の日付の投稿が先頭に残り続けた) migration `0004_gallery_received_at.sql` が索引を足す
