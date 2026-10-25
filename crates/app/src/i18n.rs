@@ -1024,24 +1024,6 @@ impl T {
             Lang::En => "Sync preset library at startup",
         }
     }
-    pub fn settings_port_default_hint(l: Lang) -> &'static str {
-        match l {
-            Lang::Ja => "(既定 8000、使用中なら +1 で自動 fallback)",
-            Lang::En => "(default 8000, auto-fallback +1 if in use)",
-        }
-    }
-    pub fn settings_port_save_error(l: Lang) -> &'static str {
-        match l {
-            Lang::Ja => "port save 失敗",
-            Lang::En => "Port save failed",
-        }
-    }
-    pub fn settings_port_range_error(l: Lang) -> &'static str {
-        match l {
-            Lang::Ja => "port は 1024-65535 の整数",
-            Lang::En => "Port must be an integer 1024-65535",
-        }
-    }
     pub fn settings_endpoint_save_error(l: Lang) -> &'static str {
         match l {
             Lang::Ja => "endpoint save 失敗",
@@ -1520,12 +1502,6 @@ impl T {
             Lang::En => {
                 "Empty uses https://text-to-print.alicelaw.net/api/presets (change only when using a self-hosted mirror or proxy)"
             }
-        }
-    }
-    pub fn settings_sidecar_port_label(l: Lang) -> &'static str {
-        match l {
-            Lang::Ja => "Sidecar port:",
-            Lang::En => "Sidecar port:",
         }
     }
     pub fn settings_save_network_button(l: Lang) -> &'static str {

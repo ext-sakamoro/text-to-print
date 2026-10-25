@@ -32,14 +32,12 @@ fn helper_app_holding_a_sidecar() {
         .build()
         .unwrap();
     rt.block_on(async move {
-        let port = text_to_print_llm::sidecar::find_free_port_starting_at(18500, 200).unwrap();
         let model = text_to_print_llm::downloader::ModelFile::user_supplied(
             PathBuf::from(model),
             text_to_print_llm::model::ModelChoice::default(),
         );
         let cfg = text_to_print_llm::sidecar::SidecarConfig {
             bin_path: Some(PathBuf::from(std::env::var(BIN_ENV).unwrap())),
-            port,
             health_timeout: Duration::from_secs(600),
             ..Default::default()
         };
@@ -128,13 +126,16 @@ fn start_app(model: &Path) -> (Child, u32, std::net::SocketAddr) {
             let _ = tx.send(line);
         }
     });
-    let deadline = Instant::now() + Duration::from_secs(60);
+    // The server binds and prints its line within a second or two; if a marker
+    // never arrives (the drain or the re-emit regressed), fail fast rather than
+    // hang Readers of the parent's stdout see both markers within this window
+    let deadline = Instant::now() + Duration::from_secs(8);
     let mut wait_for = |marker: &str| -> String {
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             let line = rx.recv_timeout(left).unwrap_or_else(|_| {
                 let _ = helper.kill();
-                panic!("no `{marker}` from the sidecar within 60 s")
+                panic!("no `{marker}` from the sidecar within 8 s")
             });
             // libtest prints `test <name> ... ` without a newline, so the
             // sidecar's first line can start in the middle of a line
@@ -163,6 +164,10 @@ fn gone_within(pid: u32, limit: Duration) -> bool {
 fn stop_app_and_check(signal: &str, tag: &str) {
     let (_scratch, model) = fifo(tag);
     let (mut helper, sidecar, addr) = start_app(&model);
+    // `addr` is the port the app resolved and re-emitted, not just a string that
+    // matched: connecting here proves something listens on exactly that port, and
+    // the refused connect after the sidecar dies (below) proves that listener was
+    // the sidecar A wrong ephemeral port fails this pre-kill connect
     assert!(addr.ip().is_loopback(), "the sidecar listens on {addr}");
     assert!(
         std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)).is_ok(),

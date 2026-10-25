@@ -37,9 +37,6 @@ pub struct SettingsState {
     pub checkout_message: Option<(String, bool)>,
     /// 2026-08-23 Network Settings — preset endpoint input buffer (空 = default)
     pub presets_endpoint_input: String,
-    /// 2026-08-23 Network Settings — sidecar port input buffer (string 経由で
-    /// TextEdit と bind、save 時に u16 parse)
-    pub sidecar_port_input: String,
     /// 2026-08-23 Network Settings — save 結果 message (ok=true / error=false)
     pub network_message: Option<(String, bool)>,
     /// 2026-08-23 Network Settings 初期 load 済みフラグ (SettingsState 生成後
@@ -639,11 +636,6 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState, lan
                         .db
                         .get_presets_endpoint(&state.profile_id)
                         .unwrap_or_default();
-                    settings.sidecar_port_input = state
-                        .db
-                        .get_sidecar_port(&state.profile_id)
-                        .unwrap_or(8000)
-                        .to_string();
                     settings.network_loaded = true;
                 }
 
@@ -676,33 +668,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, settings: &mut SettingsState, lan
                         .set_presets_sync_enabled(&state.profile_id, sync_enabled);
                 }
 
-                // Sidecar port (u16)
-                ui.horizontal(|ui| {
-                    ui.label(T::settings_sidecar_port_label(lang));
-                    ui.add(
-                        egui::TextEdit::singleline(&mut settings.sidecar_port_input)
-                            .desired_width(80.0),
-                    );
-                    ui.label(
-                        egui::RichText::new(T::settings_port_default_hint(lang))
-                            .small()
-                            .weak(),
-                    );
-                });
-
                 // Save button
                 if ui.button(T::settings_save_network_button(lang)).clicked() {
                     let endpoint = settings.presets_endpoint_input.trim().to_string();
-                    let port_result = settings.sidecar_port_input.trim().parse::<u16>();
                     let mut errors = Vec::new();
-                    match port_result {
-                        Ok(p) if (1024..=65535).contains(&p) => {
-                            if let Err(e) = state.db.set_sidecar_port(&state.profile_id, p) {
-                                errors.push(format!("{}: {e}", T::settings_port_save_error(lang)));
-                            }
-                        }
-                        _ => errors.push(T::settings_port_range_error(lang).to_string()),
-                    }
                     if let Err(e) = state.db.set_presets_endpoint(&state.profile_id, &endpoint) {
                         errors.push(format!("{}: {e}", T::settings_endpoint_save_error(lang)));
                     }
