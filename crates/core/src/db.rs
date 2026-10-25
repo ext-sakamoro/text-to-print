@@ -612,30 +612,6 @@ impl Database {
         Ok(())
     }
 
-    /// 2026-08-23: Network settings — sidecar alice-llm-server preferred port
-    ///
-    /// default 8000 port 使用中の場合は起動時 +1 で自動 fallback (8001)
-    /// user 環境で 8000 / 8001 とも別 app に占有される時に override 可
-    pub fn get_sidecar_port(&self, profile_id: &str) -> Result<u16> {
-        let value: i64 = self
-            .conn
-            .query_row(
-                "SELECT sidecar_port FROM profiles WHERE id = ?1",
-                [profile_id],
-                |row| row.get(0),
-            )
-            .unwrap_or(8000);
-        Ok(value.clamp(1024, 65535) as u16)
-    }
-
-    pub fn set_sidecar_port(&self, profile_id: &str, port: u16) -> Result<()> {
-        self.conn.execute(
-            "UPDATE profiles SET sidecar_port = ?2, updated_at = datetime('now') WHERE id = ?1",
-            rusqlite::params![profile_id, i64::from(port)],
-        )?;
-        Ok(())
-    }
-
     // ── BYO LLM (2026-08-23): OpenAI-compat provider configs ──
 
     /// Fetch which OpenAI-compat provider is currently active for

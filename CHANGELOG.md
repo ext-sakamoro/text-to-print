@@ -26,6 +26,9 @@
 - 一覧は `received_at` (worker が付ける時刻) の新しい順 (著者が署名した `created_at` で並べていたので、未来の日付の投稿が先頭に残り続けた) migration `0004_gallery_received_at.sql` が索引を足す
 - `created_at` は UTC (`Z` か `+00:00`) だけを受け、worker の時計より 10 分を超えて先の時刻は `gallery_created_at_future` で拒む 他の offset は `gallery_created_at_format` desktop は `Z` 付きの UTC (ミリ秒まで) を送る
 - 投稿の hourly 上限は著者 (did、`GALLERY_PER_AUTHOR_HOURLY`) と client の address で数える (client が選ぶ post id では数えない) 削除も address の上限に数える
+### 変更 — sidecar を ephemeral port で起動する (2026-10-25)
+- sidecar を常に ephemeral port (`--port 0`) で起動し、OS が割り当てた address を sidecar の stdout の `Bound to http://` の行から読むようにした client はその address だけに話す 固定 port を予約・予測しないので、先にその port を握った別 process を自分の sidecar と取り違えない これに伴い Settings → Network の「sidecar の port」設定と環境変数 `TTP_SIDECAR_PORT` を廃止した (binding に影響しなくなるため)
+
 
 ### Added — 公開の文の検査を CI と preflight で実行する (2026-10-25)
 
