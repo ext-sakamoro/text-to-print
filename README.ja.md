@@ -318,6 +318,10 @@ scripts/train_lora.py --config configs/lora_qwen3_5_4b.yaml
 
 Enquiries: https://extoria.co.jp/
 
+## 第三者のライセンス
+
+第三者の component (依存) はそれぞれのライセンスに従う
+
 ## 関連リポジトリ
 
 - [ALICE-LLM](https://github.com/ext-sakamoro/ALICE-LLM) — pure Rust LLM

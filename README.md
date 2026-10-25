@@ -326,6 +326,10 @@ scripts/train_lora.py --config configs/lora_qwen3_5_4b.yaml
 
 Enquiries: https://extoria.co.jp/
 
+## Third-party
+
+Third-party components (the dependencies) keep their own licenses.
+
 ## Related repos
 
 - [ALICE-LLM](https://github.com/ext-sakamoro/ALICE-LLM) — pure Rust LLM
