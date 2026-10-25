@@ -27,6 +27,7 @@ pub enum RejectReason {
     GalleryDidFormat,
     GalleryNicknameTooLong,
     GalleryCreatedAtFormat,
+    GalleryCreatedAtFuture,
     GallerySignatureFormat,
     GallerySignatureInvalid,
     GalleryLolTooLarge,
@@ -50,6 +51,7 @@ impl RejectReason {
             Self::GalleryDidFormat => "gallery_did_format",
             Self::GalleryNicknameTooLong => "gallery_nickname_too_long",
             Self::GalleryCreatedAtFormat => "gallery_created_at_format",
+            Self::GalleryCreatedAtFuture => "gallery_created_at_future",
             Self::GallerySignatureFormat => "gallery_signature_format",
             Self::GallerySignatureInvalid => "gallery_signature_invalid",
             Self::GalleryLolTooLarge => "gallery_lol_too_large",
@@ -72,7 +74,8 @@ impl RejectReason {
             Self::PromptLangFormat => "prompt_lang must be a 2-letter lowercase code",
             Self::GalleryDidFormat => "author_did must be did:key:<64 lowercase hex>",
             Self::GalleryNicknameTooLong => "author_nickname exceeds 32 chars",
-            Self::GalleryCreatedAtFormat => "created_at must be ISO-8601 UTC",
+            Self::GalleryCreatedAtFormat => "created_at must be an RFC 3339 UTC time (Z or +00:00)",
+            Self::GalleryCreatedAtFuture => "created_at is more than 10 minutes ahead of the server clock",
             Self::GallerySignatureFormat => "signature must be 128 lowercase hex chars",
             Self::GallerySignatureInvalid => "ed25519 signature does not verify against author_did",
             Self::GalleryLolTooLarge => "lol_source exceeds 102400 bytes (100 KB)",
@@ -269,7 +272,12 @@ pub struct GalleryPublishFields<'a> {
 /// is NOT checked here — the desktop-side client is authoritative and the
 /// Worker can not link `alice-bamboo` (wasm32 build) A separate cleanup task
 /// can walk the D1 table if bad rows appear in practice
-pub fn check_gallery_publish(fields: &GalleryPublishFields<'_>) -> Result<(), RejectReason> {
+/// `now_unix_ms` is the worker's clock: `created_at` may be at most
+/// [`MAX_CREATED_AT_AHEAD_MS`] ahead of it
+pub fn check_gallery_publish(
+    fields: &GalleryPublishFields<'_>,
+    now_unix_ms: u64,
+) -> Result<(), RejectReason> {
     if !is_uuid(fields.id) {
         return Err(RejectReason::UuidFormat);
     }
@@ -285,18 +293,27 @@ pub fn check_gallery_publish(fields: &GalleryPublishFields<'_>) -> Result<(), Re
     if fields.lol_source.len() > MAX_GALLERY_LOL_LEN {
         return Err(RejectReason::GalleryLolTooLarge);
     }
-    if !is_rfc3339_timestamp(fields.created_at) {
+    let Some(created_ms) = utc_timestamp_ms(fields.created_at) else {
         return Err(RejectReason::GalleryCreatedAtFormat);
+    };
+    if created_ms > i128::from(now_unix_ms) + i128::from(MAX_CREATED_AT_AHEAD_MS) {
+        return Err(RejectReason::GalleryCreatedAtFuture);
     }
     let message = gallery_publish_message(fields)?;
     verify_gallery_signature(fields.author_did, fields.signature, &message)
 }
 
-/// An RFC 3339 timestamp: `YYYY-MM-DDTHH:MM:SS`, an optional fraction of 1 to 9
-/// digits, then `Z` or `+HH:MM` / `-HH:MM`, with every field in range (the day
-/// within its month, leap years included) Anything else is refused, so the stored
-/// value is always one a reader can parse
-fn is_rfc3339_timestamp(s: &str) -> bool {
+/// How far ahead of the worker's clock a post's `created_at` may be
+pub const MAX_CREATED_AT_AHEAD_MS: u64 = 10 * 60 * 1000;
+
+/// The milliseconds since 1970-01-01T00:00:00Z of an RFC 3339 UTC time:
+/// `YYYY-MM-DDTHH:MM:SS`, an optional fraction of 1 to 9 digits (read to the
+/// millisecond, the rest truncated), then `Z` or `+00:00` (what chrono's
+/// `to_rfc3339` writes for UTC) Every field must be in range (the day within its
+/// month, leap years included, second 60 for a leap second) Any other offset, and
+/// `-00:00` (RFC 3339's "offset unknown"), is refused, so every accepted value is
+/// one instant in UTC
+pub fn utc_timestamp_ms(s: &str) -> Option<i128> {
     fn num(b: &[u8]) -> Option<u32> {
         if b.is_empty() || !b.iter().all(u8::is_ascii_digit) {
             return None;
@@ -311,7 +328,7 @@ fn is_rfc3339_timestamp(s: &str) -> bool {
         || b[13] != b':'
         || b[16] != b':'
     {
-        return false;
+        return None;
     }
     let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
         num(&b[0..4]),
@@ -321,7 +338,7 @@ fn is_rfc3339_timestamp(s: &str) -> bool {
         num(&b[14..16]),
         num(&b[17..19]),
     ) else {
-        return false;
+        return None;
     };
     let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
     let month_days = match month {
@@ -329,32 +346,52 @@ fn is_rfc3339_timestamp(s: &str) -> bool {
         4 | 6 | 9 | 11 => 30,
         2 if leap => 29,
         2 => 28,
-        _ => return false,
+        _ => return None,
     };
     // second 60 is a leap second, which RFC 3339 allows
     if !(1..=month_days).contains(&day) || hour > 23 || minute > 59 || second > 60 {
-        return false;
+        return None;
     }
     let mut rest = &b[19..];
+    let mut millis = 0u32;
     if let Some(frac) = rest.strip_prefix(b".") {
         let digits = frac.iter().take_while(|c| c.is_ascii_digit()).count();
         if !(1..=9).contains(&digits) {
-            return false;
+            return None;
         }
+        let mut ms = [b'0'; 3];
+        for (slot, d) in ms.iter_mut().zip(&frac[..digits]) {
+            *slot = *d;
+        }
+        millis = num(&ms)?;
         rest = &frac[digits..];
     }
-    match rest {
-        b"Z" => true,
-        [sign, h1, h2, b':', m1, m2] if *sign == b'+' || *sign == b'-' => {
-            matches!((num(&[*h1, *h2]), num(&[*m1, *m2])), (Some(h), Some(m)) if h <= 23 && m <= 59)
-        }
-        _ => false,
+    if rest != b"Z" && rest != b"+00:00" {
+        return None;
     }
+    // days since 1970-01-01 (Howard Hinnant's days_from_civil)
+    let (y, m) = (i64::from(year), i64::from(month));
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + i64::from(day) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    let secs = i128::from(days) * 86_400
+        + i128::from(hour) * 3_600
+        + i128::from(minute) * 60
+        + i128::from(second);
+    Some(secs * 1_000 + i128::from(millis))
 }
 
 #[cfg(test)]
 #[path = "validate_signature_scope_tests.rs"]
 mod signature_scope_tests;
+
+#[cfg(test)]
+#[path = "gallery_order_tests.rs"]
+mod gallery_order_tests;
 
 #[cfg(test)]
 mod tests {
@@ -486,6 +523,9 @@ mod tests {
 
     use ed25519_dalek::SigningKey;
 
+    /// A worker clock after every time these tests sign (2027-01-01T00:00:00Z)
+    const TEST_NOW_MS: u64 = 1_798_761_600_000;
+
     fn sign_message(key: &SigningKey, message: &[u8]) -> String {
         hex::encode(text_to_print_gallery_sign::sign(key.to_bytes(), message))
     }
@@ -590,7 +630,7 @@ mod tests {
             signature: &sig_hex,
             ..unsigned
         };
-        assert!(check_gallery_publish(&fields).is_ok());
+        assert!(check_gallery_publish(&fields, TEST_NOW_MS).is_ok());
     }
 
     #[test]
@@ -613,7 +653,7 @@ mod tests {
             ..unsigned
         };
         assert!(matches!(
-            check_gallery_publish(&fields),
+            check_gallery_publish(&fields, TEST_NOW_MS),
             Err(RejectReason::GalleryLolTooLarge)
         ));
     }
@@ -639,7 +679,7 @@ mod tests {
             ..unsigned
         };
         assert!(matches!(
-            check_gallery_publish(&fields),
+            check_gallery_publish(&fields, TEST_NOW_MS),
             Err(RejectReason::GalleryNicknameTooLong)
         ));
     }
@@ -656,7 +696,7 @@ mod tests {
             signature: &"a".repeat(128),
         };
         assert!(matches!(
-            check_gallery_publish(&fields),
+            check_gallery_publish(&fields, TEST_NOW_MS),
             Err(RejectReason::GallerySignatureInvalid)
         ));
     }
@@ -681,20 +721,31 @@ mod tests {
             ..unsigned
         };
         assert!(matches!(
-            check_gallery_publish(&fields),
+            check_gallery_publish(&fields, TEST_NOW_MS),
             Err(RejectReason::GalleryCreatedAtFormat)
         ));
     }
 
     #[test]
-    fn rfc3339_timestamps_the_client_sends_are_accepted() {
-        for ok in [
-            "2026-08-26T12:00:00Z",
-            "2026-10-25T00:14:28.123456789+00:00",
+    fn rfc3339_utc_timestamps_the_client_sends_are_accepted() {
+        for (ok, ms) in [
+            ("1970-01-01T00:00:00Z", 0),
+            ("2026-08-26T12:00:00Z", 1_787_745_600_000),
+            ("2026-10-25T00:14:28.123456789+00:00", 1_792_887_268_123),
+            ("2024-02-29T23:59:60.5Z", 1_709_251_200_500),
+        ] {
+            assert_eq!(utc_timestamp_ms(ok), Some(ms), "{ok}");
+        }
+    }
+
+    #[test]
+    fn offsets_other_than_utc_are_refused() {
+        for bad in [
             "2026-10-25T09:14:28+09:00",
             "2024-02-29T23:59:60.5-05:30",
+            "2026-10-25T00:00:00-00:00",
         ] {
-            assert!(is_rfc3339_timestamp(ok), "{ok}");
+            assert_eq!(utc_timestamp_ms(bad), None, "{bad}");
         }
     }
 
@@ -720,7 +771,7 @@ mod tests {
             "+026-10-24T00:00:00Z",
             "2026-1a-24T00:00:00Z",
         ] {
-            assert!(!is_rfc3339_timestamp(bad), "{bad}");
+            assert_eq!(utc_timestamp_ms(bad), None, "{bad}");
         }
     }
 }

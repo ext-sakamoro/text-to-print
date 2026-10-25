@@ -1,6 +1,7 @@
 //! Gallery Phase 3 (2026-08-26) endpoints
 //!
-//! `GET  /api/gallery/list?limit=N&offset=N`  — latest-first listing
+//! `GET  /api/gallery/list?limit=N&offset=N`  — latest-first listing, by the time
+//!                                              the worker received each post
 //! `POST /api/gallery/publish`                — insert with ed25519 sig verify
 //! `DELETE /api/gallery/{id}` (body: sig + did) — own-post soft delete
 //!
@@ -8,8 +9,9 @@
 //! and `migrations/0003_gallery.sql`)
 //!
 //! Rate limits reuse the shared `rate_limit_counters` table on the
-//! `SHARES_DB` binding — same per-UUID / per-IP hourly budget as
-//! `/api/share` (`PER_UUID_HOURLY` / `PER_IP_HOURLY` env vars)
+//! `SHARES_DB` binding: a publish counts against its author
+//! (`GALLERY_PER_AUTHOR_HOURLY`) and the client address (`PER_IP_HOURLY`, shared
+//! with `/api/share`), a delete against the client address
 
 use serde::{Deserialize, Serialize};
 use worker::{Date, Request, Response, Result as WorkerResult, RouteContext, Url};
@@ -20,10 +22,31 @@ use crate::{hash_ip, RejectResponse};
 
 const IP_HEADER: &str = "CF-Connecting-IP";
 const DEFAULT_IP_SALT: &str = "unsalted";
-const DEFAULT_PER_UUID_HOURLY: u32 = 10;
+const DEFAULT_PER_AUTHOR_HOURLY: u32 = 10;
 const DEFAULT_PER_IP_HOURLY: u32 = 100;
 const DEFAULT_LIST_LIMIT: u32 = 100;
 const MAX_LIST_LIMIT: u32 = 500;
+
+/// The listing: live posts, latest received first (`received_at` is set by the
+/// worker; the author's `created_at` does not decide the order)
+pub const LIST_SQL: &str = "SELECT id, author_did, author_nickname, lol_source, created_at
+     FROM gallery_sdfs
+     WHERE deleted_at IS NULL
+     ORDER BY received_at DESC, id DESC
+     LIMIT ?1 OFFSET ?2";
+
+/// The hourly buckets a publish counts against: its author and the client address
+/// (not the post id, which the client chooses)
+#[must_use]
+pub fn publish_buckets(author_did: &str, ip_hash: &str) -> [String; 2] {
+    [format!("gallery_did:{author_did}"), format!("gallery_ip:{ip_hash}")]
+}
+
+/// The hourly bucket a delete counts against: the client address, shared with publish
+#[must_use]
+pub fn delete_buckets(ip_hash: &str) -> [String; 1] {
+    [format!("gallery_ip:{ip_hash}")]
+}
 
 /// Wire schema for `POST /api/gallery/publish`
 #[derive(Debug, Deserialize)]
@@ -83,13 +106,7 @@ pub async fn handle_list(req: &Request, ctx: &RouteContext<()>) -> WorkerResult<
         Err(e) => return reject(500, "gallery_db_unbound", &e.to_string()),
     };
     let rows = db
-        .prepare(
-            "SELECT id, author_did, author_nickname, lol_source, created_at
-             FROM gallery_sdfs
-             WHERE deleted_at IS NULL
-             ORDER BY created_at DESC
-             LIMIT ?1 OFFSET ?2",
-        )
+        .prepare(LIST_SQL)
         .bind(&[limit.into(), offset.into()])?
         .all()
         .await?;
@@ -120,53 +137,15 @@ pub async fn handle_publish(
         created_at: &body.created_at,
         signature: &body.signature,
     };
-    if let Err(reason) = validate::check_gallery_publish(&fields) {
+    if let Err(reason) = validate::check_gallery_publish(&fields, Date::now().as_millis()) {
         return reject(400, reason.tag(), reason.message());
     }
 
-    // Rate limit (shared with /api/share; per-UUID + per-IP hourly bucket)
-    let per_uuid = env_u32(&ctx.env, "PER_UUID_HOURLY", DEFAULT_PER_UUID_HOURLY);
+    let per_author = env_u32(&ctx.env, "GALLERY_PER_AUTHOR_HOURLY", DEFAULT_PER_AUTHOR_HOURLY);
     let per_ip = env_u32(&ctx.env, "PER_IP_HOURLY", DEFAULT_PER_IP_HOURLY);
-    let salt = env_str(&ctx.env, "IP_HASH_SALT", DEFAULT_IP_SALT);
-    let ip = req
-        .headers()
-        .get(IP_HEADER)
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "unknown".to_string());
-    let ip_hash = hash_ip(&ip, &salt);
-
-    let now = Date::now();
-    let now_iso = now.to_string();
-    let hour_end_iso = {
-        let ms = now.as_millis();
-        let ms_per_hour: u64 = 60 * 60 * 1000;
-        let end_ms = ms - (ms % ms_per_hour) + ms_per_hour;
-        Date::new(worker::DateInit::Millis(end_ms)).to_string()
-    };
-
-    let shares_db = ctx.env.d1("SHARES_DB")?;
-    let uuid_decision = rate_limit::bump(
-        &shares_db,
-        &format!("gallery_uuid:{}", body.id),
-        per_uuid,
-        &now_iso,
-        &hour_end_iso,
-    )
-    .await?;
-    if uuid_decision == LimitDecision::Deny {
-        return reject(429, "rate_limit_uuid", "per-UUID hourly cap exceeded");
-    }
-    let ip_decision = rate_limit::bump(
-        &shares_db,
-        &format!("gallery_ip:{ip_hash}"),
-        per_ip,
-        &now_iso,
-        &hour_end_iso,
-    )
-    .await?;
-    if ip_decision == LimitDecision::Deny {
-        return reject(429, "rate_limit_ip", "per-IP hourly cap exceeded");
+    let [author_key, ip_key] = publish_buckets(&body.author_did, &client_ip_hash(req, ctx));
+    if let Some(denied) = over_limit(ctx, &[(author_key, per_author), (ip_key, per_ip)]).await? {
+        return Ok(denied);
     }
 
     // Insert (idempotent on id PK — replay writes are absorbed)
@@ -192,7 +171,7 @@ pub async fn handle_publish(
     let resp = Response::from_json(&PublishAccept {
         status: "accepted",
         id: body.id,
-        received_at: now_iso,
+        received_at: Date::now().to_string(),
     })?;
     Ok(resp.with_status(202))
 }
@@ -209,6 +188,12 @@ pub async fn handle_delete(
         Ok(b) => b,
         Err(e) => return reject(400, "invalid_json", &e.to_string()),
     };
+
+    let per_ip = env_u32(&ctx.env, "PER_IP_HOURLY", DEFAULT_PER_IP_HOURLY);
+    let [ip_key] = delete_buckets(&client_ip_hash(req, ctx));
+    if let Some(denied) = over_limit(ctx, &[(ip_key, per_ip)]).await? {
+        return Ok(denied);
+    }
 
     // Verify sig against canonical delete msg (distinct from publish msg
     // so a stolen publish sig cannot be replayed as a delete)
@@ -267,6 +252,43 @@ fn parse_list_query(url: &Url) -> (u32, u32) {
         }
     }
     (limit, offset)
+}
+
+/// The salted hash of the client address (`CF-Connecting-IP`)
+fn client_ip_hash(req: &Request, ctx: &RouteContext<()>) -> String {
+    let salt = env_str(&ctx.env, "IP_HASH_SALT", DEFAULT_IP_SALT);
+    let ip = req
+        .headers()
+        .get(IP_HEADER)
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "unknown".to_string());
+    hash_ip(&ip, &salt)
+}
+
+/// Count one request against each `(bucket, hourly limit)`; the 429 response for
+/// the first bucket that is over its limit, if any
+async fn over_limit(
+    ctx: &RouteContext<()>,
+    buckets: &[(String, u32)],
+) -> WorkerResult<Option<Response>> {
+    let now = Date::now();
+    let now_iso = now.to_string();
+    let hour_end_iso = {
+        let ms = now.as_millis();
+        let ms_per_hour: u64 = 60 * 60 * 1000;
+        let end_ms = ms - (ms % ms_per_hour) + ms_per_hour;
+        Date::new(worker::DateInit::Millis(end_ms)).to_string()
+    };
+    let shares_db = ctx.env.d1("SHARES_DB")?;
+    for (key, limit) in buckets {
+        if rate_limit::bump(&shares_db, key, *limit, &now_iso, &hour_end_iso).await?
+            == LimitDecision::Deny
+        {
+            return reject(429, "rate_limit", "hourly cap exceeded").map(Some);
+        }
+    }
+    Ok(None)
 }
 
 fn reject(status: u16, reason: &'static str, details: &str) -> WorkerResult<Response> {

@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Fixed — gallery の並び順を worker が受け取った時刻で決める (2026-10-25)
+
+- 一覧は `received_at` (worker が付ける時刻) の新しい順 (著者が署名した `created_at` で並べていたので、未来の日付の投稿が先頭に残り続けた) migration `0004_gallery_received_at.sql` が索引を足す
+- `created_at` は UTC (`Z` か `+00:00`) だけを受け、worker の時計より 10 分を超えて先の時刻は `gallery_created_at_future` で拒む 他の offset は `gallery_created_at_format` desktop は `Z` 付きの UTC (ミリ秒まで) を送る
+- 投稿の hourly 上限は著者 (did、`GALLERY_PER_AUTHOR_HOURLY`) と client の address で数える (client が選ぶ post id では数えない) 削除も address の上限に数える
+
 ### Added — 公開の文の検査を CI と preflight で実行する (2026-10-25)
 
 - `.github/workflows/public-text.yml` と `scripts/public_text.sh` が、ALICE-Law の `scripts/public_text_check.py` を `.github/public-text-pin` の rev と SHA-256 で固定して取り、HEAD の全 file と前回からの commit を検査する (比較 0 件・pin の形の誤りも失敗) `scripts/test_public_text.py` がその script の試験 3 file は ALICE-LOL ほかと同じ中身

@@ -10,6 +10,13 @@ use ed25519_dalek::SigningKey;
 
 const ID: &str = "018f4e8c-0000-7000-8000-000000000001";
 
+/// A worker clock after every time these tests sign (2027-01-01T00:00:00Z)
+const TEST_NOW_MS: u64 = 1_798_761_600_000;
+
+fn check(f: &GalleryPublishFields<'_>) -> Result<(), RejectReason> {
+    check_gallery_publish(f, TEST_NOW_MS)
+}
+
 fn identity() -> (SigningKey, String) {
     let key = SigningKey::from_bytes(&[11u8; 32]);
     let did = format!("did:key:{}", hex::encode(key.verifying_key().as_bytes()));
@@ -49,7 +56,7 @@ fn the_signed_request_is_accepted() {
     let (key, did) = identity();
     let created_at = "2026-10-24T00:00:00Z";
     let sig = sign(&key, &did, Some("maker"), "cube(10)", created_at);
-    let r = check_gallery_publish(&fields(&did, Some("maker"), "cube(10)", created_at, &sig));
+    let r = check(&fields(&did, Some("maker"), "cube(10)", created_at, &sig));
     assert!(r.is_ok(), "the signed request was refused: {r:?}");
 }
 
@@ -60,10 +67,10 @@ fn a_changed_nickname_is_refused() {
     let (key, did) = identity();
     let created_at = "2026-10-24T00:00:00Z";
     let sig = sign(&key, &did, Some("maker"), "cube(10)", created_at);
-    let r = check_gallery_publish(&fields(&did, Some("maker"), "cube(10)", created_at, &sig));
+    let r = check(&fields(&did, Some("maker"), "cube(10)", created_at, &sig));
     assert!(r.is_ok(), "the signed request was refused: {r:?}");
     assert!(
-        check_gallery_publish(&fields(
+        check(&fields(
             &did,
             Some("someone else"),
             "cube(10)",
@@ -74,7 +81,7 @@ fn a_changed_nickname_is_refused() {
         "the same signature was accepted with a different nickname"
     );
     assert!(
-        check_gallery_publish(&fields(&did, None, "cube(10)", created_at, &sig)).is_err(),
+        check(&fields(&did, None, "cube(10)", created_at, &sig)).is_err(),
         "the same signature was accepted with the nickname removed"
     );
 }
@@ -89,11 +96,11 @@ fn bytes_moved_between_the_source_and_the_date_are_refused() {
     let signed_lol = "cube(10)|2026-01-01T";
     let signed_created_at = "2026-10-24T00:00:00Z";
     let sig = sign(&key, &did, None, signed_lol, signed_created_at);
-    let r = check_gallery_publish(&fields(&did, None, signed_lol, signed_created_at, &sig));
+    let r = check(&fields(&did, None, signed_lol, signed_created_at, &sig));
     assert!(r.is_ok(), "the signed request was refused: {r:?}");
     let forged_created_at = format!("2026-01-01T|{signed_created_at}");
     assert!(
-        check_gallery_publish(&fields(&did, None, "cube(10)", &forged_created_at, &sig)).is_err(),
+        check(&fields(&did, None, "cube(10)", &forged_created_at, &sig)).is_err(),
         "a request with a different lol_source ({:?}) and created_at ({forged_created_at:?}) \
          was accepted under the signature of {signed_lol:?}",
         "cube(10)"

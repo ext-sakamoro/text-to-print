@@ -47,6 +47,8 @@ IP_HASH_SALT = "dev-salt-change-in-production"
 # Rate-limit tuning — see src/rate_limit.rs. Free-tier defaults suit a solo
 # desktop app; bump after real traffic data.
 PER_UUID_HOURLY = "10"
+# gallery publishes per author (did) per hour
+GALLERY_PER_AUTHOR_HOURLY = "10"
 PER_IP_HOURLY = "100"
 
 # ── Stripe integration (Phase S1) ───────────────────────────────────
