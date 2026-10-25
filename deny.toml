@@ -60,16 +60,12 @@ allow = [
 [licenses.private]
 ignore = true
 
-# ALICE ecosystem sibling crates (同一 author、path dep / crates.io dep)
-# 本体は proprietary の product として AGPL / proprietary sibling を link する
-# (owner が sibling の licensor なので Commercial の分岐を使う) 全外部依存を
-# 許容するのでなく、この 4 crate に限定した exception として明示
+# ALICE の sibling crate (path dep): 外部依存全体でなく、この crate だけに限った exception
 [[licenses.exceptions]]
 name = "alice-physics"
 allow = ["AGPL-3.0-or-later"]
 
-# alice-physics 4.0 is a facade over alice-physics-core; both declare
-# AGPL-3.0-or-later OR LicenseRef-Commercial, so only -or-later is allowed
+# alice-physics 4.0 is a facade over alice-physics-core
 [[licenses.exceptions]]
 name = "alice-physics-core"
 allow = ["AGPL-3.0-or-later"]
