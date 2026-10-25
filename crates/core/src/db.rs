@@ -261,20 +261,33 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_or_create_profile(&self, id: &str) -> Result<Tier> {
+    /// Create the row of profile `id` if it is missing
+    pub fn ensure_profile(&self, id: &str) -> Result<()> {
         self.conn
             .execute("INSERT OR IGNORE INTO profiles (id) VALUES (?1)", [id])?;
-        let tier: String =
-            self.conn
-                .query_row("SELECT tier FROM profiles WHERE id = ?1", [id], |row| {
-                    row.get(0)
-                })?;
-        match tier.as_str() {
-            "General" => Ok(Tier::General),
-            "Pro" => Ok(Tier::Pro),
-            "Enterprise" => Ok(Tier::Enterprise),
-            _ => Ok(Tier::Free),
-        }
+        Ok(())
+    }
+
+    /// The tier profile `id` runs with at `now`: from its stored licence key,
+    /// verified again (signature and expiry), not from the `tier` column; no key,
+    /// an invalid one or an expired one is Free
+    pub fn load_tier(
+        &self,
+        id: &str,
+        verifier: &crate::license::LicenseVerifier,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Tier> {
+        self.ensure_profile(id)?;
+        let stored: Option<String> = self.conn.query_row(
+            "SELECT license_key FROM profiles WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )?;
+        Ok(crate::license::tier_of_stored_key(
+            stored.as_deref().unwrap_or(""),
+            verifier,
+            now,
+        ))
     }
 
     pub fn get_daily_usage(&self, profile_id: &str, date: &str) -> Result<u32> {
@@ -917,8 +930,7 @@ mod tests {
     #[test]
     fn test_profile_and_usage() {
         let db = test_db();
-        let tier = db.get_or_create_profile("user1").unwrap();
-        assert_eq!(tier, Tier::Free);
+        db.ensure_profile("user1").unwrap();
 
         let usage = db.get_daily_usage("user1", "2026-04-13").unwrap();
         assert_eq!(usage, 0);
@@ -931,14 +943,14 @@ mod tests {
     #[test]
     fn share_lol_dsl_defaults_to_true() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert!(db.get_share_lol_dsl("user1").unwrap());
     }
 
     #[test]
     fn share_lol_dsl_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_share_lol_dsl("user1", false).unwrap();
         assert!(!db.get_share_lol_dsl("user1").unwrap());
         db.set_share_lol_dsl("user1", true).unwrap();
@@ -954,14 +966,14 @@ mod tests {
     #[test]
     fn nickname_defaults_to_empty() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(db.get_nickname("user1").unwrap(), "");
     }
 
     #[test]
     fn nickname_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_nickname("user1", "alice").unwrap();
         assert_eq!(db.get_nickname("user1").unwrap(), "alice");
         db.set_nickname("user1", "アリス").unwrap();
@@ -977,7 +989,7 @@ mod tests {
     #[test]
     fn gallery_auto_share_defaults_to_false() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert!(!db.get_gallery_auto_share("user1").unwrap());
     }
 
@@ -985,7 +997,7 @@ mod tests {
     #[test]
     fn gallery_auto_share_is_not_set_by_tier_or_migration() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         for tier in ["General", "Pro", "Enterprise", "Free"] {
             db.update_profile_tier("user1", tier, "key").unwrap();
             assert!(!db.get_gallery_auto_share("user1").unwrap(), "{tier}");
@@ -1004,7 +1016,7 @@ mod tests {
     #[test]
     fn gallery_auto_share_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_gallery_auto_share("user1", true).unwrap();
         assert!(db.get_gallery_auto_share("user1").unwrap());
         db.set_gallery_auto_share("user1", false).unwrap();
@@ -1014,14 +1026,14 @@ mod tests {
     #[test]
     fn lang_pref_defaults_to_auto() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(db.get_lang_pref("user1").unwrap(), "auto");
     }
 
     #[test]
     fn lang_pref_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_lang_pref("user1", "en").unwrap();
         assert_eq!(db.get_lang_pref("user1").unwrap(), "en");
         db.set_lang_pref("user1", "ja").unwrap();
@@ -1041,14 +1053,14 @@ mod tests {
         // v0.1.0-beta.1 (2026-08-07): default を Sidecar → Embedded に変更
         // alice-llm-server binary 別途 install 不要の OOB 起動 UX 優先
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(db.get_backend_kind("user1").unwrap(), "Embedded");
     }
 
     #[test]
     fn backend_kind_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_backend_kind("user1", "Embedded").unwrap();
         assert_eq!(db.get_backend_kind("user1").unwrap(), "Embedded");
         db.set_backend_kind("user1", "Sidecar").unwrap();
@@ -1066,14 +1078,14 @@ mod tests {
     #[test]
     fn execution_mode_defaults_to_cpu() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(db.get_execution_mode("user1").unwrap(), "Cpu");
     }
 
     #[test]
     fn execution_mode_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_execution_mode("user1", "Gpu").unwrap();
         assert_eq!(db.get_execution_mode("user1").unwrap(), "Gpu");
         db.set_execution_mode("user1", "Cpu").unwrap();
@@ -1092,14 +1104,14 @@ mod tests {
         // (alice-llm-server grammar constrained decoding が iGPU で実用不能な
         // 遅さのため、free-form + retry loop 救済で切替)
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert!(!db.get_enforce_lol_grammar("user1").unwrap());
     }
 
     #[test]
     fn enforce_lol_grammar_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_enforce_lol_grammar("user1", false).unwrap();
         assert!(!db.get_enforce_lol_grammar("user1").unwrap());
         db.set_enforce_lol_grammar("user1", true).unwrap();
@@ -1162,7 +1174,7 @@ mod tests {
     #[test]
     fn test_insert_and_list_generations() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
 
         db.insert_generation(&GenerationRecord {
             id: "gen1",
@@ -1187,7 +1199,7 @@ mod tests {
     #[test]
     fn generation_manifest_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.insert_generation(&GenerationRecord {
             id: "gen-with-manifest",
             profile_id: "user1",
@@ -1229,7 +1241,7 @@ mod tests {
     #[test]
     fn openai_compat_active_provider_defaults_to_openai() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(
             db.get_openai_compat_active_provider("user1").unwrap(),
             "OpenAi"
@@ -1239,7 +1251,7 @@ mod tests {
     #[test]
     fn openai_compat_active_provider_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_openai_compat_active_provider("user1", "Anthropic")
             .unwrap();
         assert_eq!(
@@ -1266,7 +1278,7 @@ mod tests {
     #[test]
     fn llm_provider_config_get_returns_none_when_missing() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert!(
             db.get_llm_provider_config("user1", "OpenAi")
                 .unwrap()
@@ -1277,7 +1289,7 @@ mod tests {
     #[test]
     fn llm_provider_config_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         let cfg = LlmProviderConfigRow {
             provider: "OpenAi".to_string(),
             endpoint: "https://api.openai.com/v1/chat/completions".to_string(),
@@ -1301,7 +1313,7 @@ mod tests {
     #[test]
     fn llm_provider_config_upsert_overwrites_previous_row() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         let cfg1 = LlmProviderConfigRow {
             provider: "Anthropic".to_string(),
             endpoint: "https://api.anthropic.com/v1/chat/completions".to_string(),
@@ -1335,7 +1347,7 @@ mod tests {
     #[test]
     fn llm_provider_config_list_ordered_by_provider() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         for provider in ["OpenAi", "Google", "Anthropic", "Custom"] {
             db.set_llm_provider_config(
                 "user1",
@@ -1358,7 +1370,7 @@ mod tests {
     #[test]
     fn llm_provider_config_delete_is_idempotent() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         // Delete when nothing exists — no error
         db.delete_llm_provider_config("user1", "OpenAi").unwrap();
 
@@ -1394,14 +1406,14 @@ mod tests {
     #[test]
     fn custom_gguf_path_defaults_to_empty() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         assert_eq!(db.get_custom_gguf_path("user1").unwrap(), "");
     }
 
     #[test]
     fn custom_gguf_path_roundtrip() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
+        db.ensure_profile("user1").unwrap();
         db.set_custom_gguf_path("user1", "/tmp/qwen2.5-14b.gguf")
             .unwrap();
         assert_eq!(
@@ -1422,8 +1434,8 @@ mod tests {
     #[test]
     fn llm_provider_configs_are_per_profile() {
         let db = test_db();
-        db.get_or_create_profile("user1").unwrap();
-        db.get_or_create_profile("user2").unwrap();
+        db.ensure_profile("user1").unwrap();
+        db.ensure_profile("user2").unwrap();
 
         db.set_llm_provider_config(
             "user1",
@@ -1453,7 +1465,7 @@ mod tests {
 
         {
             let db = Database::open(&path).unwrap();
-            db.get_or_create_profile("user1").unwrap();
+            db.ensure_profile("user1").unwrap();
         }
 
         // Reopen — migrate() runs again, ALTER TABLE for manifest_json must be

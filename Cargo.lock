@@ -4939,6 +4939,7 @@ dependencies = [
  "alice-bamboo",
  "alice-physics",
  "alice-sdf",
+ "alice-sign",
  "anyhow",
  "base64",
  "chrono",
