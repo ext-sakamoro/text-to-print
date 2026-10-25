@@ -6,12 +6,7 @@ name: Security & Hygiene
 # 補完的展開: audit job は既存 ci.yml (.cargo/audit.toml + informational_warnings)
 # の方が sophisticated なため重複せず、以下 5 job のみを canonical として追加
 #
-# 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
-# ci.yml と同じ実 sibling checkout に統一 stub は AGPL の alice-bamboo /
-# alice-physics / alice-llm を `license = "MIT OR Apache-2.0"` の空 crate として
-# 申告していたので、deny.toml の licenses.exceptions が CI では一度も評価されず、
-# alice-print / alice-lol とその transitive 依存も dep 木から消えていた
-# (ALICE-LOL a6ba9f7 / Physics 3472768 と同じ置換)
+# sibling は ci.yml と同じ実 checkout で取る (deny / audit が実際の依存木を見る)
 
 on:
   push:
