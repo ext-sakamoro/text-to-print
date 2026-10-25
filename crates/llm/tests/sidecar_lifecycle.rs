@@ -32,14 +32,12 @@ fn helper_app_holding_a_sidecar() {
         .build()
         .unwrap();
     rt.block_on(async move {
-        let port = text_to_print_llm::sidecar::find_free_port_starting_at(18500, 200).unwrap();
         let model = text_to_print_llm::downloader::ModelFile::user_supplied(
             PathBuf::from(model),
             text_to_print_llm::model::ModelChoice::default(),
         );
         let cfg = text_to_print_llm::sidecar::SidecarConfig {
             bin_path: Some(PathBuf::from(std::env::var(BIN_ENV).unwrap())),
-            port,
             health_timeout: Duration::from_secs(600),
             ..Default::default()
         };

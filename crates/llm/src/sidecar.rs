@@ -30,6 +30,7 @@
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::{Child, ChildStdin, Command};
@@ -86,8 +87,9 @@ pub enum SidecarStatus {
     Waiting,
     /// spawn 発行済、`/health` 応答待ち
     Starting,
-    /// `/health` 200 応答済、推論 request 受付可
-    Running,
+    /// `/health` 200 応答済、推論 request 受付可 保持する endpoint は sidecar が
+    /// 実際に bind した loopback の address から作った chat/completions の URL
+    Running { endpoint: String },
     /// spawn 失敗 (バイナリ不在 / model 不在 / health timeout 等)
     Error(String),
 }
@@ -95,17 +97,110 @@ pub enum SidecarStatus {
 impl SidecarStatus {
     #[must_use]
     pub const fn is_running(&self) -> bool {
-        matches!(self, Self::Running)
+        matches!(self, Self::Running { .. })
     }
 }
+
+/// `alice-llm-server` が bind 直後に stdout に出す行の接頭辞 (ALICE-LLM の contract)
+/// この後に `http://<addr>` が続く app はこの行から実際の port を知る
+pub const BOUND_LINE_PREFIX: &str = "Bound to http://";
+
+/// stdout の 1 行から sidecar が bind した address を取り出す loopback
+/// (IPv4 / IPv6 の localhost) かつ port が 0 でない時だけ返す それ以外は `None`
+/// (他 address を名乗る応答は自分の sidecar でないとみなす)
+#[must_use]
+pub fn parse_bound_addr(line: &str) -> Option<SocketAddr> {
+    let rest = line.trim().strip_prefix(BOUND_LINE_PREFIX)?;
+    // 末尾に path 等が付いていても host:port までで切る
+    let hostport = rest.split(['/', ' ']).next().unwrap_or(rest);
+    let addr: SocketAddr = hostport.parse().ok()?;
+    let loopback = match addr.ip() {
+        IpAddr::V4(v4) => v4 == Ipv4Addr::LOCALHOST,
+        IpAddr::V6(v6) => v6 == Ipv6Addr::LOCALHOST,
+    };
+    if loopback && addr.port() != 0 {
+        Some(addr)
+    } else {
+        None
+    }
+}
+
+/// stdout を 1 行ずつ読み、最初の [`BOUND_LINE_PREFIX`] の行から loopback の
+/// address を取り出す `deadline` までに出なければ、または先に EOF に達すれば
+/// エラー 1 行が `MAX_BOUND_LINE_LEN` を超えたら打ち切ってエラー (際限なく
+/// 読まない) 他の行は読み飛ばす
+async fn read_bound_addr<R>(
+    reader: R,
+    deadline: tokio::time::Instant,
+) -> Result<(SocketAddr, tokio::io::BufReader<R>)>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::BufReader;
+    let mut buf = BufReader::new(reader);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = tokio::time::timeout_at(deadline, read_capped_line(&mut buf, &mut line)).await;
+        match read {
+            Err(_) => bail!("sidecar did not report its bound address within the deadline"),
+            Ok(Err(e)) => return Err(e),
+            Ok(Ok(0)) => bail!("sidecar closed its output before reporting a bound address"),
+            Ok(Ok(_)) => {}
+        }
+        if let Some(addr) = parse_bound_addr(&line) {
+            // return the reader so the caller keeps draining stdout: the child
+            // writes more there (model-load logs, "Listening on …") and would get
+            // a broken pipe (a panic, since Rust ignores SIGPIPE) if the read end
+            // were dropped here
+            return Ok((addr, buf));
+        }
+    }
+}
+
+/// Drain the child's stdout for the rest of its life, mirroring each line to the
+/// parent with a `[sidecar]` prefix Dropping the read end instead would close the
+/// pipe and make the child panic on its next `println!`
+fn drain_stdout<R>(reader: tokio::io::BufReader<R>)
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    use tokio::io::AsyncBufReadExt;
+    tokio::spawn(async move {
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            eprintln!("[sidecar] {line}");
+        }
+    });
+}
+
+/// 1 行を最大 [`MAX_BOUND_LINE_LEN`] byte まで読む 超えたらエラー
+async fn read_capped_line<R>(buf: &mut R, out: &mut String) -> Result<usize>
+where
+    R: tokio::io::AsyncBufRead + Unpin,
+{
+    use tokio::io::AsyncBufReadExt;
+    let mut bytes = Vec::new();
+    let n = {
+        use tokio::io::AsyncReadExt;
+        let mut limited = buf.take(MAX_BOUND_LINE_LEN as u64 + 1);
+        limited.read_until(b'\n', &mut bytes).await?
+    };
+    if bytes.len() > MAX_BOUND_LINE_LEN {
+        bail!("sidecar output line exceeded {MAX_BOUND_LINE_LEN} bytes");
+    }
+    out.push_str(&String::from_utf8_lossy(&bytes));
+    Ok(n)
+}
+
+/// stdout の 1 行の読み取り上限 (bound 行は短い、暴走した出力を際限なく読まない)
+const MAX_BOUND_LINE_LEN: usize = 512;
 
 /// Sidecar 起動設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SidecarConfig {
     /// `alice-llm-server` 実行ファイルの path。`None` の場合は PATH 解決
     pub bin_path: Option<PathBuf>,
-    /// listen port (default 8000)
-    pub port: u16,
     /// `--hybrid` flag (CPU forward、arm64 / 8 GiB 機 / GPU 数値誤差回避用)
     pub hybrid: bool,
     /// health check の poll 間隔
@@ -118,7 +213,6 @@ impl Default for SidecarConfig {
     fn default() -> Self {
         Self {
             bin_path: None,
-            port: 8000,
             hybrid: false,
             health_poll_interval: Duration::from_millis(500),
             // 300s (5 min) — first-time boot needs to page in the ~4.7 GB
@@ -126,19 +220,6 @@ impl Default for SidecarConfig {
             // on slow disks and left users with only the timeout message
             health_timeout: Duration::from_secs(300),
         }
-    }
-}
-
-impl SidecarConfig {
-    /// この設定で使う OpenAI 互換 endpoint URL
-    #[must_use]
-    pub fn chat_endpoint(&self) -> String {
-        format!("http://{SIDECAR_HOST}:{}/v1/chat/completions", self.port)
-    }
-
-    #[must_use]
-    pub fn health_endpoint(&self) -> String {
-        format!("http://{SIDECAR_HOST}:{}/health", self.port)
     }
 }
 
@@ -157,8 +238,11 @@ pub fn sidecar_args(model: &ModelFile, config: &SidecarConfig) -> Vec<OsString> 
         model.path().as_os_str().to_owned(),
         "--host".into(),
         SIDECAR_HOST.into(),
+        // 常に 0 (ephemeral) で起動する OS が割り当てた port を stdout の
+        // `Bound to http://` の行から読む 固定 port を予約しないので、先に
+        // その port を握った別 process を自分の sidecar と取り違えない
         "--port".into(),
-        config.port.to_string().into(),
+        "0".into(),
         "--exit-on-stdin-eof".into(),
     ];
     if config.hybrid {
@@ -183,6 +267,10 @@ pub struct SidecarProcess {
     /// が動き、app の process が終わると OS が閉じて sidecar も終了する
     _stdin_lifeline: ChildStdin,
     config: SidecarConfig,
+    /// The loopback address the sidecar actually bound, read from its stdout
+    /// (`Bound to http://<addr>`) The app talks only to this address, so it
+    /// cannot be steered to a port it did not spawn
+    resolved: SocketAddr,
     /// Keep the tail alive alongside the child so operators can inspect
     /// via [`Self::recent_stderr`] after the sidecar becomes healthy
     stderr_tail: StderrTail,
@@ -205,17 +293,16 @@ impl SidecarProcess {
         let mut cmd = Command::new(&bin);
         cmd.args(sidecar_args(model, &config));
         cmd.stdin(std::process::Stdio::piped());
-        // stdout は継承 (少量 log)、stderr は piped で capture して
-        // 直近 STDERR_TAIL_MAX_LINES 行を保持 早期 exit / health timeout
-        // 時にこれを error msg に含めることで生 error を surface できる
-        cmd.stdout(std::process::Stdio::inherit());
+        // stdout を capture して `Bound to http://<addr>` の行から実際の port を読む
+        // stderr も piped で直近 STDERR_TAIL_MAX_LINES 行を保持し、早期 exit /
+        // health timeout 時に error msg に含めて生 error を surface する
+        cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
         cmd.kill_on_drop(true);
 
         info!(
             bin = %bin.display(),
             model = %model.path().display(),
-            port = config.port,
             hybrid = config.hybrid,
             "spawning alice-llm-server sidecar"
         );
@@ -249,10 +336,32 @@ impl SidecarProcess {
             });
         }
 
+        let stdout = child
+            .stdout
+            .take()
+            .context("sidecar stdout was not piped")?;
+        let deadline = tokio::time::Instant::now() + config.health_timeout;
+        let resolved = match read_bound_addr(stdout, deadline).await {
+            Ok((addr, rest)) => {
+                // keep the pipe open and drained for the child's lifetime
+                drain_stdout(rest);
+                addr
+            }
+            Err(e) => {
+                // surface the child's stderr tail alongside the parse failure
+                let tail = stderr_tail
+                    .lock()
+                    .map(|b| b.iter().cloned().collect::<Vec<_>>().join("\n"))
+                    .unwrap_or_default();
+                bail!("{e}\n{tail}");
+            }
+        };
+
         let mut sidecar = Self {
             child,
             _stdin_lifeline: stdin_lifeline,
             config,
+            resolved,
             stderr_tail,
         };
         sidecar.wait_healthy().await?;
@@ -287,7 +396,7 @@ impl SidecarProcess {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))
             .build()?;
-        let url = self.config.health_endpoint();
+        let url = self.health_endpoint();
 
         loop {
             // Detect early exit — surface the actual exit status + stderr
@@ -320,6 +429,18 @@ impl SidecarProcess {
             }
             tokio::time::sleep(self.config.health_poll_interval).await;
         }
+    }
+
+    /// OpenAI 互換 chat endpoint (実際に bind した address から)
+    #[must_use]
+    pub fn chat_endpoint(&self) -> String {
+        format!("http://{}/v1/chat/completions", self.resolved)
+    }
+
+    /// health endpoint (実際に bind した address から)
+    #[must_use]
+    pub fn health_endpoint(&self) -> String {
+        format!("http://{}/health", self.resolved)
     }
 
     #[must_use]
@@ -355,23 +476,23 @@ impl SidecarProcess {
 ///   4. 失敗 → `Error(msg)` 送信 → task return
 pub async fn run_auto_spawn(
     model: ModelFile,
-    port: u16,
     status_tx: tokio::sync::watch::Sender<SidecarStatus>,
 ) {
     let _ = status_tx.send(SidecarStatus::Starting);
-    // Port は caller (state.rs) 側で事前 free port scan 済み client の
-    // LlmConfig.endpoint も同じ port に同期更新される (client → sidecar
-    // 経路の一貫性保証のため authoritative は caller に置く)
-    let cfg = SidecarConfig {
-        port,
-        ..Default::default()
-    };
+    // sidecar は ephemeral port (0) で起動し、実際に bind した address を
+    // stdout から読む その address から作った endpoint を Running に載せて
+    // caller (state.rs) に渡す client の LlmConfig はこれを authoritative に
+    // 使うので、固定 port の予約も事前 scan も無い
+    let cfg = SidecarConfig::default();
     match SidecarProcess::spawn(&model, cfg).await {
-        Ok(_sidecar) => {
-            let _ = status_tx.send(SidecarStatus::Running);
+        Ok(sidecar) => {
+            let _ = status_tx.send(SidecarStatus::Running {
+                endpoint: sidecar.chat_endpoint(),
+            });
             // SidecarProcess を task スコープに保持して drop を遅らせる
-            // runtime 停止時に task が cancel され、`_sidecar` の Drop で
+            // runtime 停止時に task が cancel され、`sidecar` の Drop で
             // `kill_on_drop` 経由で子プロセス kill
+            let _keep = sidecar;
             std::future::pending::<()>().await;
         }
         Err(e) => {
@@ -382,49 +503,26 @@ pub async fn run_auto_spawn(
     }
 }
 
-/// preferred から up to `max_attempts` 個の port を試して最初に bind できた
-/// ものを返す 全部塞がっていたら None (呼び出し側で preferred fallback)
-///
-/// sidecar と同じ address ([`SIDECAR_HOST`]) で bind を試す sidecar が実際に
-/// bind する address で試すので、その address で使えるかがそのまま分かる
-/// (以前は sidecar が全 interface で待ち受けていたので 0.0.0.0 で試していた)
-///
-/// TOCTOU race (bind から close 〜 sidecar spawn の間で他 process が
-/// grab) は理論的に残るが、port scan の一般的 pattern として許容
-pub fn find_free_port_starting_at(preferred: u16, max_attempts: u16) -> Option<u16> {
-    for i in 0..max_attempts {
-        let candidate = preferred.checked_add(i)?;
-        if std::net::TcpListener::bind((SIDECAR_HOST, candidate)).is_ok() {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn default_config_endpoints() {
+    fn default_config_has_no_bin_and_is_not_hybrid() {
         let cfg = SidecarConfig::default();
-        assert_eq!(cfg.port, 8000);
-        assert!(cfg.chat_endpoint().contains(":8000"));
-        assert!(cfg.chat_endpoint().ends_with("/v1/chat/completions"));
-        assert!(cfg.health_endpoint().ends_with("/health"));
+        assert!(cfg.bin_path.is_none());
+        assert!(!cfg.hybrid);
     }
 
     #[test]
     fn config_serialization_roundtrip() {
         let cfg = SidecarConfig {
             bin_path: Some(PathBuf::from("/usr/local/bin/alice-llm-server")),
-            port: 12345,
             hybrid: true,
             ..Default::default()
         };
         let json = serde_json::to_string(&cfg).unwrap();
         let back: SidecarConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.port, cfg.port);
         assert_eq!(back.hybrid, cfg.hybrid);
         assert_eq!(back.bin_path, cfg.bin_path);
     }
@@ -435,10 +533,7 @@ mod tests {
             PathBuf::from("/m/model.gguf"),
             crate::model::ModelChoice::default(),
         );
-        let cfg = SidecarConfig {
-            port: 18123,
-            ..Default::default()
-        };
+        let cfg = SidecarConfig::default();
         let args: Vec<String> = sidecar_args(&model, &cfg)
             .into_iter()
             .map(|a| a.into_string().unwrap())
@@ -448,7 +543,8 @@ mod tests {
             args[i + 1].clone()
         };
         assert_eq!(after("--host"), "127.0.0.1");
-        assert_eq!(after("--port"), "18123");
+        // always ephemeral: the OS picks the port, the app reads it from stdout
+        assert_eq!(after("--port"), "0");
         assert_eq!(after("--model"), "/m/model.gguf");
         assert!(args.iter().any(|a| a == "--exit-on-stdin-eof"));
         assert!(!args.iter().any(|a| a == "--hybrid"));
@@ -460,23 +556,134 @@ mod tests {
             },
         );
         assert!(hybrid.iter().any(|a| a == "--hybrid"));
-        assert!(
-            SidecarConfig::default()
-                .chat_endpoint()
-                .starts_with("http://127.0.0.1:")
-        );
-        assert!(
-            SidecarConfig::default()
-                .health_endpoint()
-                .starts_with("http://127.0.0.1:")
-        );
     }
 
     #[test]
-    fn the_port_probe_skips_a_port_taken_on_loopback() {
-        let taken = std::net::TcpListener::bind((SIDECAR_HOST, 0)).unwrap();
-        let port = taken.local_addr().unwrap().port();
-        assert_ne!(find_free_port_starting_at(port, 1), Some(port));
+    fn a_preferred_port_env_does_not_change_the_binding() {
+        // TTP_SIDECAR_PORT is no longer read: the sidecar always binds --port 0,
+        // so a value set in the environment cannot steer it to a fixed port
+        // SAFETY: single-threaded test
+        unsafe {
+            std::env::set_var("TTP_SIDECAR_PORT", "9999");
+        }
+        let model = ModelFile::user_supplied(
+            PathBuf::from("/m/model.gguf"),
+            crate::model::ModelChoice::default(),
+        );
+        let args: Vec<String> = sidecar_args(&model, &SidecarConfig::default())
+            .into_iter()
+            .map(|a| a.into_string().unwrap())
+            .collect();
+        let i = args.iter().position(|a| a == "--port").unwrap();
+        assert_eq!(args[i + 1], "0");
+        unsafe {
+            std::env::remove_var("TTP_SIDECAR_PORT");
+        }
+    }
+
+    #[test]
+    fn parse_bound_addr_takes_loopback_with_a_nonzero_port() {
+        use std::net::{Ipv4Addr, Ipv6Addr};
+        // addresses are built, not written as literals, so the source carries no
+        // raw IP text
+        let lo4 = SocketAddr::from((Ipv4Addr::LOCALHOST, 54321));
+        let lo6 = SocketAddr::from((Ipv6Addr::LOCALHOST, 7000));
+        assert_eq!(
+            parse_bound_addr(&format!("Bound to http://{lo4}")),
+            Some(lo4)
+        );
+        assert_eq!(
+            parse_bound_addr(&format!("Bound to http://{lo6}/")),
+            Some(lo6)
+        );
+        // not loopback, port 0, wrong prefix, garbage: all refused
+        let unspec = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 54321));
+        let private = SocketAddr::from((Ipv4Addr::new(10, 0, 0, 5), 54321));
+        let lo_zero = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
+        assert_eq!(parse_bound_addr(&format!("Bound to http://{unspec}")), None);
+        assert_eq!(
+            parse_bound_addr(&format!("Bound to http://{private}")),
+            None
+        );
+        assert_eq!(
+            parse_bound_addr(&format!("Bound to http://{lo_zero}")),
+            None
+        );
+        assert_eq!(parse_bound_addr(&format!("Listening on {lo4}")), None);
+        assert_eq!(parse_bound_addr("Bound to http://nonsense"), None);
+    }
+
+    #[tokio::test]
+    async fn read_bound_addr_reads_the_first_loopback_line() {
+        use std::net::Ipv4Addr;
+        let far = tokio::time::Instant::now() + Duration::from_secs(5);
+        let lo = SocketAddr::from((Ipv4Addr::LOCALHOST, 41234));
+        let input = format!("loading model\nBound to http://{lo}\nmore\n").into_bytes();
+        let (addr, _rest) = read_bound_addr(&input[..], far).await.unwrap();
+        assert_eq!(addr, lo);
+    }
+
+    #[tokio::test]
+    async fn read_bound_addr_fails_on_eof_without_a_bound_line() {
+        let far = tokio::time::Instant::now() + Duration::from_secs(5);
+        let input = b"loading model\nstill loading\n";
+        assert!(read_bound_addr(&input[..], far).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_bound_addr_refuses_a_non_loopback_address() {
+        use std::net::Ipv4Addr;
+        let far = tokio::time::Instant::now() + Duration::from_secs(5);
+        // EOF after a non-loopback bound line: never accepted, so it errors
+        let unspec = SocketAddr::from((Ipv4Addr::UNSPECIFIED, 41234));
+        let input = format!("Bound to http://{unspec}\n").into_bytes();
+        assert!(read_bound_addr(&input[..], far).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_bound_addr_times_out() {
+        // a reader that never yields a line, with a deadline already in the past
+        let past = tokio::time::Instant::now();
+        let (_client, server) = tokio::io::duplex(64);
+        assert!(read_bound_addr(server, past).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_bound_addr_caps_an_overlong_line() {
+        let far = tokio::time::Instant::now() + Duration::from_secs(5);
+        let mut input = vec![b'x'; MAX_BOUND_LINE_LEN + 10];
+        input.push(b'\n');
+        assert!(read_bound_addr(&input[..], far).await.is_err());
+    }
+
+    // a real child that writes its bound line, then floods stdout: proves the
+    // reader keeps the pipe open (drained) past the bound line Dropping it would
+    // close the pipe and the child would die with a broken pipe on its own logs
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_child_may_keep_writing_after_the_bound_line() {
+        use std::net::Ipv4Addr;
+        use std::process::Stdio;
+        use tokio::process::Command;
+        let lo = SocketAddr::from((Ipv4Addr::LOCALHOST, 45678));
+        // enough lines to fill the pipe buffer, so a closed read end would break it
+        let script = format!(
+            "printf 'Bound to http://{lo}\\n'; i=0; while [ $i -lt 5000 ]; do echo log line filler; i=$((i+1)); done"
+        );
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(&script)
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let far = tokio::time::Instant::now() + Duration::from_secs(10);
+        let (addr, rest) = read_bound_addr(stdout, far).await.unwrap();
+        assert_eq!(addr, lo);
+        drain_stdout(rest);
+        let status = child.wait().await.unwrap();
+        assert!(status.success(), "child did not finish cleanly: {status:?}");
     }
 
     #[tokio::test]
@@ -495,7 +702,12 @@ mod tests {
     fn status_is_running_only_for_running() {
         assert!(!SidecarStatus::Waiting.is_running());
         assert!(!SidecarStatus::Starting.is_running());
-        assert!(SidecarStatus::Running.is_running());
+        assert!(
+            SidecarStatus::Running {
+                endpoint: String::from("http://host/x")
+            }
+            .is_running()
+        );
         assert!(!SidecarStatus::Error("nope".into()).is_running());
     }
 
@@ -553,7 +765,6 @@ mod tests {
                 PathBuf::from("/nonexistent/model.gguf"),
                 crate::model::ModelChoice::default(),
             ),
-            18080,
             tx,
         )
         .await;
