@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Added — SQL を組み立てていないことを CI で確かめる (2026-10-25)
+
+- `scripts/sql_binding_check.py`: query に SQL を渡す呼び出し (execute / prepare / query_row 等) の第 1 引数が文字列 literal か UPPER_CASE の const であることを `crates/core/src/db.rs` と worker の handler で検査する format! / 連結 / 実行時に組んだ変数なら失敗する (検査 0 件も失敗) 検査器自身の試験つき CI の wiring-guard と preflight で実行する
+
 ### Fixed — licence を支払いが済んだ checkout にだけ、1 回だけ発行する (2026-10-25)
 
 - `checkout.session.completed` は `payment_status` が `paid` か `no_payment_required` の時だけ licence を発行する (`unpaid` の非同期決済は `checkout.session.async_payment_succeeded` で発行、`async_payment_failed` は記録だけ) これまでは決済の状態を見ずに発行していた

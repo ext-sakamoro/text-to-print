@@ -48,6 +48,10 @@ python3 scripts/test_workflow_timeouts.py
 python3 scripts/workflow_timeouts.py
 python3 scripts/wiring_guard.py
 
+step "ci.yml / wiring-guard: sql-binding (query の SQL が literal か const)"
+python3 scripts/sql_binding_check.py --self-test
+python3 scripts/sql_binding_check.py
+
 step "ci.yml / wiring-guard: vocab-lint (許可リスト外の token が無い)"
 python3 scripts/vocab_lint.py --self-test
 python3 scripts/vocab_lint.py

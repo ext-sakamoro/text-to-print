@@ -189,6 +189,10 @@ jobs:
         run: python scripts/test_wiring_guard.py
       - name: wiring-guard (新規の未配線 / 理由の無い dead_code が無い)
         run: python scripts/wiring_guard.py
+      - name: sql-binding (query に渡す SQL が literal か const、組み立てた SQL でない、検査器の試験を含む)
+        run: |
+          python scripts/sql_binding_check.py --self-test
+          python scripts/sql_binding_check.py
       - name: workflow-timeouts (全 job に timeout-minutes がある、検査器の試験を含む)
         run: |
           python scripts/test_workflow_timeouts.py
