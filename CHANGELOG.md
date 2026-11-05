@@ -7,6 +7,7 @@
 
 ### Security — ブラウザで開く URL を allow-list で確かめる (2026-10-25)
 
+- Fixed: yanked になった `async-executor` 1.14.0 を 1.14.1 に上げた
 - CI: 共有の `advisory_hold_guard` (試験も) と `public-text.yml` を新しい版にした 保留の期限は今日から 21 日以内 (`advisory_holds.toml` を 2026-11-26 に)、`deny.toml` は `unused-ignored-advisory = "deny"`
 - checkout (Stripe) と updater (GitHub release) で browser に開く URL を alice-browser-secure の `UrlAllowList` で確かめてから開く checkout は `https` + host `checkout.stripe.com`、updater は `https` + `github.com` の `/ext-sakamoro/text-to-print/releases` 配下だけを許す userinfo / 既定でない port / 非 https / `.`・`..` / percent-encode した区切り / 似せた host は拒むので、改竄された応答が任意の URL を開けない
 
