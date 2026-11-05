@@ -40,7 +40,7 @@ dependents = [
     "zbus_xml 4.0.0",
 ]
 fixed = []
-expires = "2026-12-31"
+expires = "2026-11-26"
 until = "eframe / egui upgrade in crates/app"
 
 [[hold]]
@@ -50,7 +50,7 @@ crate = "zbus_names"
 version = "3.0.0"
 dependents = ["atspi-common 0.6.0", "zbus 4.4.0", "zbus_xml 4.0.0"]
 fixed = []
-expires = "2026-12-31"
+expires = "2026-11-26"
 until = "eframe / egui upgrade in crates/app"
 
 [[hold]]
@@ -60,5 +60,5 @@ crate = "zvariant_derive"
 version = "4.2.0"
 dependents = ["zvariant 4.2.0"]
 fixed = []
-expires = "2026-12-31"
+expires = "2026-11-26"
 until = "eframe / egui upgrade in crates/app"
