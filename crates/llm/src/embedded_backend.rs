@@ -336,7 +336,10 @@ fn worker_main_cpu(
         let _ = init_tx.send(Err(anyhow!("tokenizer construction failed")));
         return;
     };
-    let Some(mut model) = Llama3Model::from_gguf(&gguf) else {
+    // llm-5-typed-error: `into_iter().next()` reads both the 4.x `Option` and the 5.x `Result`
+    // while the requirement spans both; it drops the 5.x `LoadError` until the pin moves to 5 and
+    // this matches on the error and sends its message
+    let Some(mut model) = Llama3Model::from_gguf(&gguf).into_iter().next() else {
         let _ = init_tx.send(Err(anyhow!(
             "Llama3Model construction failed (arch not supported?)"
         )));

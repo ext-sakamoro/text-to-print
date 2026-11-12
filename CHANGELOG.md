@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Changed
+- alice-llm の要求を `"4"` から `">=4, <6"` に広げた (Cargo.lock は 4.0.0 のまま) alice-llm 5.0.0 で `Llama3Model::from_gguf` が `Option` から `Result` に変わるので、`crates/llm` の読み込みは両方で読める `into_iter().next()` にした (5 に上げる時に `LoadError` の内容を送る形に戻す、`llm-5-typed-error`)
+
 ### Security — bundle した SQLite を 3.54.1 にする (2026-11-12)
 
 - `rusqlite` を 0.31 から 0.41 (`libsqlite3-sys` 0.39.1、SQLite 3.54.1) にした (workspace と `crates/worker`) RUSTSEC-2026-0459 / CVE-2026-119375: 3.54.0 より前の SQLite は、page size の違う `-wal` を持つ database を開くと未初期化の page cache の内容を返しうる code の変更は無い

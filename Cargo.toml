@@ -27,7 +27,7 @@ publish = false
 # re-exports (alice-bamboo has `wgsl` feature default-on so `to_wgsl` is
 # exposed uniformly)
 alice-sdf = { git = "https://github.com/ext-sakamoro/ALICE-SDF", branch = "main", version = "7" }
-alice-llm = { git = "https://github.com/ext-sakamoro/ALICE-LLM", branch = "main", version = "4", default-features = false }
+alice-llm = { git = "https://github.com/ext-sakamoro/ALICE-LLM", branch = "main", version = ">=4, <6", default-features = false }
 alice-bamboo = { git = "https://github.com/ext-sakamoro/ALICE-Bamboo", branch = "main", version = "0.1" }
 alice-physics = { git = "https://github.com/ext-sakamoro/ALICE-Physics", branch = "main", version = "4" }
 # SHA-256 of downloaded model files (alice_crypto::sha256)
