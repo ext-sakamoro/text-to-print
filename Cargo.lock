@@ -224,8 +224,8 @@ dependencies = [
 
 [[package]]
 name = "alice-llm"
-version = "4.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LLM?branch=main#13444b493be971e672c8a1b57dda053799c41ae8"
+version = "5.0.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LLM?branch=main#e8b8a1dfacf2fb707e9447f81cd2d55cf6c98773"
 dependencies = [
  "alice-det-math",
  "bytemuck",

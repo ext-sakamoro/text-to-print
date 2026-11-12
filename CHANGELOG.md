@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Changed
+- alice-llm を 5.0.0 (e8b8a1df) に上げ、要求を `"5"` にした (Cargo.lock は alice-llm の行だけ) `crates/llm` の読み込みは `Llama3Model::from_gguf` の `LoadError` (未対応の arch / 欠けた tensor) の内容を初期化の結果に入れて返す (`into_iter().next()` の暫定の形を外した)
 - alice-llm の要求を `"4"` から `">=4, <6"` に広げた (Cargo.lock は 4.0.0 のまま) alice-llm 5.0.0 で `Llama3Model::from_gguf` が `Option` から `Result` に変わるので、`crates/llm` の読み込みは両方で読める `into_iter().next()` にした (5 に上げる時に `LoadError` の内容を送る形に戻す、`llm-5-typed-error`)
 
 ### Security — bundle した SQLite を 3.54.1 にする (2026-11-12)
