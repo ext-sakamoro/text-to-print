@@ -1327,7 +1327,7 @@ fn show_prompt_templates(ui: &mut egui::Ui, state: &mut AppState, is_generating:
 /// household 3 (coaster / tissue_box_cover / storage_box) +
 /// hobby-diy 4 (cable_clip / led_channel / card_tray / token_well、Sprint 5) +
 /// tools 3 (wrench_holder / socket_rail / hex_bit_holder、Sprint 6) +
-/// electronics 3 (raspi_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
+/// electronics 3 (sbc_case / esp32_enclosure / battery_18650_holder、Sprint 7) +
 /// bathroom-garage 3 (toothbrush_holder / drill_bit_holder / pliers_rack、Sprint 8) +
 /// kitchen 3 (spice_rack / egg_tray / utensil_caddy、Sprint 9) +
 /// printer 3 (filament_spool_holder / nozzle_holder / build_plate_rack、Sprint 10) +
@@ -3554,7 +3554,7 @@ fn show_dry_box_customizer(ui: &mut egui::Ui, state: &mut AppState, lang: Lang) 
 /// 屋外用 IP54 密閉筐体 customizer
 /// (`internal_w × internal_d × internal_h`、electronics § 5)
 ///
-/// raspi_case + gasket groove (top rim seal for O-ring)
+/// sbc_case + gasket groove (top rim seal for O-ring)
 fn show_outdoor_enclosure_customizer(ui: &mut egui::Ui, state: &mut AppState, lang: Lang) {
     ui.label(egui::RichText::new(crate::i18n::T::prompt_p325(lang)).strong());
 
@@ -3932,7 +3932,7 @@ fn show_can_rack_customizer(ui: &mut egui::Ui, state: &mut AppState, lang: Lang)
 /// LED hub 筐体 customizer
 /// (`internal_w × internal_d × internal_h`、electronics § 6、multi-component)
 ///
-/// raspi_case + front LED window + top-right antenna hole (3-component composite)
+/// sbc_case + front LED window + top-right antenna hole (3-component composite)
 fn show_led_hub_box_customizer(ui: &mut egui::Ui, state: &mut AppState, lang: Lang) {
     ui.label(egui::RichText::new(crate::i18n::T::prompt_p377(lang)).strong());
 

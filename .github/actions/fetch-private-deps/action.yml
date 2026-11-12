@@ -1,0 +1,166 @@
+name: Fetch the dependencies, the private ones with their read-only deploy keys
+description: |
+  Fetches every dependency in Cargo.lock (`cargo fetch --locked`). The private repositories named in
+  `repos` come over ssh, each with its own read-only deploy key (`key-1`, `key-2`, in the order of
+  `repos`); every other source is fetched over https as before. The keys are written to a directory under
+  the runner's temp directory and removed when this step ends. ssh reads only this step's config file
+  (one host alias per repository, each naming its key), GitHub's published host key and no ssh-agent.
+  The URL rewrites that send those repositories to ssh are set through this step's environment
+  (GIT_CONFIG_COUNT), never in a git config file.
+  Before the fetch, Cargo.lock must name each of them by exactly its own URL; a source that only shares
+  the prefix fails. After the fetch, each must have come over ssh at least once, and have a checkout.
+  The second step checks that no later step can reach a key: no key directory, no rewrite in the
+  global git config, no fetch environment. A check that looked at nothing fails. Later cargo steps run
+  offline (CARGO_NET_OFFLINE).
+
+inputs:
+  repos:
+    description: "The private repositories of the owner fetched with a key, space-separated, in the order of the keys"
+    required: true
+  key-1:
+    description: "Read-only deploy key of the first repository in `repos`"
+    required: true
+  key-2:
+    description: "Read-only deploy key of the second repository in `repos` (empty when `repos` names one)"
+    required: false
+    default: ""
+  working-directory:
+    description: "The directory holding Cargo.lock"
+    required: false
+    default: text-to-print
+  offline:
+    description: "Make the later cargo steps offline (false only for a job whose tool fetches its own data, such as cargo-deny's advisory database)"
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch (the private repositories over ssh with their deploy keys, only in this step)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        REPOS: ${{ inputs.repos }}
+        KEY_1: ${{ inputs.key-1 }}
+        KEY_2: ${{ inputs.key-2 }}
+      run: |
+        set -euo pipefail
+        read -r -a repos <<< "${REPOS}"
+        keys=("${KEY_1}" "${KEY_2}")
+        if [ "${#repos[@]}" -lt 1 ] || [ "${#repos[@]}" -gt 2 ]; then
+          echo "::error::repos names ${#repos[@]} repositories (1 or 2)"; exit 1
+        fi
+        for i in "${!repos[@]}"; do
+          if [[ ! "${repos[$i]}" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]; then echo "::error::not a repository name: '${repos[$i]}'"; exit 1; fi
+        done
+        # a key for each repository and none left over
+        if [ "${#repos[@]}" -eq 1 ] && [ -n "${KEY_2}" ]; then echo "::error::key-2 is set but repos names one repository"; exit 1; fi
+
+        tmp="${RUNNER_TEMP}"
+        # on Windows RUNNER_TEMP is D:\a\_temp: git runs GIT_SSH_COMMAND through its shell, which drops
+        # the backslashes, so every path given to ssh is the POSIX one (/d/a/_temp)
+        if command -v cygpath > /dev/null 2>&1; then tmp="$(cygpath -u "$tmp")"; fi
+        keydir="${tmp}/alice-depkeys"
+        echo "${keydir}" > "${RUNNER_TEMP}/alice-depkeys.path"
+        trap 'rm -rf "${keydir}"' EXIT
+        mkdir -p "${keydir}"
+        chmod 700 "${keydir}"
+
+        for i in "${!repos[@]}"; do
+          repo="${repos[$i]}" value="${keys[$i]}" file="${keydir}/${repos[$i]}.key"
+          if [ -z "${value}" ]; then echo "::error::the deploy key of ${repo} (key-$((i + 1))) is empty"; exit 1; fi
+          # a key pasted with CRLF line ends fails to load ("error in libcrypto"): keep LF only
+          (umask 077; printf '%s\n' "${value}" | tr -d '\r' > "${file}")
+          if ! err="$(ssh-keygen -y -f "${file}" 2>&1 > /dev/null)"; then
+            # the key's shape only (its line count), never its content
+            echo "key file: $(wc -l < "${file}") lines"
+            echo "::error::the deploy key of ${repo} does not load as a private key (${err}); check the secret's format"
+            exit 1
+          fi
+        done
+
+        # GitHub's published ssh host key (https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
+        echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "${keydir}/known_hosts"
+        {
+          for repo in "${repos[@]}"; do
+            printf 'Host %s.github\n  HostName github.com\n  User git\n  IdentityFile %s/%s.key\n  IdentitiesOnly yes\n  IdentityAgent none\n  HostKeyAlias github.com\n' \
+              "${repo}" "${keydir}" "${repo}"
+          done
+          printf 'Host *\n  UserKnownHostsFile %s/known_hosts\n  GlobalKnownHostsFile /dev/null\n  StrictHostKeyChecking yes\n  HostKeyAlgorithms ssh-ed25519\n' "${keydir}"
+        } > "${keydir}/ssh_config"
+        # every ssh call is logged, so the step can check that each repository came over ssh (with its key)
+        log="${keydir}/ssh-calls.log"
+        : > "${log}"
+        cat > "${keydir}/ssh" <<EOF
+        #!/usr/bin/env bash
+        echo "\$*" >> "${log}"
+        exec ssh -F "${keydir}/ssh_config" "\$@"
+        EOF
+        chmod +x "${keydir}/ssh"
+
+        # Cargo.lock names each repository by exactly its URL (git's insteadOf is a prefix match: a source
+        # that only shares the prefix would also be sent to ssh, so a lock naming one fails)
+        for repo in "${repos[@]}"; do
+          total=$(grep -c "^source = \"git+https://github.com/ext-sakamoro/${repo}" Cargo.lock || true)
+          exact=$(grep -cE "^source = \"git\+https://github\.com/ext-sakamoro/${repo}(\.git)?\?branch=main#[0-9a-f]{40}\"$" Cargo.lock || true)
+          if [ "${total}" -lt 1 ] || [ "${total}" -ne "${exact}" ]; then
+            echo "::error::Cargo.lock names ${repo} in ${total} source line(s), ${exact} of them exactly ${repo} on branch main (want at least 1, all exact)"
+            exit 1
+          fi
+          echo "Cargo.lock: ${repo} in ${total} source line(s), all exact"
+        done
+
+        # a cached checkout would let cargo skip the fetch, and then nothing shows the key works
+        # (cargo names its git directories by the lower-case repository name and a hash)
+        cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+        for repo in "${repos[@]}"; do
+          lower=$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')
+          rm -rf "${cargo_home}"/git/db/"${lower}"-* "${cargo_home}"/git/checkouts/"${lower}"-*
+        done
+
+        export GIT_SSH_COMMAND="${keydir}/ssh"
+        export GIT_CONFIG_COUNT="${#repos[@]}"
+        for i in "${!repos[@]}"; do
+          export "GIT_CONFIG_KEY_${i}=url.git@${repos[$i]}.github:ext-sakamoro/${repos[$i]}.insteadOf"
+          export "GIT_CONFIG_VALUE_${i}=https://github.com/ext-sakamoro/${repos[$i]}"
+        done
+        export CARGO_NET_GIT_FETCH_WITH_CLI=true
+        cargo fetch --locked
+
+        for repo in "${repos[@]}"; do
+          calls=$(grep -c "${repo}\.github" "${log}" || true)
+          lower=$(printf '%s' "${repo}" | tr '[:upper:]' '[:lower:]')
+          checkouts=$(find "${cargo_home}/git/checkouts" -maxdepth 1 -name "${lower}-*" 2> /dev/null | wc -l | tr -d ' ')
+          echo "${repo}: ${calls} ssh call(s), ${checkouts} checkout(s)"
+          if [ "${calls}" -lt 1 ]; then echo "::error::${repo} was not fetched over ssh (0 ssh calls): its deploy key was not used"; exit 1; fi
+          if [ "${checkouts}" -lt 1 ]; then echo "::error::no ${repo} checkout after cargo fetch"; exit 1; fi
+        done
+
+    - name: The deploy keys are gone before any build step
+      shell: bash
+      env:
+        OFFLINE: ${{ inputs.offline }}
+      run: |
+        set -euo pipefail
+        checks=0
+        keydir="$(cat "${RUNNER_TEMP}/alice-depkeys.path")"
+        if [ -z "${keydir}" ]; then echo "::error::the fetch step left no key directory path"; exit 1; fi
+        if [ -e "${keydir}" ]; then echo "::error::the deploy key directory is still there: ${keydir}"; exit 1; fi
+        checks=$((checks + 1))
+        # the rewrites send a repository to its host alias (`git@<repo>.github:`): none may be in the global config
+        if git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null | grep -q '\.github:'; then
+          echo "::error::a deploy key URL rewrite is in the global git config"; exit 1
+        fi
+        checks=$((checks + 1))
+        if [ -n "${GIT_SSH_COMMAND:-}" ] || [ -n "${GIT_CONFIG_COUNT:-}" ]; then
+          echo "::error::the fetch step's GIT_SSH_COMMAND / GIT_CONFIG_COUNT reached a later step"; exit 1
+        fi
+        checks=$((checks + 1))
+        rm -f "${RUNNER_TEMP}/alice-depkeys.path"
+        if [ "${checks}" -ne 3 ]; then echo "::error::checked ${checks} of 3"; exit 1; fi
+        echo "deploy key scope: ${checks} checks passed (no key directory, no global rewrite, no fetch environment)"
+        case "${OFFLINE}" in
+          true) echo "CARGO_NET_OFFLINE=true" >> "${GITHUB_ENV}"; echo "cargo is offline for the rest of the job" ;;
+          false) ;;
+          *) echo "::error::offline must be true or false, not '${OFFLINE}'"; exit 1 ;;
+        esac

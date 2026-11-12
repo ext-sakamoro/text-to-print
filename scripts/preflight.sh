@@ -64,10 +64,6 @@ step "ci.yml / wiring-guard: image-metadata (追跡している PNG / JPEG に m
 python3 scripts/test_image_metadata_check.py
 python3 scripts/image_metadata_check.py
 
-step "ci.yml / clippy-test-doc: sibling pins (固定 commit と cargo の解決の突合)"
-python3 scripts/ci_sibling_checkout_check.py --self-test
-python3 scripts/ci_sibling_checkout_check.py
-
 step "ci.yml / clippy-test-doc: no peer-to-peer layer (libp2p が無い)"
 python3 scripts/no_p2p_guard.py --self-test
 python3 scripts/no_p2p_guard.py

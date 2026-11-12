@@ -516,7 +516,7 @@ or all-field 明示 (advanced field も全部書く)
 | 17 | `wrench_holder(min_mm, max_mm, count)` | 3 | 8-19mm × 6 (Metric、等間隔補間) | tools § 1 |
 | 18 | `socket_rail(post_dia, post_height, count)` | 3 | Ø12.4×H22mm × 6 (1/2" drive) | tools § 2 |
 | 19 | `hex_bit_holder(rows, cols, spacing)` | 3 | 5×4 grid @ 12mm (20 hole、1/4" bit 固定) | tools § 3 |
-| 20 | `raspi_case(pcb_w, pcb_d, internal_h)` | 3 | 85×56×25mm (RPi 5、Active Cooler、4 standoff + port opening) | electronics § 1 |
+| 20 | `sbc_case(pcb_w, pcb_d, internal_h)` | 3 | 85×56×25mm (RPi 5、Active Cooler、4 standoff + port opening) | electronics § 1 |
 | 21 | `esp32_enclosure(pcb_w, pcb_d, internal_h)` | 3 | 51.6×28.4×15mm (ESP32 DevKit V1、USB opening) | electronics § 2 |
 | 22 | `battery_18650_holder(count, wall, floor)` | 3 | 4 cell × 2.5mm wall × 0 floor (through、Ø18.6×L68 固定) | electronics § 3 |
 | 23 | `toothbrush_holder(count, hole_diameter, height)` | 3 | 4本 × Ø15×H70mm (manual、top 開口) | bathroom § 7.1 |
@@ -559,7 +559,7 @@ or all-field 明示 (advanced field も全部書く)
 - ~~household.md~~ ✅ 3 archetype 完了 (Sprint 4、coaster / tissue_box_cover / storage_box) 残 = lid + hinge (Print-in-Place / filament pin / living hinge) は future sprint
 - ~~hobby-diy.md~~ ✅ 4 archetype 完了 (Sprint 5、cable_clip / led_channel / card_tray / token_well) 残 = gear (§ 4、involute 歯型 SDF) / bearing_mount (§ 4、608 press-fit) / model train scale accessory (§ 5) は future sprint
 - ~~tools.md~~ ✅ 3 archetype 完了 (Sprint 6、wrench_holder / socket_rail / hex_bit_holder) 残 = caliper_holder (§ 4、shape 特化) / vise (§ 5、thread SDF) / battery_holder (§ 6、type 別 dims) は future sprint
-- ~~electronics-enclosure.md~~ ✅ 3 archetype 完了 (Sprint 7、raspi_case / esp32_enclosure / battery_18650_holder) 残 = phone_dock (§ 4、MagSafe/USB-C shape 特化) / outdoor_enclosure (§ 5、IP sealing + gasket groove) / led_hub_box (§ 6、antenna keep-out + light pipe) は future sprint
+- ~~electronics-enclosure.md~~ ✅ 3 archetype 完了 (Sprint 7、sbc_case / esp32_enclosure / battery_18650_holder) 残 = phone_dock (§ 4、MagSafe/USB-C shape 特化) / outdoor_enclosure (§ 5、IP sealing + gasket groove) / led_hub_box (§ 6、antenna keep-out + light pipe) は future sprint
 - ~~organizer-bathroom-garage.md~~ ✅ 3 archetype 完了 (Sprint 8、toothbrush_holder / drill_bit_holder / pliers_rack) 残 = bathroom 7 (razor / soap_tray / shower_caddy / towel_hook / cotton_dispenser / hairdryer / tp_holder) + garage 6 (hex_key / tape_dispenser / driver_rack / sandpaper / brush / clamp_rack) は future sprint
 - ~~organizer-cable-kitchen.md~~ ✅ 3 archetype 完了 (Sprint 9、spice_rack / egg_tray / utensil_caddy) 残 = cable § 5 は既存 hobby-diy cable_clip と重複 skip、kitchen § 6 残 6 (wrap_holder / bag_clip_org / can_rack / cutting_board_rack / kcup_holder / sink_caddy) は future sprint
 - ~~organizer-printer-modular.md~~ ✅ 3 archetype 完了 (Sprint 10、filament_spool_holder / nozzle_holder / build_plate_rack) 残 = § 9 残 5 (dry_box / tool_holder / sd_card_holder / swatch_holder / allen_key_holder) + § 10 modular connection systems (Gridfinity/Multiboard/SKADIS/Honeycomb/Lego/Dovetail/T-Slot 等は protocol 仕様書、既存 SKADIS panel / gridfinity_bin で cover 済) は future sprint

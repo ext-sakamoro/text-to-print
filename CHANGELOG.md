@@ -5,6 +5,18 @@
 
 ## [Unreleased]
 
+### Changed — ALICE-* を各 repo の main branch の git 依存にする (2026-11-12)
+
+- ALICE-* の依存を `../ALICE-Xxx` の path 依存から `{ git = "https://github.com/ext-sakamoro/ALICE-Xxx", branch = "main", version = … }` にした (workspace / `crates/core` / `crates/gallery-sign`) `Cargo.lock` が commit を固定する (Bamboo 09d9dbc / Browser-Secure c1eb4f3 / Crypto 497e170 / DetMath d80446e / LLM 13444b4 / LOL 67a637b / Physics cc239dd / Print 7deaa9e / SDF 16dabf0 / Serial 16b34eb / Sign 8c8d1ee / Zip 977c755) `fuzz/` と `crates/worker` の lock も同じ commit にした
+- 版: alice-sdf 7、alice-llm 4 (`default-features = false`)、alice-physics 4、alice-crypto 0.7、alice-det-math 0.6 (間接)
+- alice-llm 4 で `sample_argmax` / `top_k_filter` / `softmax_inplace` / `sample_with_random` が `Result<_, SamplingError>` を返すようになったので、組み込み backend の生成 loop はその誤りを生成の誤りとして返す (index の `u32` への変換も `try_from` で確かめる、これまでは `as` で切り詰めていた)
+- ALICE-LOL 03f4d3c が単一基板計算機の筐体と取付板の構文を `sbc_case` / `sbc_mount_plate` に改名した (旧名は未知の構文) ので、preset (app 3 件・worker 6 件)、LLM の文法と system prompt、customizer が出す LOL、文書と試験の構文名を新名にした 引数と出力の形は同じ preset の id と UI の state の名前は変えていない
+- CI: `.github/siblings.toml` と `.github/actions/alice-siblings`、`scripts/ci_sibling_checkout_check.py` を外した 依存は cargo が `Cargo.lock` の commit を取る 非公開の 2 repo は新しい composite action `.github/actions/fetch-private-deps` が各 repo の読み取り専用 deploy key (`ALICE_DEPKEY_*`) で ssh から取る (repo の名前は workflow の `repos:` に data として渡す): 鍵は fetch だけの step の一時 dir にだけ置き、ssh は step の設定 file (repo ごとの host 別名と鍵、GitHub の公開 host key、agent 不使用) だけを読み、URL の書き換えは step の環境 (`GIT_CONFIG_COUNT`) だけに置く fetch の前に `Cargo.lock` が 2 repo をちょうどその URL (`?branch=main#<40 桁>`) でだけ名指すこと、後に各 repo が ssh で 1 回以上取られ checkout があることを確かめる 次の step で鍵の dir・global の書き換え・fetch の環境が残っていないことを確かめ (3 件、数が合わなければ失敗)、以降の cargo は offline 鍵を要らない job (machete、worker の wasm) には渡さない
+- sidecar (alice-llm-server) は `Cargo.lock` が固定する ALICE-LLM の commit (cargo が取った git checkout、`scripts/alice_llm_dir.py` が `cargo metadata` から求める、試験 `scripts/test_alice_llm_dir.py`) から本 repo の `target/alice-llm-server` に build する (`scripts/sidecar_lifecycle_test.sh` / `scripts/build_sidecar.sh` / release)
+- README: 隣に ALICE-* を checkout する手順を外した
+- `deny.toml`: ALICE-* の licence の例外を各 crate が名乗る `LicenseRef-Proprietary` にした (alice-physics / alice-physics-core / alice-llm と非公開の依存 1 つは AGPL から変更、alice-det-math / alice-lol / alice-lol-layout / alice-lol-macro / alice-sdf / alice-zip を追加) 本 crate も同じ owner の `LicenseRef-Proprietary`
+- **Behavior change:** 書き出す mesh が、形が格子の max 側の境界から 1 cell 以内に届く時に閉じるようになった ALICE-SDF f51fdabf (dual contouring が max 側の最後の格子の層の辺の quad も作る) による zip の oracle (`crates/core/tests/fixtures/zip_oracle/zip2.json` / `zip2_app.json`) では coaster の `3D/Objects/object_1.model` と `Metadata/model_settings.config` (面の数) が変わり、取り直した: 頂点 74160 は同じで三角形が 146984 → 148364、開いた辺が 296 → 0 blend と sphere の全 entry は変わらない alice-det-math 0.5 → 0.6 で bit が変わった関数 (`|x| ≥ 2¹³` の sin / cos、両方 subnormal の hypot、`powf`) は、この 3 program の値域では呼ばれない
+
 ### Security — ブラウザで開く URL を allow-list で確かめる (2026-10-25)
 
 - Fixed: yanked になった `async-executor` 1.14.0 を 1.14.1 に上げた

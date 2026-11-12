@@ -3692,8 +3692,8 @@ impl T {
     }
     pub fn prompt_p325(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "🛡 屋外用 IP54 密閉筐体 (raspi_case + gasket groove)",
-            Lang::En => "🛡 Outdoor IP54 sealed enclosure (raspi_case + gasket groove)",
+            Lang::Ja => "🛡 屋外用 IP54 密閉筐体 (sbc_case + gasket groove)",
+            Lang::En => "🛡 Outdoor IP54 sealed enclosure (sbc_case + gasket groove)",
         }
     }
     pub fn prompt_p326(l: Lang) -> &'static str {
@@ -4046,8 +4046,8 @@ impl T {
     }
     pub fn prompt_p377(l: Lang) -> &'static str {
         match l {
-            Lang::Ja => "💡 LED hub 筐体 (raspi_case + LED window + antenna hole)",
-            Lang::En => "💡 LED hub enclosure (raspi_case + LED window + antenna hole)",
+            Lang::Ja => "💡 LED hub 筐体 (sbc_case + LED window + antenna hole)",
+            Lang::En => "💡 LED hub enclosure (sbc_case + LED window + antenna hole)",
         }
     }
     pub fn prompt_p378(l: Lang) -> &'static str {

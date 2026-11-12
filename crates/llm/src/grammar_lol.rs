@@ -94,7 +94,7 @@ mod tests {
             "wrench_holder",
             "socket_rail",
             "hex_bit_holder",
-            "raspi_case",
+            "sbc_case",
             "esp32_enclosure",
             "battery_18650_holder",
             "toothbrush_holder",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`cargo fmt --check` を走らせ、本 repo の Rust file が全部検査されたことを確かめる
 
-CI の fmt は本 repo の package だけを見る (`--all` は path 依存の sibling 全体を
+CI の fmt は本 repo の package だけを見る (`--all` は依存の alice-* 全体を
 1 回の rustfmt に渡し、Windows で引数長の上限に当たる) その代わりに、検査した
 file の集合が「workspace member の directory にある追跡済み `.rs` 全部」と一致する
 ことを assert する member が抜けたり file が検査から漏れたら fail、0 件も fail

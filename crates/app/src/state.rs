@@ -853,7 +853,7 @@ impl HexBitHolderUiState {
     }
 }
 
-/// Raspberry Pi ケース customizer UI state (`raspi_case(pcb_w, pcb_d, internal_h)`)
+/// Raspberry Pi ケース customizer UI state (`sbc_case(pcb_w, pcb_d, internal_h)`)
 #[derive(Debug, Clone, Copy)]
 pub struct RaspiCaseUiState {
     /// PCB 幅 (mm、RPi 5/4=85 / Zero 2W=65、default 85)
@@ -877,7 +877,7 @@ impl Default for RaspiCaseUiState {
 impl RaspiCaseUiState {
     pub fn to_lol(self) -> String {
         format!(
-            "raspi_case({}, {}, {})",
+            "sbc_case({}, {}, {})",
             self.pcb_width, self.pcb_depth, self.internal_height
         )
     }
@@ -1809,7 +1809,7 @@ impl DryBoxUiState {
     }
 }
 
-/// 屋外用 IP54 密閉筐体 UI state (electronics § 5、raspi_case + gasket groove)
+/// 屋外用 IP54 密閉筐体 UI state (electronics § 5、sbc_case + gasket groove)
 /// (`outdoor_enclosure(internal_w, internal_d, internal_h)`)
 #[derive(Debug, Clone, Copy)]
 pub struct OutdoorEnclosureUiState {
@@ -2094,7 +2094,7 @@ impl CanRackUiState {
     }
 }
 
-/// LED hub 筐体 UI state (electronics § 6、raspi_case + LED window + antenna hole)
+/// LED hub 筐体 UI state (electronics § 6、sbc_case + LED window + antenna hole)
 /// (`led_hub_box(internal_w, internal_d, internal_h)`)
 #[derive(Debug, Clone, Copy)]
 pub struct LedHubBoxUiState {
@@ -2232,7 +2232,7 @@ impl TSlotBracket2020UiState {
     }
 }
 
-/// Raspberry Pi マウント板 customizer (`raspi_mount_plate(model, extra_m4_holes)`)
+/// Raspberry Pi マウント板 customizer (`sbc_mount_plate(model, extra_m4_holes)`)
 #[derive(Debug, Clone, Copy)]
 pub struct RaspiMountPlateUiState {
     pub model: u32,
@@ -2248,7 +2248,7 @@ impl Default for RaspiMountPlateUiState {
 }
 impl RaspiMountPlateUiState {
     pub fn to_lol(self) -> String {
-        format!("raspi_mount_plate({}, {})", self.model, self.extra_m4_holes)
+        format!("sbc_mount_plate({}, {})", self.model, self.extra_m4_holes)
     }
 }
 
@@ -4220,7 +4220,7 @@ mod tests {
         assert!((c.pcb_width - 85.0).abs() < 1e-6);
         assert!((c.pcb_depth - 56.0).abs() < 1e-6);
         assert!((c.internal_height - 25.0).abs() < 1e-6);
-        assert_eq!(c.to_lol(), "raspi_case(85, 56, 25)");
+        assert_eq!(c.to_lol(), "sbc_case(85, 56, 25)");
     }
 
     #[test]
@@ -4245,7 +4245,7 @@ mod tests {
     fn customizer_state_default_includes_all_22_archetypes() {
         let c = CustomizerState::default();
         // Sprint 7 追加後は 22 archetype (organizer 9 + household 3 + hobby-diy 4 + tools 3 + electronics 3)
-        assert_eq!(c.raspi_case.to_lol(), "raspi_case(85, 56, 25)");
+        assert_eq!(c.raspi_case.to_lol(), "sbc_case(85, 56, 25)");
         assert_eq!(
             c.esp32_enclosure.to_lol(),
             "esp32_enclosure(51.6, 28.4, 15)"

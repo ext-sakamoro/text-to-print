@@ -61,15 +61,39 @@ allow = [
 [licenses.private]
 ignore = true
 
-# ALICE の sibling crate (path dep): 外部依存全体でなく、この crate だけに限った exception
+# ALICE-* crate (git 依存、どれも同じ owner の LicenseRef-Proprietary): 外部依存全体でなく、この crate だけに限った exception
 [[licenses.exceptions]]
 name = "alice-physics"
-allow = ["AGPL-3.0-or-later"]
+allow = ["LicenseRef-Proprietary"]
 
-# alice-physics 4.0 is a facade over alice-physics-core
+# alice-physics 4 is a facade over alice-physics-core
 [[licenses.exceptions]]
 name = "alice-physics-core"
-allow = ["AGPL-3.0-or-later"]
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-det-math"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol-layout"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol-macro"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-sdf"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-zip"
+allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-crypto"
@@ -81,11 +105,11 @@ allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-llm"
-allow = ["AGPL-3.0-or-later"]
+allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-bamboo"
-allow = ["AGPL-3.0-only"]
+allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-print"

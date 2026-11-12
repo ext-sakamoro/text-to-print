@@ -5,7 +5,7 @@
 //!   core (main a39e48c) で同梱 template 116 件を検査した結果 (`fixtures/safety_messages_templates.json`)
 //!   通常の試験は速い数件、全件は `--release -- --ignored` で走らせる
 //! * 構造の各欄 (種類 / 重大度 / 確かさ / 値) と、利用者向けの文に検査の元の文字列が出ないこと
-//! * raspi_case の穴径の標本 (0.09mm) を測り直すと本当の隙間 (柱と壁の間 1.5mm) が出ること
+//! * sbc_case の穴径の標本 (0.09mm) を測り直すと本当の隙間 (柱と壁の間 1.5mm) が出ること
 
 use std::collections::BTreeMap;
 
@@ -89,13 +89,13 @@ fn large_flat_plate_is_warp_critical() {
     assert_eq!(v[0].severity, Severity::Blocking);
 }
 
-/// raspi_case の穴径の標本は床の 0.4mm 上の入隅 (柱の脇) を読んで 0.09mm と報告する
+/// sbc_case の穴径の標本は床の 0.4mm 上の入隅 (柱の脇) を読んで 0.09mm と報告する
 /// その位置 (柱の中心から z に 1.5mm ずれた所) の柱と壁の間は、spec から 1.74mm
 /// (壁の内側 43.5 と、柱 (中心 (39, 24.5)、半径 3) の表面の距離 √(4.5² + 1.5²) − 3) で、
 /// 柱の真横の最も狭い所が 1.5mm 測り直しは限界 2.0 を下回る (誤差扱いにはしない)
 #[test]
 fn raspi_gap_is_remeasured_to_the_real_slot() {
-    let v = safety_report("raspi_case(85, 56, 25)");
+    let v = safety_report("sbc_case(85, 56, 25)");
     let hole = v
         .iter()
         .find(|x| x.kind == Kind::HoleTooSmall)
@@ -117,7 +117,7 @@ fn shown_text_is_free_of_raw_check_output() {
     for lol in [
         "box3d(10, 10, 0.3)",
         "box3d(150, 150, 2)",
-        "raspi_case(85, 56, 25)",
+        "sbc_case(85, 56, 25)",
         "box3d(1, 2",
     ] {
         for v in safety_report(lol) {

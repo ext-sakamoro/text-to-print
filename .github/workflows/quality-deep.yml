@@ -45,17 +45,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      # ci.yml と同じ実 sibling checkout (stub では compile できない)
+      # 実 dep 木 (Cargo.lock の git 依存、非公開の 2 repo は deploy key で取る) stub では compile できない
       - uses: actions/checkout@v5
         with:
           path: text-to-print
           fetch-depth: 0
-      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
-        uses: ./text-to-print/.github/actions/alice-siblings
-        with:
-          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
-          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
-
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -68,9 +62,17 @@ jobs:
       - name: Install cargo-mutants
         uses: taiki-e/install-action@cargo-mutants
 
-      # `--in-place` は multi-repo layout で必須 (tree copy すると `../ALICE-SDF`
-      # 等の sibling path dep が切れる) in-place は tree を書き換えるので
-      # `--jobs` と併用不可 (cargo-mutants 自身が usage error で落ちる)
+      # the private dependencies over ssh with their read-only deploy keys, in one fetch-only step;
+      # the keys are gone (checked) before any build step
+      - name: Fetch the dependencies (private ones with their deploy keys)
+        uses: ./text-to-print/.github/actions/fetch-private-deps
+        with:
+          repos: ALICE-Bamboo ALICE-Print
+          key-1: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          key-2: ${{ secrets.ALICE_DEPKEY_PRINT }}
+
+      # `--in-place`: tree を copy せずに走らせる (copy 先では fetch 済みの offline の状態を引き継がない)
+      # in-place は tree を書き換えるので `--jobs` と併用不可 (cargo-mutants 自身が usage error で落ちる)
       - name: Mutants (judgement core)
         working-directory: text-to-print
         run: |
@@ -143,9 +145,3 @@ jobs:
           path: text-to-print/mutants.out
           retention-days: 14
 
-      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
-      - name: Verify sibling HEADs (job end)
-        if: always()
-        shell: bash
-        working-directory: ${{ github.workspace }}
-        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
