@@ -17,10 +17,12 @@ dependencies = [
 [[package]]
 name = "alice-serial"
 version = "0.2.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Serial?branch=main#16b34ebcaf3a195fe6500defb4d1e6002cb3d09d"
 
 [[package]]
 name = "alice-sign"
 version = "0.1.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Sign?branch=main#8c8d1eebf4ef9fc4059dae08779f8846e832df5e"
 dependencies = [
  "ed25519-dalek",
  "sha2",

@@ -355,21 +355,21 @@
     ]
   },
   "raspi_5_bare": {
-    "lol": "raspi_case(85, 56, 15)",
+    "lol": "sbc_case(85, 56, 15)",
     "messages": [
       "DfAM hole diameter: narrowest enclosed gap 0.09 mm at [43.5, -26.0, -5.9] is below 2.00 mm min hole diameter (Hubs/Formlabs/HP/EOS design guides + ISO/ASTM 52910 §6.5/§6.7 (conservative defaults)); enlarge to ≥ 2.00 mm",
       "Printability wall thickness: 最小局所肉厚 0.09mm < 1.6mm (薄い三角形 11385 枚、三角形ごとの厳密 march)"
     ]
   },
   "raspi_5_cooler": {
-    "lol": "raspi_case(85, 56, 25)",
+    "lol": "sbc_case(85, 56, 25)",
     "messages": [
       "DfAM hole diameter: narrowest enclosed gap 0.09 mm at [43.5, -26.0, -10.6] is below 2.00 mm min hole diameter (Hubs/Formlabs/HP/EOS design guides + ISO/ASTM 52910 §6.5/§6.7 (conservative defaults)); enlarge to ≥ 2.00 mm",
       "Printability wall thickness: 最小局所肉厚 0.04mm < 1.6mm (薄い三角形 13085 枚、三角形ごとの厳密 march)"
     ]
   },
   "raspi_zero_2w": {
-    "lol": "raspi_case(65, 30, 15)",
+    "lol": "sbc_case(65, 30, 15)",
     "messages": [
       "DfAM hole diameter: narrowest enclosed gap 1.16 mm at [29.5, 11.5, -7.3] is below 2.00 mm min hole diameter (Hubs/Formlabs/HP/EOS design guides + ISO/ASTM 52910 §6.5/§6.7 (conservative defaults)); enlarge to ≥ 2.00 mm",
       "Printability wall thickness: 最小局所肉厚 0.10mm < 1.6mm (薄い三角形 14667 枚、三角形ごとの厳密 march)"

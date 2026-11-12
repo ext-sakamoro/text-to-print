@@ -587,18 +587,15 @@ fn run_decode<M: ModelForward>(
         }
 
         let next = if temperature < 1e-6 {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            {
-                sample_argmax(&logits) as u32
-            }
+            let i = sample_argmax(&logits).map_err(|e| anyhow!("sampling (argmax): {e:?}"))?;
+            u32::try_from(i).map_err(|_| anyhow!("token index {i} does not fit u32"))?
         } else {
             apply_temperature(&mut logits, temperature);
-            top_k_filter(&mut logits, top_k);
-            softmax_inplace(&mut logits);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            {
-                sample_with_random(&logits, next_rand()) as u32
-            }
+            top_k_filter(&mut logits, top_k).map_err(|e| anyhow!("sampling (top-k): {e:?}"))?;
+            softmax_inplace(&mut logits).map_err(|e| anyhow!("sampling (softmax): {e:?}"))?;
+            let i = sample_with_random(&logits, next_rand())
+                .map_err(|e| anyhow!("sampling (random): {e:?}"))?;
+            u32::try_from(i).map_err(|_| anyhow!("token index {i} does not fit u32"))?
         };
 
         if next == tokenizer.eos_id {

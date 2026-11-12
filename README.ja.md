@@ -260,7 +260,7 @@ Apple Developer Program 加入 + Windows Authenticode cert 導入は Phase S3 (L
 | **Linux arm64 Ubuntu 22.04** | (source build) | ✅ verified | ✅ **CLI smoke OK** | build success、wgpu backend 選択、identity 読み込み |
 
 **arm64 Linux 実測** (2026-09-07、arm64 機 2 台):
-- Rust workspace + 6 ALICE-* sibling deps 全 build 成功 (~18 分 on 4-core Cortex-A76 / ~6-core Ampere)
+- Rust workspace + ALICE-* 依存の全 build 成功 (~18 分 on 4-core Cortex-A76 / ~6-core Ampere)
 - Binary size: 36-37 MB (stripped、dynamically linked)
 - Shared libs: `libssl.so.3` + `libdbus-1.so.3` + `libcrypto.so.3` (Debian bookworm / Ubuntu 22.04 標準)
 - **wgpu backend 自動選択** (eframe: "Both glow and wgpu renderers are available. Using wgpu.")
@@ -284,8 +284,8 @@ cargo build --release --package text-to-print-core --bin gen-license-key
 
 必要環境:
 - Rust 1.75+ (rust-toolchain.toml pinned)
-- ALICE ecosystem sibling checkout: `../ALICE-SDF`, `../ALICE-LOL`,
-  `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`, `../ALICE-LLM`
+- 隣に checkout する必要は無い: ALICE-* は branch `main` の git 依存で、`Cargo.lock` が固定する commit を
+  cargo が取る
 
 > **注**: `ALICE-Bamboo` (+ transitive dep `ALICE-Print`) は **private repo**
 > Source build にはこの 2 repo の読み取り権限が必要

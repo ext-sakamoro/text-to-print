@@ -7,9 +7,9 @@ publish.workspace = true
 
 # The desktop client (crates/network) and the Worker (crates/worker, outside the
 # workspace) both build the signed messages from this crate, so the two sides can
-# not drift apart The ALICE siblings are path dependencies pinned in
-# .github/siblings.toml; the paths are written out because crates/worker can not
-# inherit workspace dependencies
+# not drift apart The alice-* dependencies are git dependencies on branch main (the
+# commits in Cargo.lock), written out because crates/worker can not inherit workspace
+# dependencies
 [dependencies]
-alice-sign = { path = "../../../ALICE-Sign" }
-alice-serial = { path = "../../../ALICE-Serial" }
+alice-sign = { git = "https://github.com/ext-sakamoro/ALICE-Sign", branch = "main", version = "0.1" }
+alice-serial = { git = "https://github.com/ext-sakamoro/ALICE-Serial", branch = "main", version = "0.2" }

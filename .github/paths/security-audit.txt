@@ -14,7 +14,6 @@ scripts/test_advisory_hold_guard.py
 scripts/deny_exception_guard.py
 scripts/test_deny_exception_guard.py
 .github/workflows/security-audit.yml
-.github/siblings.toml
-.github/actions/alice-siblings/**
+.github/actions/fetch-private-deps/**
 scripts/changed_paths.py
 .github/paths/security-audit.txt

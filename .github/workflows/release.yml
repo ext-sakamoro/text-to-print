@@ -61,12 +61,6 @@ jobs:
         with:
           path: text-to-print
 
-      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
-        uses: ./text-to-print/.github/actions/alice-siblings
-        with:
-          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
-          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -84,6 +78,15 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
 
+      # the private ALICE-Bamboo / ALICE-Print over ssh with their read-only deploy keys, in one
+      # fetch-only step; the keys are gone (checked) before any build step
+      - name: Fetch the dependencies (private ones with their deploy keys)
+        uses: ./text-to-print/.github/actions/fetch-private-deps
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+          offline: "false"
+
       - name: cargo build --release
         run: cargo build --release --target ${{ matrix.target }} --bin text-to-print
 
@@ -93,18 +96,27 @@ jobs:
       # the binary via `resolve_bin_path` -> exe-neighbor lookup without any
       # user-side install (`crates/llm/src/sidecar.rs`)
       #
-      # ALICE-LLM/rust-toolchain.toml で 1.92.0 pin されているため、外側の
-      # dtolnay/rust-toolchain@stable で入れた target は stable 側にしか反映
-      # されない pinned 1.92.0 側にも明示追加 (cross-compile x86_64-apple-darwin)
-      # 既 install 済み target なら rustup は no-op なので全 4 job で idempotent
+      # The sidecar is built from the ALICE-LLM commit Cargo.lock pins (the git checkout cargo
+      # fetched, located by scripts/alice_llm_dir.py), into this repo's target directory
+      # ALICE-LLM's rust-toolchain.toml pins its own toolchain, so the target dtolnay/rust-toolchain
+      # installed on stable is added to that toolchain too (rustup is a no-op when it is there)
+      - name: Locate the ALICE-LLM checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          PY=$(command -v python3 || command -v python)
+          dir="$("$PY" scripts/alice_llm_dir.py)"
+          # the native (Windows) form of this directory on Windows, cargo reads the variable as given
+          here="$(pwd -W 2> /dev/null || pwd)"
+          echo "ALICE_LLM_DIR=${dir}" >> "$GITHUB_ENV"
+          echo "ALICE_LLM_TARGET=${here}/target/alice-llm-server" >> "$GITHUB_ENV"
+          echo "ALICE-LLM checkout: ${dir}"
       - name: Ensure ALICE-LLM toolchain has target
         shell: bash
-        working-directory: ALICE-LLM
-        run: rustup target add ${{ matrix.target }}
+        run: cd "$ALICE_LLM_DIR" && rustup target add ${{ matrix.target }}
       - name: Build alice-llm-server sidecar
         shell: bash
-        working-directory: ALICE-LLM
-        run: cargo build --release --features server --bin alice-llm-server --target ${{ matrix.target }}
+        run: cd "$ALICE_LLM_DIR" && CARGO_TARGET_DIR="$ALICE_LLM_TARGET" cargo build --locked --release --features server --bin alice-llm-server --target ${{ matrix.target }}
 
       - name: Stage binary artifact
         shell: bash
@@ -112,13 +124,13 @@ jobs:
           mkdir -p dist
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
           # Stage sidecar next to desktop binary (bundled layout)
-          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "dist/${{ matrix.sidecar_bin }}"
+          cp "${ALICE_LLM_TARGET}/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "dist/${{ matrix.sidecar_bin }}"
           # Mirror both binaries into target/release/ so cargo-deb / cargo-wix
           # (which read from the profile dir without a --target flag) pick
           # them up uniformly on every runner
           mkdir -p target/release
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} target/release/${{ matrix.bin_name }}
-          cp "../ALICE-LLM/target/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "target/release/${{ matrix.sidecar_bin }}"
+          cp "${ALICE_LLM_TARGET}/${{ matrix.target }}/release/${{ matrix.sidecar_bin }}" "target/release/${{ matrix.sidecar_bin }}"
 
       # === macOS code signing + notarize (T10.3) ===
       # Requires the following secrets to be set at the repository level:
@@ -422,13 +434,6 @@ jobs:
           name: text-to-print-${{ matrix.target }}-appimage
           path: text-to-print/text-to-print-${{ matrix.target }}.AppImage
           if-no-files-found: warn
-
-      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
-      - name: Verify sibling HEADs (job end)
-        if: always()
-        shell: bash
-        working-directory: ${{ github.workspace }}
-        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
 
   release:
     name: Publish GitHub Release

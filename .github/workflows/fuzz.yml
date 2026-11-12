@@ -4,8 +4,9 @@ name: Fuzz
 # text-to-print 3 target: license base64 / manifest JSON / sha256 hex
 #
 # 2026-09-28: manifest-only stub (`.github/actions/alice-stubs`) を廃止し、
-# ci.yml と同じ実 sibling checkout に統一 stub は空 lib だったので fuzz が
-# 実 dep 木を一度も build していなかった (ALICE-LOL a6ba9f7 と同じ置換)
+# 実 dep 木に統一 stub は空 lib だったので fuzz が実 dep 木を一度も build していなかった
+# (ALICE-LOL a6ba9f7 と同じ置換) 2026-11-12: alice-* は git (branch main) 依存、非公開の
+# ALICE-Bamboo / ALICE-Print は各 repo の読み取り専用 deploy key で fetch-only の step が取る
 
 on:
   push:
@@ -19,8 +20,7 @@ on:
       - '**/src/**'
       - 'fuzz/**'
       - '.github/workflows/fuzz.yml'
-      - '.github/siblings.toml'
-      - '.github/actions/alice-siblings/**'
+      - '.github/actions/fetch-private-deps/**'
       - 'scripts/changed_paths.py'
       - '.github/paths/fuzz.txt'
   schedule:
@@ -89,17 +89,9 @@ jobs:
       run:
         working-directory: text-to-print
     steps:
-      # Real siblings, same layout as ci.yml (8 repo: 6 public + Bamboo / Print
-      # private, each read with its own read-only deploy key)
       - uses: actions/checkout@v5
         with:
           path: text-to-print
-      - name: Checkout ALICE siblings (pinned in .github/siblings.toml)
-        uses: ./text-to-print/.github/actions/alice-siblings
-        with:
-          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
-          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
-
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
 
@@ -113,6 +105,15 @@ jobs:
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+
+      # the private ALICE-Bamboo / ALICE-Print over ssh with their read-only deploy keys, in one
+      # fetch-only step; the keys are gone (checked) before any build step
+      - name: Fetch the dependencies (private ones with their deploy keys)
+        uses: ./text-to-print/.github/actions/fetch-private-deps
+        with:
+          bamboo-key: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          print-key: ${{ secrets.ALICE_DEPKEY_PRINT }}
+          working-directory: text-to-print/fuzz
 
       - name: Set fuzz duration
         id: dur
@@ -137,13 +138,6 @@ jobs:
           path: text-to-print/fuzz/artifacts/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 14
-
-      # 全 step の後で sibling の HEAD を再照合する (途中で別 commit を checkout し直したら fail)
-      - name: Verify sibling HEADs (job end)
-        if: always()
-        shell: bash
-        working-directory: ${{ github.workspace }}
-        run: python text-to-print/scripts/ci_sibling_checkout_check.py --root text-to-print --siblings . --heads-only
 
   # red when the changes job said run and a job was skipped, cancelled or failed
   gate:

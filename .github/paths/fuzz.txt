@@ -6,7 +6,6 @@
 **/src/**
 fuzz/**
 .github/workflows/fuzz.yml
-.github/siblings.toml
-.github/actions/alice-siblings/**
+.github/actions/fetch-private-deps/**
 scripts/changed_paths.py
 .github/paths/fuzz.txt

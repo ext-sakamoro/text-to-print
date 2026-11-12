@@ -2,7 +2,7 @@
 # Build alice-llm-server binary for text-to-print packaging bundle
 #
 # Prerequisites:
-#   - Sibling checkout at ../ALICE-LLM (or $ALICE_LLM_DIR)
+#   - The ALICE-LLM checkout cargo resolved from Cargo.lock (scripts/alice_llm_dir.py), or $ALICE_LLM_DIR
 #   - Rust toolchain with the desired target installed
 #
 # Usage:
@@ -19,7 +19,10 @@
 
 set -euo pipefail
 
-ALICE_LLM_DIR="${ALICE_LLM_DIR:-../ALICE-LLM}"
+if [ -z "${ALICE_LLM_DIR:-}" ]; then
+    ALICE_LLM_DIR="$("$(command -v python3 || command -v python)" scripts/alice_llm_dir.py)"
+fi
+ALICE_LLM_TARGET="${ALICE_LLM_TARGET:-$(pwd)/target/alice-llm-server}"
 OUT_DIR="${OUT_DIR:-target/release}"
 TARGET=""
 
@@ -43,17 +46,17 @@ done
 
 if [ ! -d "$ALICE_LLM_DIR" ]; then
     echo "ERROR: ALICE-LLM checkout not found at $ALICE_LLM_DIR" >&2
-    echo "  clone: git clone https://github.com/Project-ALICE/ALICE-LLM \"$ALICE_LLM_DIR\"" >&2
+    echo "  run cargo fetch first (the checkout comes from Cargo.lock)" >&2
     exit 1
 fi
 
 echo "==> Building alice-llm-server (features=server)"
 if [ -n "$TARGET" ]; then
-    (cd "$ALICE_LLM_DIR" && cargo build --release --features server --bin alice-llm-server --target "$TARGET")
-    SRC="$ALICE_LLM_DIR/target/$TARGET/release/alice-llm-server"
+    (cd "$ALICE_LLM_DIR" && CARGO_TARGET_DIR="$ALICE_LLM_TARGET" cargo build --locked --release --features server --bin alice-llm-server --target "$TARGET")
+    SRC="$ALICE_LLM_TARGET/$TARGET/release/alice-llm-server"
 else
-    (cd "$ALICE_LLM_DIR" && cargo build --release --features server --bin alice-llm-server)
-    SRC="$ALICE_LLM_DIR/target/release/alice-llm-server"
+    (cd "$ALICE_LLM_DIR" && CARGO_TARGET_DIR="$ALICE_LLM_TARGET" cargo build --locked --release --features server --bin alice-llm-server)
+    SRC="$ALICE_LLM_TARGET/release/alice-llm-server"
 fi
 
 # Windows binary ends in .exe fall through if the non-suffixed version is missing

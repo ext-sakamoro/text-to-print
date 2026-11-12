@@ -217,17 +217,17 @@
         {
           "id": "raspi_pi4b_vesa",
           "label": "Raspberry Pi 4B/5 マウント板 (58×49 M2.5 + VESA)",
-          "lol_dsl": "raspi_mount_plate(4, 4)"
+          "lol_dsl": "sbc_mount_plate(4, 4)"
         },
         {
           "id": "raspi_pi5_bare",
           "label": "Raspberry Pi 5 マウント板 (58×49 M2.5 のみ)",
-          "lol_dsl": "raspi_mount_plate(5, 0)"
+          "lol_dsl": "sbc_mount_plate(5, 0)"
         },
         {
           "id": "raspi_zero_bare",
           "label": "Raspberry Pi Zero マウント板 (58×23 M2.5)",
-          "lol_dsl": "raspi_mount_plate(0, 0)"
+          "lol_dsl": "sbc_mount_plate(0, 0)"
         },
         {
           "id": "heat_set_m3_2x2",
@@ -362,17 +362,17 @@
         {
           "id": "raspi_5_cooler",
           "label": "RPi 5 ケース (Active Cooler 25mm)",
-          "lol_dsl": "raspi_case(85, 56, 25)"
+          "lol_dsl": "sbc_case(85, 56, 25)"
         },
         {
           "id": "raspi_5_bare",
           "label": "RPi 5 ケース (bare 15mm)",
-          "lol_dsl": "raspi_case(85, 56, 15)"
+          "lol_dsl": "sbc_case(85, 56, 15)"
         },
         {
           "id": "raspi_zero_2w",
           "label": "RPi Zero 2W ケース",
-          "lol_dsl": "raspi_case(65, 30, 15)"
+          "lol_dsl": "sbc_case(65, 30, 15)"
         },
         {
           "id": "esp32_devkit",

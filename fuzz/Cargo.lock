@@ -23,6 +23,7 @@ dependencies = [
 [[package]]
 name = "alice-bamboo"
 version = "0.1.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Bamboo?branch=main#09d9dbc893f99ec3ae4be58243c56c758a02bfb2"
 dependencies = [
  "alice-lol",
  "alice-physics",
@@ -37,9 +38,8 @@ dependencies = [
 
 [[package]]
 name = "alice-det-math"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2857e06dcc3838a2138f4c8ed7b30cf8515a223eeb6d5fbd068dd13d45cb4ff4"
+version = "0.6.1"
+source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#d80446ebce73c5c397f7df12435cf574460400bf"
 dependencies = [
  "bytemuck",
  "wide",
@@ -48,8 +48,10 @@ dependencies = [
 [[package]]
 name = "alice-lol"
 version = "0.5.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
 dependencies = [
  "alice-det-math",
+ "alice-lol-layout",
  "alice-lol-macro",
  "alice-sdf",
  "alice-zip",
@@ -59,8 +61,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "alice-lol-layout"
+version = "0.1.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
+dependencies = [
+ "sha2",
+]
+
+[[package]]
 name = "alice-lol-macro"
 version = "0.4.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -70,6 +81,7 @@ dependencies = [
 [[package]]
 name = "alice-physics"
 version = "4.0.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#cc239dd0a7a809d6f7626e716ef788b22272d5f0"
 dependencies = [
  "alice-physics-core",
 ]
@@ -77,6 +89,7 @@ dependencies = [
 [[package]]
 name = "alice-physics-core"
 version = "4.0.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#cc239dd0a7a809d6f7626e716ef788b22272d5f0"
 dependencies = [
  "alice-det-math",
  "sha2",
@@ -85,6 +98,7 @@ dependencies = [
 [[package]]
 name = "alice-print"
 version = "0.1.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Print?branch=main#7deaa9e87f9e8bfded83529a78a10a1c65653b02"
 dependencies = [
  "alice-lol",
  "alice-sdf",
@@ -97,13 +111,15 @@ dependencies = [
 [[package]]
 name = "alice-sdf"
 version = "7.0.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-SDF?branch=main#16dabf082f2695b50a9e12d9838d1c75a06119eb"
 dependencies = [
  "alice-det-math",
+ "alice-zip",
+ "ash",
  "bincode",
  "bytemuck",
  "clap",
  "crc32fast",
- "futures-channel",
  "glam",
  "log",
  "pollster",
@@ -119,6 +135,7 @@ dependencies = [
 [[package]]
 name = "alice-sign"
 version = "0.1.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Sign?branch=main#8c8d1eebf4ef9fc4059dae08779f8846e832df5e"
 dependencies = [
  "ed25519-dalek",
  "sha2",
@@ -127,6 +144,7 @@ dependencies = [
 [[package]]
 name = "alice-zip"
 version = "0.11.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Zip?branch=main#977c755b70672e9716c972b5cbf46c2f4a56849e"
 dependencies = [
  "alice-det-math",
  "libm",
@@ -752,15 +770,6 @@ name = "foreign-types-shared"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
-
-[[package]]
-name = "futures-channel"
-version = "0.3.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
-dependencies = [
- "futures-core",
-]
 
 [[package]]
 name = "futures-core"

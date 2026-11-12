@@ -267,7 +267,7 @@ Apple Developer Program enrollment + Windows Authenticode cert are planned for P
 | **Linux arm64 Ubuntu 22.04** | (source build) | ✅ verified | ✅ **CLI smoke OK** | build success, wgpu backend selected, identity load |
 
 **arm64 Linux measurements** (2026-09-07, two arm64 machines):
-- Rust workspace + 6 ALICE-* sibling deps all build successfully (~18 min on 4-core Cortex-A76 / ~6-core Ampere)
+- Rust workspace + its ALICE-* dependencies all build successfully (~18 min on 4-core Cortex-A76 / ~6-core Ampere)
 - Binary size: 36-37 MB (stripped, dynamically linked)
 - Shared libs: `libssl.so.3` + `libdbus-1.so.3` + `libcrypto.so.3` (standard on Debian bookworm / Ubuntu 22.04)
 - **wgpu backend auto-selection** (eframe: "Both glow and wgpu renderers are available. Using wgpu.")
@@ -291,8 +291,8 @@ cargo build --release --package text-to-print-core --bin gen-license-key
 
 Requires:
 - Rust 1.75+ (rust-toolchain.toml pinned)
-- ALICE ecosystem sibling checkouts at `../ALICE-SDF`, `../ALICE-LOL`,
-  `../ALICE-View`, `../ALICE-Physics`, `../ALICE-Bamboo`, `../ALICE-LLM`
+- No side-by-side checkouts: the ALICE-* crates are git dependencies on branch `main`, and cargo
+  fetches the commits `Cargo.lock` pins
 
 > **Note**: `ALICE-Bamboo` (+ transitive dep `ALICE-Print`) are **private repos**
 > A source build needs read access to these two repositories
