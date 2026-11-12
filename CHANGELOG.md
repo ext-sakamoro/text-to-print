@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Security — bundle した SQLite を 3.54.1 にする (2026-11-12)
+
+- `rusqlite` を 0.31 から 0.41 (`libsqlite3-sys` 0.39.1、SQLite 3.54.1) にした (workspace と `crates/worker`) RUSTSEC-2026-0459 / CVE-2026-119375: 3.54.0 より前の SQLite は、page size の違う `-wal` を持つ database を開くと未初期化の page cache の内容を返しうる code の変更は無い
+
 ### Changed — ALICE-* を各 repo の main branch の git 依存にする (2026-11-12)
 
 - ALICE-* の依存を `../ALICE-Xxx` の path 依存から `{ git = "https://github.com/ext-sakamoro/ALICE-Xxx", branch = "main", version = … }` にした (workspace / `crates/core` / `crates/gallery-sign`) `Cargo.lock` が commit を固定する (Bamboo 09d9dbc / Browser-Secure c1eb4f3 / Crypto 497e170 / DetMath d80446e / LLM 13444b4 / LOL 67a637b / Physics cc239dd / Print 7deaa9e / SDF 16dabf0 / Serial 16b34eb / Sign 8c8d1ee / Zip 977c755) `fuzz/` と `crates/worker` の lock も同じ commit にした

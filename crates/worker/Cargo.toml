@@ -61,4 +61,4 @@ codegen-units = 1
 ignored = ["getrandom"]
 
 [dev-dependencies]
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
