@@ -35,12 +35,6 @@ count = 2
 why = "agent との連携の機能 (製品の機能)"
 
 [[public-text.allow]]
-path = "scripts/ci_sibling_checkout_check.py"
-class = "agent process"
-count = 2
-why = "git の command の引数"
-
-[[public-text.allow]]
 path = "scripts/vocab_lint.py"
 class = "agent process"
 count = 1
@@ -79,65 +73,42 @@ why = "製品の preset の筐体の名前 (preset と、その名前を扱う c
 [[public-text.allow]]
 path = "crates/app/src/i18n.rs"
 class = "device"
-count = 22
+count = 18
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "crates/app/src/state.rs"
 class = "device"
-count = 23
+count = 18
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "crates/app/src/ui/prompt.rs"
 class = "device"
-count = 13
+count = 10
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "crates/core/tests/fixtures/safety_messages_templates.json"
 class = "device"
-count = 7
+count = 4
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "crates/core/tests/safety_report.rs"
 class = "device"
-count = 5
-why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
-
-[[public-text.allow]]
-path = "crates/llm/src/grammar_lol.rs"
-class = "device"
 count = 1
-why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
-
-[[public-text.allow]]
-path = "crates/llm/src/prompt.rs"
-class = "device"
-count = 1
-why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
-
-[[public-text.allow]]
-path = "crates/llm/src/system_prompt.md"
-class = "device"
-count = 2
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "crates/worker/src/default_presets.json"
 class = "device"
-count = 21
+count = 15
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]
 path = "docs/CUSTOMIZER_HOWTO.md"
 class = "device"
-count = 2
+count = 1
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
-[[public-text.allow]]
-path = "skills/text-to-print/references/lol-dsl-quickref.md"
-class = "device"
-count = 2
-why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
