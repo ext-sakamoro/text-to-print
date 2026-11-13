@@ -193,6 +193,16 @@ pub const fn tier_slug(tier: Tier) -> &'static str {
 /// tags into `3D/3dmodel.model` right after the opening `<model ...>` element,
 /// and adds `Metadata/alice_manifest.json` as a new STORE entry.
 pub fn embed_in_3mf(path: &Path, manifest: &AliceManifest) -> Result<()> {
+    embed_in_3mf_with_limit(path, manifest, MAX_COMPRESSED_3MF_ENTRY_BYTES)
+}
+
+/// The most bytes a compressed entry of a 3MF may decompress to (1 GiB, four times the 256 MiB limit of one decode):
+/// the 3MF writer deflates `3D/3dmodel.model`, whose size follows the triangle count of the print (not capped), so the
+/// limit leaves room for large prints while a few kilobytes can no longer expand without bound
+const MAX_COMPRESSED_3MF_ENTRY_BYTES: u64 = 1 << 30;
+
+/// [`embed_in_3mf`] with `limit` as the most bytes a compressed entry may decompress to
+fn embed_in_3mf_with_limit(path: &Path, manifest: &AliceManifest, limit: u64) -> Result<()> {
     let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
     let mut archive = ZipArchive::new(Cursor::new(bytes)).with_context(|| "parse 3MF as ZIP")?;
 
@@ -200,8 +210,26 @@ pub fn embed_in_3mf(path: &Path, manifest: &AliceManifest) -> Result<()> {
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry.name()?.to_string();
-        let mut data = Vec::with_capacity(entry.size() as usize);
-        entry.read_to_end(&mut data)?;
+        // the declared size is not trusted: a stored entry is read up to its stored size (it cannot expand), a
+        // compressed one up to `limit`; above it the entry is refused before reading, and the read itself stops one
+        // byte past it (nothing is allocated from the declared size). Every entry is read before the file is
+        // recreated, so a refusal leaves the 3MF as it was
+        let entry_limit = if entry.compression() == CompressionMethod::Stored {
+            entry.compressed_size()
+        } else {
+            limit
+        };
+        anyhow::ensure!(
+            entry.size() <= entry_limit,
+            "3MF entry {name} declares {} bytes, above the limit of {entry_limit} bytes",
+            entry.size()
+        );
+        let mut data = Vec::new();
+        Read::take(&mut entry, entry_limit + 1).read_to_end(&mut data)?;
+        anyhow::ensure!(
+            data.len() as u64 <= entry_limit,
+            "3MF entry {name} expands past the limit of {entry_limit} bytes"
+        );
         entries.push((name, data));
     }
 
@@ -319,6 +347,48 @@ fn xml_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A 3MF whose `3D/3dmodel.model` is a deflated stream of `n` bytes (`<model>` then spaces), written in chunks
+    fn deflated_model_3mf(path: &Path, n: usize) {
+        use std::io::Write as _;
+        let mut w = ZipWriter::new(std::fs::File::create(path).unwrap());
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        w.start_file("3D/3dmodel.model", deflated).unwrap();
+        w.write_all(b"<model>").unwrap();
+        let chunk = vec![b' '; 1 << 16];
+        let mut left = n - 7;
+        while left > 0 {
+            let k = left.min(chunk.len());
+            w.write_all(&chunk[..k]).unwrap();
+            left -= k;
+        }
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn a_compressed_entry_that_expands_past_the_limit_is_refused_and_the_file_kept() {
+        // 2 MiB behind a 1 MiB limit: refused before the file is rewritten, so the 3MF is left as it was
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bomb.3mf");
+        deflated_model_3mf(&path, 2 << 20);
+        let before = std::fs::read(&path).unwrap();
+        let err = embed_in_3mf_with_limit(&path, &sample_manifest(), 1 << 20).unwrap_err();
+        // the archive declares the expanded size, so the declared-size check refuses it before any read
+        assert!(format!("{err:#}").contains("declares"), "{err:#}");
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "the file is untouched"
+        );
+    }
+
+    #[test]
+    fn a_compressed_entry_within_the_limit_is_embedded() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ok.3mf");
+        deflated_model_3mf(&path, 1 << 20);
+        embed_in_3mf_with_limit(&path, &sample_manifest(), 1 << 20).unwrap();
+    }
 
     fn sample_manifest() -> AliceManifest {
         ManifestBuilder {

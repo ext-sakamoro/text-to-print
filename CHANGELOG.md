@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Security
+- `embed_in_3mf` は 3MF の entry を上限までしか読まない: 格納 (stored) は格納された長さ、圧縮された entry は 1 GiB (1 回の展開の上限の 4 倍、3MF の書き手が deflate する `3D/3dmodel.model` は print の三角形数に応じて大きくなる) archive が宣言する長さは信じず、上限を超える宣言は読む前に拒み、読み取りも上限 + 1 byte で止める 拒んだ時は file を書き換えない 以前は宣言の長さで確保して上限なしに読んだ
+
 ### Changed
 - alice-llm を 5.0.0 (e8b8a1df) に上げ、要求を `"5"` にした (Cargo.lock は alice-llm の行だけ) `crates/llm` の読み込みは `Llama3Model::from_gguf` の `LoadError` (未対応の arch / 欠けた tensor) の内容を初期化の結果に入れて返す (`into_iter().next()` の暫定の形を外した)
 - alice-llm の要求を `"4"` から `">=4, <6"` に広げた (Cargo.lock は 4.0.0 のまま) alice-llm 5.0.0 で `Llama3Model::from_gguf` が `Option` から `Result` に変わるので、`crates/llm` の読み込みは両方で読める `into_iter().next()` にした (5 に上げる時に `LoadError` の内容を送る形に戻す、`llm-5-typed-error`)
