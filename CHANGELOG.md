@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Security
+- 依存: `quinn-udp` を 0.5.15 から 0.5.16 に (RUSTSEC-2026-0538: 切り詰められた datagram の後に受信の loop が回り続けうる、修正は 0.5.16) Cargo.lock は quinn-udp の行だけ
 - `embed_in_3mf` は 3MF の entry を上限までしか読まない: 格納 (stored) は格納された長さ、圧縮された entry は 1 GiB (1 回の展開の上限の 4 倍、3MF の書き手が deflate する `3D/3dmodel.model` は print の三角形数に応じて大きくなる) archive が宣言する長さは信じず、上限を超える宣言は読む前に拒み、読み取りも上限 + 1 byte で止める 拒んだ時は file を書き換えない 以前は宣言の長さで確保して上限なしに読んだ
 
 ### Changed
