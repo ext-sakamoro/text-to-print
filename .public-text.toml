@@ -2,7 +2,7 @@
 # 製品の語 (Cloudflare Workers の backend と crate の path、筐体の preset の名前、
 # agent との連携の機能) だけを file ごとに件数を固定して許す
 [public-text]
-technical-paths = [".public-text.toml", ".github/workflows/ci.yml", "CHANGELOG.md", "Cargo.toml", "README.ja.md", "README.md", "crates/app/src/state.rs", "crates/app/src/ui/gallery.rs", "crates/app/src/ui/settings.rs", "crates/gallery-sign/Cargo.toml", "crates/llm/src/embedded_backend.rs", "crates/network/Cargo.toml", "crates/network/src/gallery_client.rs", "crates/network/src/presets_client.rs", "crates/network/src/share.rs", "crates/network/tests/gallery_requests.rs", "crates/network/tests/share_schema.rs", "docs/CUSTOMIZER_HOWTO.md", "docs/STRIPE_SETUP.md", "scripts/preflight.sh", "scripts/smoke_worker.sh", "scripts/wiring-baseline.txt"]
+technical-paths = [".public-text.toml", ".github/workflows/ci.yml", "CHANGELOG.md", "Cargo.toml", "README.ja.md", "README.md", "crates/app/src/state.rs", "crates/app/src/ui/gallery.rs", "crates/app/src/ui/settings.rs", "crates/gallery-sign/Cargo.toml", "crates/llm/src/embedded_backend.rs", "crates/network/Cargo.toml", "crates/network/src/gallery_client.rs", "crates/network/src/presets_client.rs", "crates/network/src/share.rs", "crates/network/tests/gallery_requests.rs", "crates/network/tests/share_schema.rs", "crates/core/src/presets.rs", "crates/core/tests/presets_single_source.rs", "docs/CUSTOMIZER_HOWTO.md", "docs/STRIPE_SETUP.md", "scripts/preflight.sh", "scripts/smoke_worker.sh", "scripts/wiring-baseline.txt"]
 
 [[public-text.allow]]
 path = "CHANGELOG.md"
@@ -62,12 +62,6 @@ why = "製品の preset の筐体の名前 (preset と、その名前を扱う c
 path = "README.md"
 class = "device"
 count = 2
-why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
-
-[[public-text.allow]]
-path = "crates/app/src/default_presets.json"
-class = "device"
-count = 4
 why = "製品の preset の筐体の名前 (preset と、その名前を扱う code・試験・文書)"
 
 [[public-text.allow]]

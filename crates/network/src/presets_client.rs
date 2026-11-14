@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 /// Preset response schema (Worker `presets_handler.rs` と JSON 対応)
 ///
-/// Kept manually in sync with worker crate + `default_presets.json`; 手動 sync 前提
+/// The bundled presets are one file, `crates/worker/src/default_presets.json`, read by the app (through core), the worker and this test
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PresetsResponse {
     pub version: String,
@@ -165,8 +165,7 @@ mod tests {
 
     #[test]
     fn parse_bundled_default_matches_worker_schema() {
-        // network crate 側の default_presets.json は app crate 側と同 schema
-        // (worker と app 両方で fallback として使う想定、schema 一致を verify)
+        // 既定 preset の正本 (crates/worker/src/default_presets.json) を app と worker が同じ bytes で使う、その schema の一致
         // 2026-08-24 Sprint 20: 18→19 categories (ミックス 9 追加)、108→114 preset
         // 2026-08-27 Sprint 21 Phase X.1: 19→21 categories (機械要素 + 追加、+22 preset = 136)
         // 2026-08-27 Sprint 22 Phase X.2: 21→22 categories (building block +5 preset = 141)
@@ -175,6 +174,7 @@ mod tests {
         //   building block +2 primitive demo (+6 preset = 152)
         // 2026-08-28 電子工作 domain: 24→25 categories (Arduino/Pixhawk/Servo 8 preset)、
         //   building block +1 JST-PH demo (+9 preset = 161)
+        // 2026-11-14 app と worker の 2 つの写しを 1 つに: worker の 161 + app にだけあった 2 = 163
         let bundled = include_str!("../../worker/src/default_presets.json");
         let parsed = parse_presets_json(bundled).expect("bundled default parses");
         assert_eq!(
@@ -184,8 +184,8 @@ mod tests {
         );
         let total_presets: usize = parsed.categories.iter().map(|c| c.presets.len()).sum();
         assert_eq!(
-            total_presets, 161,
-            "seed data: 161 preset total (電子工作 domain Arduino 3 + Pixhawk 3 + Servo 2 + JST-PH demo 1)"
+            total_presets, 163,
+            "seed data: 163 preset total (worker の 161 と、app にだけあった引き出し仕切りと壁掛けフック)"
         );
     }
 

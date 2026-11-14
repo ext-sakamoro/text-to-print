@@ -1,8 +1,8 @@
 {
-  "version": "2026-09-02T15:45:00Z",
+  "version": "2026-11-14T00:00:00Z",
   "categories": [
     {
-      "name": "実績品 Both 認証 (Sim 88 + UserFieldTest、ALICE-Bamboo/models 由来)",
+      "name": "実績品 (シミュレーション と 実荷重試験 に合格)",
       "presets": [
         {
           "id": "coin_100yen",
@@ -32,7 +32,7 @@
       ]
     },
     {
-      "name": "実績品 UserFieldTest 認証 (実荷重テスト合格、ALICE-Bamboo/models 由来)",
+      "name": "実績品 (実荷重試験 に合格)",
       "presets": [
         {
           "id": "skadis_hook_j",
@@ -583,6 +583,16 @@
           "id": "magnet_tool_large_12",
           "label": "マグネットバー 12 magnet × Ø10 (large tool rail)",
           "lol_dsl": "magnetic_strip(12, 10, 40)"
+        },
+        {
+          "id": "drawer_organizer_default",
+          "label": "引き出し仕切り (固定 252×202×40)",
+          "lol_dsl": "drawer_organizer()"
+        },
+        {
+          "id": "wall_hook_default",
+          "label": "壁掛けフック (固定 L 字 26×80×50)",
+          "lol_dsl": "wall_hook()"
         }
       ]
     },

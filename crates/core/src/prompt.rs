@@ -5,11 +5,8 @@
 /// LOL DSL 生成用のシステムプロンプト
 pub const SYSTEM_PROMPT: &str = include_str!("system_prompt.md");
 
-/// 同梱の既定 preset (JSON) 初回起動と offline の時に使う
-///
-/// file は app crate の下にある (公開文の検査の許可が path ごとなので、置き場の移動は別に行う) core は git
-/// 依存で repo ごと取り出されるので、iOS の bridge からもこの定数で読める
-pub const DEFAULT_PRESETS_JSON: &str = include_str!("../../app/src/default_presets.json");
+/// 同梱の既定 preset (JSON) 初回起動と offline の時に使う 正本は 1 つ ([`crate::presets`])
+pub use crate::presets::DEFAULT_PRESETS_JSON;
 
 /// User prompt に含まれる cm / m / inch / inches を mm へ deterministic に変換
 ///
