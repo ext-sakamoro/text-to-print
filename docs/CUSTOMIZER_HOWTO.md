@@ -404,14 +404,14 @@ name_no_arg ::= ... | "xxx"  # 0 param (preset shortcut)
 
 ### Step 6 (optional): system_prompt.md に SHORTCUT 例追加 (LLM 用途学習)
 
-`~/text-to-print/crates/llm/src/system_prompt.md` の PRODUCT SHORTCUTS section table に 1 行追加:
+`~/text-to-print/crates/core/src/system_prompt.md` の PRODUCT SHORTCUTS section table に 1 行追加:
 ```
 | user says | LOL DSL | 説明 |
 |--|--|--|
 | ○○ / xxx | `xxx(p1, p2, p3)` | (default 値の説明) |
 ```
 
-**test 追加** (`~/text-to-print/crates/llm/src/prompt.rs`):
+**test 追加** (`~/text-to-print/crates/core/src/prompt.rs`):
 ```rust
 // system_prompt_teaches_high_level_shortcuts の array に "xxx" 追加
 ```

@@ -16,6 +16,38 @@ fn empty(e: &anyhow::Error) -> Option<EmptyMesh> {
 }
 
 #[test]
+fn the_unbounded_example_in_the_user_text_is_unbounded() {
+    // the message for empty_mesh_unbounded names an example: it has to be a shape whose extent really cannot be
+    // bounded (polar_repeat was named after it became bounded in alice-sdf 6.1.0)
+    let text: serde_json::Value =
+        serde_json::from_str(include_str!("../data/violation_text.json")).unwrap();
+    let entry = &text["errors"]["empty_mesh_unbounded"];
+    let mut compared = 0;
+    for (lang, open, close) in [("ja", "(例: ", ")) "), ("en", "(for example ", "))")] {
+        let msg = entry[lang]
+            .as_str()
+            .unwrap_or_else(|| panic!("{lang} missing"));
+        let start = msg
+            .find(open)
+            .unwrap_or_else(|| panic!("{lang}: no example in {msg}"))
+            + open.len();
+        let len = msg[start..]
+            .find(close)
+            .unwrap_or_else(|| panic!("{lang}: example not closed"))
+            + 1;
+        let lol = &msg[start..start + len];
+        let e = preview_lol_to_mesh(lol, Quality::Preview).expect_err(lol);
+        assert_eq!(
+            empty(&e),
+            Some(EmptyMesh { aabb_pinned: true }),
+            "{lang} {lol}: {e}"
+        );
+        compared += 1;
+    }
+    assert_eq!(compared, 2);
+}
+
+#[test]
 fn unbounded_shape_is_an_error_not_an_empty_mesh() {
     let lol = "gyroid(3, 1)";
     let e = preview_lol_to_mesh(lol, Quality::Preview).expect_err("空の mesh を返した");

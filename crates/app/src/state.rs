@@ -14,7 +14,7 @@ use text_to_print_network::presets_client::{PresetCategory, PresetsResponse, par
 /// Bundled default presets JSON — 起動時 Cloudflare / cache いずれも空なら
 /// 本 blob を parse して初期 preset とする (β 初期でも offline でも app が動く)
 /// worker crate 側の同名 file と手動 sync (schema 一致)
-pub const BUNDLED_DEFAULT_PRESETS_JSON: &str = include_str!("default_presets.json");
+pub const BUNDLED_DEFAULT_PRESETS_JSON: &str = text_to_print_core::prompt::DEFAULT_PRESETS_JSON;
 
 /// Ordered pipeline phases surfaced to the UI progress indicator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

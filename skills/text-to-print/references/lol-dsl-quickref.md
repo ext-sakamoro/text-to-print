@@ -1,6 +1,6 @@
 # LOL DSL quick reference
 
-Mirror of `crates/llm/src/system_prompt.md` (the prompt the embedded LLM sees).
+Mirror of `crates/core/src/system_prompt.md` (the prompt the embedded LLM sees).
 Keep the two in sync when the DSL grows. The first line is prompt framing —
 when *you* write LOL by hand, only the grammar below matters.
 

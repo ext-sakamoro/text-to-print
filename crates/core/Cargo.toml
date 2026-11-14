@@ -29,6 +29,8 @@ hex = "0.4"
 sha2 = { workspace = true }
 zip = { workspace = true }
 keyring = { workspace = true }
+# prompt::normalize_units (cm / m / inch → mm)
+regex = "1"
 
 [[bin]]
 name = "gen-license-key"

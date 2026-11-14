@@ -6,5 +6,6 @@ pub mod license;
 pub mod manifest;
 pub mod pipeline;
 pub mod progress;
+pub mod prompt;
 pub mod tier;
 pub mod violation;

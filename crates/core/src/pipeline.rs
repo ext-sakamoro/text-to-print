@@ -1105,7 +1105,7 @@ fn mesh_with_remesh(
 /// 読めた LOL から作った mesh が空だった
 ///
 /// `aabb_pinned` は形を包む箱が探索の上限 (±500 mm) に張り付いたこと (区間評価で範囲を絞れない演算、
-/// 例 `polar_repeat` を含む) false は箱は求まったが中に材料が無かったこと
+/// 例 `gyroid(3, 1)` を含む) false は箱は求まったが中に材料が無かったこと
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmptyMesh {
     /// 形を包む箱が探索の上限に張り付いた
