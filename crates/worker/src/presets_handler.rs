@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn default_presets_has_seed_data() {
-        // 累積 25 categories / 161 preset (Sprint 21-22 + Multi-domain 4 domain 展開後、2026-09-04)
+        // 累積 25 categories / 163 preset (2026-09-04 の 161 に、2026-11-14 app の写しにだけあった 2 を足した)
         // categories.len() は cross-crate assertion pattern (presets_client と同型)
         let v: serde_json::Value = serde_json::from_str(DEFAULT_PRESETS_JSON).unwrap();
         let cats = v["categories"].as_array().unwrap();
@@ -118,8 +118,8 @@ mod tests {
             .map(|c| c["presets"].as_array().map(Vec::len).unwrap_or(0))
             .sum();
         assert_eq!(
-            total_presets, 161,
-            "161 preset total (Sprint 21-22 + Multi-domain 4 domain 展開)"
+            total_presets, 163,
+            "163 preset total (161 + drawer_organizer_default + wall_hook_default)"
         );
     }
 
