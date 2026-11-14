@@ -2,7 +2,8 @@
 //!
 //! * 文字列 (`safety_check_lol`) が構造化の前と同じ bytes であること: LLM の修正の指示は
 //!   この文字列で分類するので、変わると retry loop の振る舞いが変わる 期待値は構造化の前の
-//!   core (main a39e48c) で同梱 template 116 件を検査した結果 (`fixtures/safety_messages_templates.json`)
+//!   core で同梱 template 116 件を検査した結果 (`fixtures/safety_messages_templates.json`、限界の Law か測り方を
+//!   変えた時は `record_the_fixture` で記録し直し、差分を読む)
 //!   通常の試験は速い数件、全件は `--release -- --ignored` で走らせる
 //! * 構造の各欄 (種類 / 重大度 / 確かさ / 値) と、利用者向けの文に検査の元の文字列が出ないこと
 //! * sbc_case の穴径の標本 (0.09mm) を測り直すと本当の隙間 (柱と壁の間 1.5mm) が出ること
@@ -52,6 +53,43 @@ fn strings_are_unchanged_for_every_template() {
     check_ids(&ids);
 }
 
+/// 期待値の記録 (`T2P_SAFETY_RECORD=1 cargo test --release -p text-to-print-core --test safety_report -- --ignored record`)
+///
+/// 限界の Law や測り方を変えた時だけ使う 文字列は LLM の修正の指示の分類に使うので、記録し直したら差分を
+/// 読んで、変わった template と理由を commit に書く 記録の lol は fixture の既存の組をそのまま使う
+#[test]
+#[ignore = "records the fixture, only with T2P_SAFETY_RECORD=1"]
+fn record_the_fixture() {
+    if std::env::var("T2P_SAFETY_RECORD").as_deref() != Ok("1") {
+        return;
+    }
+    let all = fixture();
+    let jobs: Vec<(String, String)> = all.into_iter().map(|(id, e)| (id, e.lol)).collect();
+    let next = std::sync::Mutex::new(jobs.iter());
+    let out = std::sync::Mutex::new(BTreeMap::new());
+    std::thread::scope(|s| {
+        for _ in 0..6 {
+            s.spawn(|| {
+                loop {
+                    let Some((id, lol)) = next.lock().unwrap().next() else {
+                        break;
+                    };
+                    let messages = safety_check_lol(lol);
+                    out.lock().unwrap().insert(
+                        id.clone(),
+                        serde_json::json!({"lol": lol, "messages": messages}),
+                    );
+                }
+            });
+        }
+    });
+    let out = out.into_inner().unwrap();
+    assert_eq!(out.len(), jobs.len(), "記録した件数");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/safety_messages_templates.json");
+    std::fs::write(&path, serde_json::to_string_pretty(&out).unwrap() + "\n").unwrap();
+}
+
 #[test]
 fn parse_error_is_blocking_and_proved() {
     let v = safety_report("box3d(1, 2");
@@ -72,7 +110,8 @@ fn thin_plate_reports_measured_wall_and_proved_erosion() {
         .expect("wall_thin");
     // oracle: 板厚 2 × 0.3 = 0.6mm
     assert!((wall.measured.unwrap() - 0.6).abs() < 0.05, "{wall:?}");
-    assert_eq!(wall.limit, Some(1.6));
+    // 既定の profile (H2D 0.4 mm、3 周回) の壁の限界 = 3 × 0.4 (印刷可能性の Law)
+    assert!((wall.limit.unwrap() - 1.2).abs() < 1e-6, "{wall:?}");
     assert_eq!(wall.severity, Severity::Blocking);
     assert!(wall.count.unwrap() > 0);
     let everywhere = v

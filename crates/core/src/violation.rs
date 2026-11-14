@@ -5,7 +5,7 @@
 //! 利用者向けの文 (ja / en) は 1 つの表 (`data/violation_text.json`) から作る
 //! 元の文字列は [`Violation::message`] に残し、LLM の修正の指示と「詳細」の表示に使う
 //!
-//! 限界と重大度の決め方は `data/printability_policy.json` の 1 つの表にある 検査
+//! 限界と重大度は印刷可能性の Law (`alice_bamboo::printability`、printer profile から導く) にある 検査
 //! (DfAM の限界 / 肉厚の証明) もこの表から限界を受け取る ([`Policy::limit`])
 //!
 //! 標本で測る項目 (穴径 / 突起) は、報告された位置を含む最も大きい内接球を探して測り直す
@@ -15,11 +15,12 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use alice_bamboo::printability::PrintabilityLimits;
 use alice_sdf::SdfNode;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
 
-/// 違反の種類 (`data/violation_text.json` と `data/printability_policy.json` の key)
+/// 違反の種類 (`data/violation_text.json` の key)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
@@ -271,74 +272,74 @@ struct Text {
     errors: BTreeMap<String, BTreeMap<String, String>>,
 }
 
-/// 方針の表の 1 項目
-#[derive(Debug, Clone, Deserialize)]
-pub struct PolicyKind {
-    /// 限界 \[mm\] (測る項目だけ)
-    pub limit_mm: Option<f32>,
-    /// `blocking` / `advisory` / `info` / `by_band`
-    pub severity: String,
-    /// この製品で選んだ値 (設計の指針の値ではない)
-    #[serde(default)]
-    pub ours: bool,
-    /// 出所
-    pub source: String,
-}
+/// 測り直しで標本の点を含むとみなす余裕 \[mm\]
+///
+/// 標本の点を (この距離の余裕で) 含む最も大きい内接球を探す 余裕は、標本が入隅の点 (どの大きい球にもちょうどは
+/// 含まれない点) を読んだ時に、隙間の本当の幅の球に届くための最小限の値 (0.1mm で幅 1.5 / 3.0mm の隙間を
+/// 1.50 / 3.00 と測り直す、0.25mm 以上では隣の広い所の球まで拾い始める) 測り方の値で、プリンタの限界ではない
+pub const DISCRIMINATOR_TOLERANCE_MM: f32 = 0.1;
 
-/// 数値 1 つと出所
-#[derive(Debug, Clone, Deserialize)]
-pub struct PolicyValue {
-    /// 値
-    pub value: f32,
-    /// この製品で選んだ値
-    #[serde(default)]
-    pub ours: bool,
-    /// 出所
-    pub source: String,
-}
+/// 誤差扱いに下げる前に確かめる周りの範囲 (限界に掛ける)
+///
+/// 標本の周り (半径 = 限界 × この値) の同じ側 (隙間なら空隙、突起なら材料) の点を全て測り直し、全てが限界以上の
+/// 時だけ下げる (標本の点 1 つだけで判断すると、厚い部分との境の近くの標本が本物の薄い部分を下げてしまう)
+pub const DISCRIMINATOR_NEIGHBOURHOOD_FACTOR: f32 = 0.5;
 
-/// 印刷可能性の判定の方針 (`data/printability_policy.json`)
-#[derive(Debug, Clone, Deserialize)]
+/// 印刷可能性の判定の方針: 限界と重大度は印刷可能性の Law
+/// (`alice_bamboo::printability`) が printer profile (`SlicerConfig`、既定は H2D 0.4 mm) から導く
+/// この crate は数値の写しを持たない
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Policy {
-    /// 限界から何割以内を advisory にするか
-    pub band: PolicyValue,
-    /// 測り直しで標本の点を含むとみなす余裕 \[mm\]
-    pub discriminator_tolerance_mm: PolicyValue,
-    /// 誤差扱いに下げる前に確かめる周りの範囲 (limit に掛ける)
-    pub discriminator_neighbourhood_factor: PolicyValue,
-    /// 種類ごとの限界と重大度
-    pub kinds: BTreeMap<String, PolicyKind>,
+    /// profile から導いた限界
+    pub limits: PrintabilityLimits,
 }
 
 impl Policy {
-    /// 種類の項目
-    ///
-    /// # Panics
-    /// 表に種類が無い時 (試験 `every_kind_is_in_both_tables` が先に止める)
+    /// profile から方針を作る
     #[must_use]
-    pub fn kind(&self, kind: Kind) -> &PolicyKind {
-        &self.kinds[kind.key()]
+    pub fn from_slicer(cfg: &alice_bamboo::SlicerConfig) -> Self {
+        Self {
+            limits: PrintabilityLimits::from_slicer(cfg),
+        }
     }
 
-    /// 種類の限界 \[mm\]
+    /// 種類の限界 \[mm\] (これ未満を報告する、測る項目だけ)
     #[must_use]
     pub fn limit(&self, kind: Kind) -> Option<f32> {
-        self.kind(kind).limit_mm
+        match kind {
+            Kind::WallThin | Kind::WallTooThinEverywhere => Some(self.limits.wall_advisory_mm),
+            Kind::HoleTooSmall => Some(self.limits.hole_min_mm),
+            Kind::FeatureTooSmall => Some(self.limits.feature_min_mm),
+            _ => None,
+        }
     }
 
-    /// 測定値から重大度を決める (`by_band` は限界の `band` 以内を advisory にする)
+    /// 測定値から重大度を決める 限界を満たしていれば `None` (通知しない) 測る項目で値が無い時は blocking
     #[must_use]
-    pub fn severity(&self, kind: Kind, measured: Option<f32>) -> Severity {
-        match self.kind(kind).severity.as_str() {
-            "blocking" => Severity::Blocking,
-            "advisory" => Severity::Advisory,
-            "info" => Severity::Info,
-            _ => match (measured, self.limit(kind)) {
-                (Some(m), Some(l)) if m >= l => Severity::Info,
-                (Some(m), Some(l)) if m >= l * (1.0 - self.band.value) => Severity::Advisory,
-                _ => Severity::Blocking,
-            },
-        }
+    pub fn severity(&self, kind: Kind, measured: Option<f32>) -> Option<Severity> {
+        use alice_bamboo::printability::Severity as Law;
+        let m = measured.unwrap_or(f32::NAN);
+        let law = match kind {
+            Kind::WallThin => self.limits.wall_severity(m),
+            Kind::HoleTooSmall => self.limits.hole_severity(m),
+            Kind::FeatureTooSmall => self.limits.feature_severity(m),
+            // 反りは alice-physics の危険度の区分 (Critical / High / Medium) が Law の score の帯に当たる
+            Kind::WarpCritical => Some(Law::Blocking),
+            Kind::WarpHigh => Some(Law::Advisory),
+            Kind::WarpMedium => Some(Law::Info),
+            // 証明や区分で決まる種類 (数値の限界を持たない)
+            Kind::WallTooThinEverywhere
+            | Kind::Disconnected
+            | Kind::BeamOverloaded
+            | Kind::LolParse => Some(Law::Blocking),
+            Kind::ThermalStress | Kind::ThermalNearTg => Some(Law::Info),
+            Kind::Other => Some(Law::Advisory),
+        };
+        law.map(|l| match l {
+            Law::Blocking => Severity::Blocking,
+            Law::Advisory => Severity::Advisory,
+            Law::Info => Severity::Info,
+        })
     }
 }
 
@@ -355,17 +356,13 @@ struct Annotations {
     annotations: Vec<Annotation>,
 }
 
-const POLICY_JSON: &str = include_str!("../data/printability_policy.json");
 const TEXT_JSON: &str = include_str!("../data/violation_text.json");
 const ANNOTATIONS_JSON: &str = include_str!("../data/template_annotations.json");
 
-/// 方針の表
-///
-/// # Panics
-/// 同梱の表が読めない時 (crate に入れる data の誤り、試験が先に止める)
+/// 方針 (既定の printer profile = Bambu H2D 0.4 mm の Law)
 pub fn policy() -> &'static Policy {
     static P: OnceLock<Policy> = OnceLock::new();
-    P.get_or_init(|| serde_json::from_str(POLICY_JSON).expect("data/printability_policy.json"))
+    P.get_or_init(|| Policy::from_slicer(&alice_bamboo::SlicerConfig::default()))
 }
 
 fn text() -> &'static Text {
@@ -555,6 +552,8 @@ pub fn neighbourhood_is_wide(
 }
 
 /// 測る項目 (穴径 / 突起) の違反を作る 位置があれば測り直して重大度と確かさを決める
+///
+/// 限界を満たす (Law が通知しない) 時と、測り直しで標本の点も周りも限界以上だった (測定の誤差) 時は `None`
 #[must_use]
 pub fn measured_violation(
     sdf: &SdfNode,
@@ -563,7 +562,7 @@ pub fn measured_violation(
     location: Option<Vec3>,
     count: Option<u32>,
     message: String,
-) -> Violation {
+) -> Option<Violation> {
     let p = policy();
     let limit = p.limit(kind);
     let gap = match kind {
@@ -572,13 +571,9 @@ pub fn measured_violation(
         _ => None,
     };
     let remeasured = match (gap, location, limit) {
-        (Some(gap), Some(at), Some(l)) => Some(remeasure(
-            sdf,
-            at,
-            l,
-            p.discriminator_tolerance_mm.value,
-            gap,
-        )),
+        (Some(gap), Some(at), Some(l)) => {
+            Some(remeasure(sdf, at, l, DISCRIMINATOR_TOLERANCE_MM, gap))
+        }
         _ => None,
     };
     // 誤差扱いに下げるのは、標本の点と、その周りの同じ側の点が全て limit 以上の時だけ
@@ -586,23 +581,22 @@ pub fn measured_violation(
         (Some(gap), Some(at)) => neighbourhood_is_wide(
             sdf,
             at,
-            l * p.discriminator_neighbourhood_factor.value,
-            p.discriminator_tolerance_mm.value,
+            l * DISCRIMINATOR_NEIGHBOURHOOD_FACTOR,
+            DISCRIMINATOR_TOLERANCE_MM,
             l,
             gap,
         ),
         _ => false,
     };
     let (severity, confidence) = match (remeasured, limit) {
-        (Some(r), Some(l)) if r >= l && wide_around(l) => {
-            (Severity::Info, Confidence::PossibleArtefact)
-        }
+        // 標本の点も周りも限界以上: 測定の誤差なので通知しない
+        (Some(r), Some(l)) if r >= l && wide_around(l) => return None,
         // 標本の点は広いが周りに狭い所がある: 標本の値でなく元の測定で判断する
-        (Some(r), Some(l)) if r >= l => (p.severity(kind, measured), Confidence::Measured),
-        (Some(r), _) => (p.severity(kind, Some(r)), Confidence::Measured),
-        (None, _) => (p.severity(kind, measured), Confidence::Measured),
+        (Some(r), Some(l)) if r >= l => (p.severity(kind, measured)?, Confidence::Measured),
+        (Some(r), _) => (p.severity(kind, Some(r))?, Confidence::Measured),
+        (None, _) => (p.severity(kind, measured)?, Confidence::Measured),
     };
-    Violation {
+    Some(Violation {
         kind,
         severity,
         confidence,
@@ -613,10 +607,10 @@ pub fn measured_violation(
         count,
         intentional: None,
         message,
-    }
+    })
 }
 
-/// 証明や区分で決まる違反 (測り直さない)
+/// 証明や区分で決まる違反 (測り直さない) 測る種類で限界を満たす時は `None`
 #[must_use]
 pub fn fixed_violation(
     kind: Kind,
@@ -624,11 +618,11 @@ pub fn fixed_violation(
     measured: Option<f32>,
     count: Option<u32>,
     message: String,
-) -> Violation {
+) -> Option<Violation> {
     let p = policy();
-    Violation {
+    Some(Violation {
         kind,
-        severity: p.severity(kind, measured),
+        severity: p.severity(kind, measured)?,
         confidence,
         measured,
         remeasured: None,
@@ -637,7 +631,7 @@ pub fn fixed_violation(
         count,
         intentional: None,
         message,
-    }
+    })
 }
 
 /// 同梱 template の意図的な形の注記を付ける (LOL の最上位の関数名と、違反の位置で照合)
@@ -666,27 +660,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_kind_is_in_both_tables_with_ja_and_en() {
+    fn every_kind_has_a_severity_and_ja_and_en_text() {
         let mut checked = 0;
         for kind in Kind::ALL {
-            let pk = policy()
-                .kinds
-                .get(kind.key())
-                .unwrap_or_else(|| panic!("{} が方針の表に無い", kind.key()));
-            assert!(!pk.source.trim().is_empty(), "{} の出所が空", kind.key());
+            // 測る種類は値が無い時 blocking、それ以外は種類だけで重大度が決まる (どの種類も通知を持つ)
             assert!(
-                ["blocking", "advisory", "info", "by_band"].contains(&pk.severity.as_str()),
-                "{}: {}",
-                kind.key(),
-                pk.severity
+                policy().severity(kind, None).is_some(),
+                "{} の重大度が無い",
+                kind.key()
             );
-            if pk.severity == "by_band" {
-                assert!(
-                    pk.limit_mm.is_some(),
-                    "{} は by_band なのに limit が無い",
-                    kind.key()
-                );
-            }
             let t = text()
                 .kinds
                 .get(kind.key())
@@ -698,8 +680,7 @@ mod tests {
             }
         }
         assert_eq!(checked, Kind::ALL.len() * 2, "比較 0 件で通らない");
-        // 表に余分な種類が無い (表だけ増えて code が知らない種類を作らない)
-        assert_eq!(policy().kinds.len(), Kind::ALL.len());
+        // 文の表に余分な種類が無い (表だけ増えて code が知らない種類を作らない)
         assert_eq!(text().kinds.len(), Kind::ALL.len());
         for key in ["possible_artefact", "remeasured", "intentional"] {
             for lang in ["ja", "en"] {
@@ -732,27 +713,52 @@ mod tests {
         }
     }
 
+    /// 既定の profile (H2D 0.4 mm、3 周回) の帯: 壁 0.8 未満 blocking、0.8 以上 1.2 未満 advisory、1.2 以上は通知しない
     #[test]
-    fn band_splits_blocking_advisory_info() {
+    fn bands_come_from_the_printability_law() {
         let p = policy();
-        // limit 1.6、band 10% ⇒ 1.44 未満は blocking、1.44 以上 1.6 未満は advisory
-        assert_eq!(p.severity(Kind::WallThin, Some(0.04)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.43)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.45)), Severity::Advisory);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.6)), Severity::Info);
-        assert_eq!(p.severity(Kind::WallThin, None), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WarpHigh, None), Severity::Advisory);
-        assert_eq!(p.severity(Kind::WarpCritical, None), Severity::Blocking);
-        assert_eq!(p.severity(Kind::ThermalNearTg, None), Severity::Info);
-        assert!(
-            p.band.ours && p.discriminator_tolerance_mm.ours,
-            "製品で選んだ値は ours を付ける"
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(0.04)),
+            Some(Severity::Blocking)
         );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(0.79)),
+            Some(Severity::Blocking)
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(0.81)),
+            Some(Severity::Advisory)
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(1.19)),
+            Some(Severity::Advisory)
+        );
+        assert_eq!(p.severity(Kind::WallThin, Some(1.2)), None);
+        assert_eq!(p.severity(Kind::WallThin, None), Some(Severity::Blocking));
+        assert_eq!(
+            p.severity(Kind::HoleTooSmall, Some(1.79)),
+            Some(Severity::Blocking)
+        );
+        assert_eq!(
+            p.severity(Kind::HoleTooSmall, Some(1.9)),
+            Some(Severity::Advisory)
+        );
+        assert_eq!(p.severity(Kind::HoleTooSmall, Some(2.0)), None);
+        assert_eq!(p.severity(Kind::WarpHigh, None), Some(Severity::Advisory));
+        assert_eq!(
+            p.severity(Kind::WarpCritical, None),
+            Some(Severity::Blocking)
+        );
+        assert_eq!(p.severity(Kind::ThermalNearTg, None), Some(Severity::Info));
     }
 
-    /// 方針の表の限界が ALICE-Bamboo の FDM の値と同じ (違えば表の側を見直す)
+    /// 方針は印刷可能性の Law と同じ値 (この crate は写しを持たない) DfAM の FDM の行とも一致する
     #[test]
-    fn policy_limits_match_the_bamboo_fdm_row() {
+    fn policy_is_the_bamboo_law_on_the_default_profile() {
+        let law = alice_bamboo::printability::PrintabilityLimits::from_slicer(
+            &alice_bamboo::SlicerConfig::default(),
+        );
+        assert_eq!(policy().limits, law);
         let l =
             alice_bamboo::dfam::DfamConfig::for_process(alice_bamboo::dfam::Process::Fdm).limits;
         let p = policy();
@@ -788,7 +794,8 @@ mod tests {
             Some(Vec3::new(21.8, 18.6, -2.6)),
             None,
             String::new(),
-        );
+        )
+        .expect("a violation is reported");
         // 1.5 は限界 2.0 の 10% より下 ⇒ blocking のまま、値は測り直した方を見せる
         assert_eq!(v.confidence, Confidence::Measured);
         assert_eq!(v.severity, Severity::Blocking);
@@ -798,7 +805,7 @@ mod tests {
     /// oracle: 幅 3mm の隙間の入隅 (床と壁の両方に近い点) で標本が 0.6 と読んだ場合
     /// 標本の点も周りの同じ側の点も全て 3.0 に測り直されるので、誤差扱いに下げる
     #[test]
-    fn wide_gap_sampled_at_a_corner_is_demoted() {
+    fn wide_gap_sampled_at_a_corner_is_not_reported() {
         // 壁 (内側 23) から 3mm 離れた角柱 (x 16..20)
         let s = sdf(
             "union(subtract(box3d(25, 25, 8), translate(0, 0, 5, box3d(23, 23, 8))), translate(18, 18, -0.5, box3d(2, 2, 2.5)))",
@@ -812,9 +819,10 @@ mod tests {
             String::new(),
         );
         // oracle: 柱 (x ≤ 20) と壁 (x = 23) の間 3.0mm
-        assert!((v.remeasured.unwrap() - 3.0).abs() < 0.05, "{v:?}");
-        assert_eq!(v.confidence, Confidence::PossibleArtefact);
-        assert_eq!(v.severity, Severity::Info);
+        assert!(
+            v.is_none(),
+            "an artefact (the sample and its neighbourhood are wide) is not reported: {v:?}"
+        );
     }
 
     /// 厚い土台 (厚さ 4) の上の薄い板 (幅 0.2) で、標本が土台の上面から tolerance の
@@ -828,7 +836,7 @@ mod tests {
             child: std::sync::Arc::new(s),
             offset: Vec3::new(0.0, 0.0, -2.0),
         };
-        let tol = policy().discriminator_tolerance_mm.value;
+        let tol = DISCRIMINATOR_TOLERANCE_MM;
         let mut checked = 0;
         for k in [0.5_f32, 1.0, 2.0] {
             let at = Vec3::new(0.0, 0.0, k * tol);
@@ -839,7 +847,8 @@ mod tests {
                 Some(at),
                 None,
                 String::new(),
-            );
+            )
+            .expect("a violation is reported");
             assert_ne!(
                 v.confidence,
                 Confidence::PossibleArtefact,
@@ -864,7 +873,8 @@ mod tests {
             Some(at),
             None,
             String::new(),
-        );
+        )
+        .expect("a violation is reported");
         assert_ne!(v.confidence, Confidence::PossibleArtefact, "{v:?}");
     }
 
@@ -877,7 +887,7 @@ mod tests {
         let s = sdf("union(box3d(5, 5, 5), translate(6, 4, 0, box3d(1, 0.1, 5)))");
         let at = Vec3::new(5.05, 4.0, 0.0);
         let limit = policy().limit(Kind::FeatureTooSmall).unwrap();
-        let tol = policy().discriminator_tolerance_mm.value;
+        let tol = DISCRIMINATOR_TOLERANCE_MM;
         let raw = remeasure(&s, at, limit, tol, false);
         assert!(
             raw >= limit,
@@ -890,7 +900,8 @@ mod tests {
             Some(at),
             None,
             String::new(),
-        );
+        )
+        .expect("a violation is reported");
         assert_eq!(v.confidence, Confidence::Measured, "{v:?}");
         assert_ne!(v.severity, Severity::Info);
     }
@@ -930,7 +941,7 @@ mod tests {
 
     /// 平らな壁の脇の幅 3mm の隙間 (床から離れた高さ) の標本は、周りも全て 3mm なので下げる
     #[test]
-    fn wide_gap_away_from_corners_is_demoted() {
+    fn wide_gap_away_from_corners_is_not_reported() {
         let s = sdf(
             "union(subtract(box3d(25, 25, 8), translate(0, 0, 5, box3d(23, 23, 8))), translate(18, 18, -0.5, box3d(2, 2, 6)))",
         );
@@ -942,8 +953,10 @@ mod tests {
             None,
             String::new(),
         );
-        assert_eq!(v.confidence, Confidence::PossibleArtefact, "{v:?}");
-        assert_eq!(v.severity, Severity::Info);
+        assert!(
+            v.is_none(),
+            "an artefact (the sample and its neighbourhood are wide) is not reported: {v:?}"
+        );
     }
 
     /// oracle: 材料の内接球 = 板厚 (0.6mm の板の中央) 突起の測り直しは 0.6 前後
@@ -957,13 +970,16 @@ mod tests {
     #[test]
     fn annotation_needs_call_kind_and_location_inside() {
         // 同梱の注記は空 (利用者との表の確認の前) なので、照合だけを空振りしない形で確かめる
-        let mut v = vec![fixed_violation(
-            Kind::WallThin,
-            Confidence::Measured,
-            Some(0.1),
-            None,
-            String::new(),
-        )];
+        let mut v: Vec<Violation> = vec![
+            fixed_violation(
+                Kind::WallThin,
+                Confidence::Measured,
+                Some(0.1),
+                None,
+                String::new(),
+            )
+            .expect("a 0.1 mm wall is reported"),
+        ];
         annotate("tape_dispenser(76, 50, 3)", &mut v);
         assert!(v[0].intentional.is_none(), "位置の無い違反に注記は付かない");
     }

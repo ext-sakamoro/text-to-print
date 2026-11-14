@@ -198,22 +198,11 @@ impl DfamSummary {
 }
 
 /// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
-/// DfAM の設定 限界は印刷可能性の方針の表 (`data/printability_policy.json`) から渡す
-/// (表が 1 つの出所、ALICE-Bamboo の FDM の値と同じことは `violation` の試験が確かめる)
+///
+/// FDM の限界は既定の printer profile から印刷可能性の Law で導く
+/// (`violation::policy` と同じ Law、この crate は数値を持たない)
 fn dfam_config() -> DfamConfig {
-    use crate::violation::{Kind, policy};
-    let mut cfg = DfamConfig::for_process(Process::Fdm);
-    let p = policy();
-    if let Some(v) = p.limit(Kind::WallThin) {
-        cfg.limits.min_unsupported_wall_mm = v;
-    }
-    if let Some(v) = p.limit(Kind::HoleTooSmall) {
-        cfg.limits.min_hole_diameter_mm = v;
-    }
-    if let Some(v) = p.limit(Kind::FeatureTooSmall) {
-        cfg.limits.min_positive_feature_mm = v;
-    }
-    cfg
+    DfamConfig::for_process(Process::Fdm)
 }
 
 /// 三値判定の結果ラベル (合格 / 違反 / 未決定)
@@ -1613,13 +1602,15 @@ pub fn safety_report(lol_source: &str) -> Vec<crate::violation::Violation> {
     let sdf = match alice_bamboo::lol_to_sdf(lol_source) {
         Ok(sdf) => sdf,
         Err(e) => {
-            return vec![fixed_violation(
+            return fixed_violation(
                 Kind::LolParse,
                 Confidence::Proved,
                 None,
                 None,
                 dedup_lol_parse_prefix(e),
-            )];
+            )
+            .into_iter()
+            .collect();
         }
     };
     let report = alice_bamboo::safety::safety_validate(&sdf, "PLA", None);
@@ -1644,7 +1635,9 @@ fn bamboo_violations(
     bamboo_kinds(report)
         .into_iter()
         .zip(report.messages.iter())
-        .map(|(kind, msg)| fixed_violation(kind, Confidence::Measured, None, None, msg.clone()))
+        .filter_map(|(kind, msg)| {
+            fixed_violation(kind, Confidence::Measured, None, None, msg.clone())
+        })
         .collect()
 }
 
@@ -1729,7 +1722,7 @@ fn violations_from_reports(
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Fail && is_retryable_dfam_check(f.check))
-        .map(|f| {
+        .filter_map(|f| {
             let kind = match f.check {
                 alice_bamboo::dfam::Check::HoleDiameter => Kind::HoleTooSmall,
                 _ => Kind::FeatureTooSmall,
@@ -1769,7 +1762,7 @@ fn violations_from_reports(
                 .get(i)
                 .copied()
                 .unwrap_or((Kind::Other, Confidence::Measured, None, None));
-        out.push(fixed_violation(kind, confidence, measured, count, msg));
+        out.extend(fixed_violation(kind, confidence, measured, count, msg));
     }
     out
 }
@@ -2776,11 +2769,11 @@ mod tests {
 
     /// fail が 1 つも無くても、証明が揃わなければ合格にしない
     ///
-    /// oracle: 肉厚 2.0mm の球殻 (`sphere(10) - sphere(8)`) は min_wall 1.6mm を
-    /// 上回るので薄い三角形は 0 枚、連結性も `Proved` それでも erosion の大域
-    /// 判定は octree 深さ 6 では決着せず `Undecided` で残る (2026-09-28 実測の
-    /// 境界: 2.5mm → `Proved` / 2.0mm → 未決定で fail 0 件 / 1.6mm → 薄い三角形
-    /// 59,024 枚で違反)
+    /// oracle: 肉厚 1.5mm の球殻 (`sphere(10) - sphere(8.5)`) は min_wall 1.2mm (既定の profile の
+    /// 壁の限界、印刷可能性の Law) を上回るので薄い三角形は 0 枚、連結性も違反ではない それでも erosion の
+    /// 大域判定は octree 深さ 6 では決着せず `Undecided` で残る (連結性も未決定になる) 限界 1.6mm の時は
+    /// 2.0mm の球殻が境界で連結性は `Proved` だった 限界 1.2mm では 1.8mm で erosion が `Proved` になり、
+    /// 1.5mm では erosion と連結性の両方が未決定 (2026-11-14 実測)
     ///
     /// 「探索で見つからなかった」を合格に繰り上げないことが本 judge の要点なので、
     /// **fail が空 かつ `ok == false` かつ notes で理由が出る** をここで固定する
@@ -2788,13 +2781,18 @@ mod tests {
     /// (その時は境界となる別の肉厚に付け替える)
     #[test]
     fn undecided_proof_is_not_promoted_to_ok() {
-        let sdf = alice_bamboo::lol_to_sdf("subtract(sphere(10.0), sphere(8.0))").expect("parse");
+        let sdf = alice_bamboo::lol_to_sdf("subtract(sphere(10.0), sphere(8.5))").expect("parse");
         let b = Vec3::splat(12.0);
         let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
         let p = printability_summary(&sdf, &mesh, -b, b);
         assert_eq!(p.erosion, ProofVerdict::Undecided, "notes: {:?}", p.notes);
         assert_eq!(p.thin_triangles, 0);
-        assert_eq!(p.connectivity, ProofVerdict::Proved, "notes: {:?}", p.notes);
+        assert_ne!(
+            p.connectivity,
+            ProofVerdict::Violated,
+            "notes: {:?}",
+            p.notes
+        );
         assert!(
             p.fail_messages.is_empty(),
             "この形状は fail が出ない前提: {:?}",
