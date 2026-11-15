@@ -41,7 +41,9 @@ dependents = [
 ]
 fixed = []
 expires = "2026-11-26"
-until = "eframe / egui upgrade in crates/app"
+until = "accesskit_unix (and so eframe) on zbus 6"
+reason = "zvariant 4.2.0 <- (accesskit_atspi_common 0.10.1, atspi-common 0.6.0, atspi-proxies 0.6.0, zbus 4.4.0, zbus-lockstep 0.4.4, zbus_names 3.0.0, zbus_xml 4.0.0) <- atspi 0.22.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal -i zvariant@4.2.0; 0 lines for aarch64-apple-darwin and x86_64-pc-windows-msvc); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]
 
 [[hold]]
 id = "RUSTSEC-2026-0371"
@@ -51,7 +53,9 @@ version = "3.0.0"
 dependents = ["atspi-common 0.6.0", "zbus 4.4.0", "zbus_xml 4.0.0"]
 fixed = []
 expires = "2026-11-26"
-until = "eframe / egui upgrade in crates/app"
+until = "accesskit_unix (and so eframe) on zbus 6"
+reason = "zbus_names 3.0.0 <- (atspi-common 0.6.0, zbus 4.4.0, zbus_xml 4.0.0) <- atspi 0.22.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal -i zbus_names@3.0.0); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]
 
 [[hold]]
 id = "RUSTSEC-2026-0372"
@@ -61,4 +65,6 @@ version = "4.2.0"
 dependents = ["zvariant 4.2.0"]
 fixed = []
 expires = "2026-11-26"
-until = "eframe / egui upgrade in crates/app"
+until = "accesskit_unix (and so eframe) on zbus 6"
+reason = "zvariant_derive 4.2.0 (proc-macro) <- zvariant 4.2.0 <- atspi / zbus 4.4.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); built for Linux targets only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal,build -i zvariant_derive@4.2.0); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]

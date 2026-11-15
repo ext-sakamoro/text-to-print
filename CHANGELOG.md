@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Security
+- `scripts/advisory_hold_guard.py` / `scripts/test_advisory_hold_guard.py` を共有の新しい版にし、`scripts/advisory_holds.toml` の 3 件 (zvariant / zbus_names / zvariant_derive、eframe 0.31 の accesskit 経由) に `reason` (実測した依存の鎖、Linux だけで compile される) と `until_release` (accesskit_unix の 0.24.1 より新しい版) を足した 修正版には届かない: 最新の accesskit_unix 0.24.1 / atspi 0.30.0 も zbus 5 で、その zvariant 系も同じ勧告の対象 (eframe 0.37 へ上げても保留が 5.x に移るだけ)
 - 依存: `quinn-udp` を 0.5.15 から 0.5.16 に (RUSTSEC-2026-0538: 切り詰められた datagram の後に受信の loop が回り続けうる、修正は 0.5.16) Cargo.lock は quinn-udp の行だけ
 - `embed_in_3mf` は 3MF の entry を上限までしか読まない: 格納 (stored) は格納された長さ、圧縮された entry は 1 GiB (1 回の展開の上限の 4 倍、3MF の書き手が deflate する `3D/3dmodel.model` は print の三角形数に応じて大きくなる) archive が宣言する長さは信じず、上限を超える宣言は読む前に拒み、読み取りも上限 + 1 byte で止める 拒んだ時は file を書き換えない 以前は宣言の長さで確保して上限なしに読んだ
 
