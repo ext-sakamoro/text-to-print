@@ -1,0 +1,18 @@
+# Dated holds on RustSec advisories for the upload backend's own Cargo.lock
+# (crates/worker is outside the workspace). Same format and guard as
+# scripts/advisory_holds.toml at the repository root:
+# python3 scripts/advisory_hold_guard.py --dir crates/worker
+
+# chrono is pulled only by the Cloudflare SDK crate `worker`; this crate's own code
+# does not use chrono (time is alice-ephemeris). No release of `worker` drops it.
+[[hold]]
+id = "RUSTSEC-2026-0543"
+kind = "unmaintained"
+crate = "chrono"
+version = "0.4.45"
+dependents = ["worker 0.8.5"]
+fixed = []
+expires = "2026-12-02"
+until = "a release of the worker crate without chrono"
+reason = "chrono 0.4.45 <- worker 0.8.5 <- text-to-print-worker (crates/worker) (cargo tree --locked -e normal -i chrono in crates/worker); the newest worker (0.9.0) still requires chrono ^0.4.41 with no feature that drops it (crates.io, 2026-11-18)"
+until_release = [{crate = "worker", newer_than = "0.9.0"}]

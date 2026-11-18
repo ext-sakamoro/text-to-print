@@ -1,0 +1,155 @@
+# The fuzz crate is outside the workspace and has its own Cargo.lock; this is the root
+# deny.toml's policy with the advisories this lock's graph actually contains
+# cargo-deny 設定 (v0.14+ schema)
+# ALICE-* 共通の CI 構成に従う
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+unused-ignored-advisory = "deny"
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+version = 2
+yanked = "deny"
+# text-to-print 側 CVE ignore の canonical は .cargo/audit.toml (ci.yml audit job 用)
+# 本 deny.toml と同期を保つ (両方 update する時は忘れず片側に反映)
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained notice (not a vulnerability), proc-macro: metal 0.31 <- wgpu-hal 24 <- wgpu 24 <- alice-sdf; exit = wgpu 24 -> 30 in ALICE-SDF and ALICE-LLM, then eframe 0.31 -> 0.37 here" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+    "MPL-2.0",
+    "OpenSSL",
+    # font licenses (egui/epaint transitive)
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "NCSA",
+    # webpki-roots (Mozilla CA cert bundle、Cloudflare Worker / rustls transitive)
+    "CDLA-Permissive-2.0",
+]
+
+# text-to-print 本体 (publish = false、LicenseRef-Proprietary) は公開しない
+# crate なので license 検査の対象から外す
+[licenses.private]
+ignore = true
+
+# ALICE-* crate (git 依存、どれも同じ owner の LicenseRef-Proprietary): 外部依存全体でなく、この crate だけに限った exception
+[[licenses.exceptions]]
+name = "alice-physics"
+allow = ["LicenseRef-Proprietary"]
+
+# alice-physics 4 is a facade over alice-physics-core
+[[licenses.exceptions]]
+name = "alice-physics-core"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-det-math"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol-layout"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-lol-macro"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-sdf"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-zip"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-crypto"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-browser-secure"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-llm"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-bamboo"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-print"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-serial"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-sign"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-ephemeris"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-ephemeris-os-local"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.clarify]]
+name = "ring"
+version = "*"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+version = "*"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
