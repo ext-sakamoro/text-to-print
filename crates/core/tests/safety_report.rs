@@ -72,7 +72,11 @@ fn thin_plate_reports_measured_wall_and_proved_erosion() {
         .expect("wall_thin");
     // oracle: 板厚 2 × 0.3 = 0.6mm
     assert!((wall.measured.unwrap() - 0.6).abs() < 0.05, "{wall:?}");
-    assert_eq!(wall.limit, Some(1.6));
+    // oracle: the selected printer profile (0.4 mm nozzle, 3 perimeters) gives 3 x 0.4 = 1.2 mm
+    assert!(
+        wall.limit.is_some_and(|l| (l - 1.2).abs() < 1e-5),
+        "{wall:?}"
+    );
     assert_eq!(wall.severity, Severity::Blocking);
     assert!(wall.count.unwrap() > 0);
     let everywhere = v

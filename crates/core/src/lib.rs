@@ -7,6 +7,7 @@ pub mod license;
 pub mod manifest;
 pub mod pipeline;
 pub mod presets;
+pub mod printer;
 pub mod progress;
 pub mod prompt;
 pub mod tier;
