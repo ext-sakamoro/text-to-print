@@ -20,10 +20,9 @@ ignore = [
     # zbus 4.4 (eframe 0.31 → egui-winit → accesskit_unix → atspi、Linux の読み上げ) 経由 (.cargo/audit.toml と同期)
     "RUSTSEC-2026-0194",  # quick-xml v0.30 (zbus_xml 4.0)
     "RUSTSEC-2026-0195",  # quick-xml DoS v0.30 (zbus_xml 4.0)
-    "RUSTSEC-2024-0436",  # paste unmaintained (pyo3-macros transitive)
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained notice (not a vulnerability), proc-macro: metal 0.31 <- wgpu-hal 24 (from the SDF and LLM crates and eframe 0.31) and accesskit_windows 0.24 <- eframe 0.31; exit = wgpu 24 -> 30 in the SDF and LLM crates, then eframe 0.31 -> 0.37 here" },
     "RUSTSEC-2026-0192",  # ttf-parser unmaintained (egui transitive)
     # ALICE-* sibling transitive (.cargo/audit.toml と同期、2026-09-16)
-    "RUSTSEC-2025-0141",  # bincode 1.3 unmaintained (via alice-sdf → alice-bamboo、SDF / Physics deny.toml と同根拠、wire format 互換のため据置)
     # 期限付きの保留 (scripts/advisory_holds.toml、scripts/advisory_hold_guard.py が版・経路・期限を照合する)
     { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },

@@ -19,8 +19,7 @@ yanked = "deny"
 # text-to-print 側 CVE ignore の canonical は .cargo/audit.toml (ci.yml audit job 用)
 # 本 deny.toml と同期を保つ (両方 update する時は忘れず片側に反映)
 ignore = [
-    "RUSTSEC-2024-0436",  # paste unmaintained (proc-macro): metal 0.31 <- wgpu-hal 24 <- wgpu 24 <- alice-sdf; the same as the root deny.toml
-    "RUSTSEC-2025-0141",  # bincode unmaintained, via alice-sdf; the same as the root deny.toml
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained notice (not a vulnerability), proc-macro: metal 0.31 <- wgpu-hal 24 (from the SDF and LLM crates and eframe 0.31) and accesskit_windows 0.24 <- eframe 0.31; exit = wgpu 24 -> 30 in the SDF and LLM crates, then eframe 0.31 -> 0.37 here" },
 ]
 
 [licenses]
