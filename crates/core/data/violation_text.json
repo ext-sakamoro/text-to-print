@@ -111,6 +111,26 @@
         "action": "Avoid using it in hot places or direct sunlight."
       }
     },
+    "printability_not_checked": {
+      "ja": {
+        "title": "壁の厚さや穴の大きさを確かめられませんでした",
+        "action": "印刷前に形と寸法を確認してください 理由は詳細にあります"
+      },
+      "en": {
+        "title": "Wall thickness and hole sizes could not be checked",
+        "action": "Check the shape and its sizes before printing. The reason is in the details."
+      }
+    },
+    "gap_not_measured": {
+      "ja": {
+        "title": "穴や隙間の幅を確かめられませんでした",
+        "action": "細い穴やすき間がある場合は、印刷前に寸法を確認してください 理由は詳細にあります"
+      },
+      "en": {
+        "title": "Hole and gap widths could not be checked",
+        "action": "If the model has narrow holes or slots, check their size before printing. The reason is in the details."
+      }
+    },
     "lol_parse": {
       "ja": {
         "title": "LOL を読み取れません",

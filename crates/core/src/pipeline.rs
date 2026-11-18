@@ -1696,16 +1696,24 @@ fn printability_violations_for_retry(sdf: &alice_sdf::SdfNode) -> Vec<crate::vio
         || dims.1 <= 0.0
         || dims.2 <= 0.0
     {
-        return Vec::new();
+        return vec![printability_not_checked(format!(
+            "the shape has no finite extent (bounding box {:.2} x {:.2} x {:.2} mm)",
+            dims.0, dims.1, dims.2
+        ))];
     }
-    let Ok((mesh, bounds)) = mesh_with_remesh(
+    let (mesh, bounds) = match mesh_with_remesh(
         sdf,
         aabb.min,
         aabb.max,
         Quality::Preview,
         &mut crate::progress::NoProgress,
-    ) else {
-        return Vec::new();
+    ) {
+        Ok(m) => m,
+        Err(e) => {
+            return vec![printability_not_checked(format!(
+                "the preview mesh could not be built ({e})"
+            ))];
+        }
     };
     let mesh = repair_mesh(&mesh);
     let mut cfg = dfam_config();
@@ -1746,6 +1754,9 @@ fn violations_from_reports(
         })
         .collect();
 
+    // 穴・隙間は SDF の隙間の測定が canonical (Bamboo の穴径は数えない形がある、例 sbc_case の柱と壁の間)
+    out.extend(sdf_gap_violation(sdf));
+
     // 肉厚 / 連結性は証明ベース側が canonical (`PrintabilitySummary` の表参照)
     // fail_messages は (erosion の違反、薄い三角形、連結性の違反) の順に積まれる
     let mut kinds = Vec::new();
@@ -1775,9 +1786,113 @@ fn violations_from_reports(
     out
 }
 
+/// An Info item saying the printability checks did not run, with the reason: a check that could not run
+/// must not read as "no problems"
+fn printability_not_checked(why: String) -> crate::violation::Violation {
+    use crate::violation::{Confidence, Kind, fixed_violation};
+    fixed_violation(
+        Kind::PrintabilityNotChecked,
+        Confidence::Measured,
+        None,
+        None,
+        format!("Printability not checked: {why}"),
+    )
+}
+
+/// The narrowest gap (air between walls, a hole, a slot) of `sdf` against the selected printer
+/// profile's hole limit, from the SDF's own gap measure: `alice_sdf::validity::measure_gaps` on a grid
+/// whose any-orientation resolution (`√3 · cell`) is half the limit, and `GapReport::verdict` with an
+/// air-side proof (`prove_gaps`, a bounded budget). A `Fail` is a measured hole violation (the proof's
+/// witnesses, each proven on its own, are counted in the message; the proof may run out of budget, so
+/// nothing here is called proven). When the gap cannot be measured (the grid cannot be built) or the
+/// verdict is undecided, the result is an Info line saying so with the reason, never silence: a model too
+/// large for the grid must not print as having no gap problems. A `Pass` (only from a complete proof)
+/// adds nothing
+fn sdf_gap_violation(sdf: &alice_sdf::SdfNode) -> Option<crate::violation::Violation> {
+    use crate::violation::{Confidence, Kind, fixed_violation, measured_violation, policy};
+    use alice_sdf::validity::{GapFailure, GapVerdict, measure_gaps, prove_gaps};
+    let limit = policy().limit(Kind::HoleTooSmall)?;
+    let not_measured = |why: String| {
+        Some(fixed_violation(
+            Kind::GapNotMeasured,
+            Confidence::Measured,
+            None,
+            None,
+            format!("Printability gap not measured: {why} (limit {limit:.2} mm)"),
+        ))
+    };
+    let aabb = compute_tight_aabb_with_config(sdf, &TightAabbConfig::preset_large());
+    let cell = limit / (2.0 * 3.0_f32.sqrt());
+    let report = match measure_gaps(sdf, aabb.min, aabb.max, cell) {
+        Ok(r) => r,
+        Err(e) => {
+            return not_measured(format!(
+                "the gap grid at {cell:.2} mm could not be built ({e:?})"
+            ));
+        }
+    };
+    let proof = match prove_gaps(
+        sdf,
+        limit,
+        aabb.min,
+        aabb.max,
+        GAP_PROOF_DEPTH,
+        GAP_PROOF_BUDGET,
+    ) {
+        Ok(p) => p,
+        Err(e) => return not_measured(format!("the air-side proof could not run ({e:?})")),
+    };
+    let failure = match report.verdict(limit, &proof) {
+        GapVerdict::Fail(f) => f,
+        GapVerdict::Pass(_) => return None,
+        GapVerdict::Undetermined(why) => {
+            return not_measured(format!(
+                "undecided at grid resolution {:.2} mm ({why:?})",
+                report.resolution
+            ));
+        }
+    };
+    let (what, width, at) = match failure {
+        GapFailure::Width { width, at } => ("narrowest gap", width, at),
+        GapFailure::CreviceMouth { mouth, at } => ("narrowest groove mouth", mouth, at),
+        GapFailure::ProvenGap { width, at } => ("walls facing within", width, at),
+        GapFailure::Sheet { at } => ("zero-width sheet", 0.0, at),
+    };
+    Some(measured_violation(
+        sdf,
+        Kind::HoleTooSmall,
+        Some(width),
+        Some(at),
+        None,
+        format!(
+            "Printability gap width: {what} {width:.2} mm at [{:.1}, {:.1}, {:.1}] is below {limit:.2} mm (SDF gap measure, grid resolution {:.2} mm; {} narrow-air witness(es), proof {})",
+            at.x,
+            at.y,
+            at.z,
+            report.resolution,
+            proof.witnesses.len(),
+            if proof.exhausted {
+                "partial"
+            } else {
+                "complete"
+            },
+        ),
+    ))
+}
+
+/// The depth and work budget of the air-side proof in [`sdf_gap_violation`] (a sixteenth of the SDF's
+/// default budget: the retry loop runs this per generation)
+const GAP_PROOF_DEPTH: u32 = 12;
+const GAP_PROOF_BUDGET: u64 = alice_sdf::validity::GAP_PROOF_WORK / 16;
+
 /// LLM retry に流す DfAM 項目
 ///
-/// LOL 側で局所的に直せるもの (穴を大きく / 突起を太く) に限定する
+/// LOL 側で局所的に直せるもの (突起を太く) に限定する
+///
+/// - **hole diameter**: 2026-11-18 に除外 穴・隙間の canonical source は `alice_sdf::validity` の
+///   隙間の測定 ([`sdf_gap_violation`]) DfAM の穴径は 6 軸の ray のうち 4 本以上が材料に当たる点だけを
+///   数えるので、横に開いた slot (sbc_case の柱と壁の間 1.5mm) を数えない 同じ量を 2 つの source で
+///   判定すると片方が緩い方に倒れるため 1 つに寄せる (肉厚と同じ)
 ///
 /// - **wall thickness**: 2026-09-28 に除外 肉厚の canonical source は
 ///   `alice_sdf::validity` 側 (erosion の証明 + 三角形ごとの厳密 march) に
@@ -1793,7 +1908,7 @@ fn violations_from_reports(
 /// bridge / watertight は UI + manifest で示すに留める
 fn is_retryable_dfam_check(check: alice_bamboo::dfam::Check) -> bool {
     use alice_bamboo::dfam::Check;
-    matches!(check, Check::PositiveFeature | Check::HoleDiameter)
+    matches!(check, Check::PositiveFeature)
 }
 
 /// caller 由来 violations に、pipeline 内 `safety_validate` の messages を
@@ -2894,10 +3009,57 @@ mod tests {
         // 肉厚は証明ベース側 (`printability_summary`) が canonical source
         assert!(!is_retryable_dfam_check(Check::WallThickness));
         assert!(is_retryable_dfam_check(Check::PositiveFeature));
-        assert!(is_retryable_dfam_check(Check::HoleDiameter));
+        assert!(!is_retryable_dfam_check(Check::HoleDiameter));
         assert!(!is_retryable_dfam_check(Check::Bridge));
         assert!(!is_retryable_dfam_check(Check::SupportRatio));
         assert!(!is_retryable_dfam_check(Check::Scale));
+    }
+
+    /// a shape with no extent is not silent: an Info "printability not checked" item with the reason
+    #[test]
+    fn printability_that_cannot_run_is_said_not_passed() {
+        use crate::violation::{Kind, Severity};
+        let sdf =
+            alice_bamboo::lol_to_sdf("subtract(box3d(1, 1, 1), box3d(2, 2, 2))").expect("parse");
+        let v = printability_violations_for_retry(&sdf);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert_eq!(v[0].kind, Kind::PrintabilityNotChecked, "{v:?}");
+        assert_eq!(v[0].severity, Severity::Info, "{v:?}");
+        assert!(
+            v[0].message.starts_with("Printability not checked: "),
+            "{}",
+            v[0].message
+        );
+    }
+
+    /// a model too large for the gap grid (2 m cube: (2000 / 0.58)^3 points, over the grid's limit) is not
+    /// silent: an Info "gap not measured" line with the reason, never a pass
+    #[test]
+    fn a_gap_that_cannot_be_measured_is_said_not_passed() {
+        use crate::violation::{Kind, Severity};
+        let sdf = alice_bamboo::lol_to_sdf("box3d(2000, 2000, 2000)").expect("parse");
+        let v = sdf_gap_violation(&sdf).expect("a line, not silence");
+        assert_eq!(v.kind, Kind::GapNotMeasured, "{v:?}");
+        assert_eq!(v.severity, Severity::Info, "{v:?}");
+        assert!(v.message.contains("not measured"), "{}", v.message);
+        assert!(v.message.contains("could not be built"), "{}", v.message);
+    }
+
+    /// the spec's slot (sbc_case: 1.5 mm between the post and the inner wall) is a measured hole
+    /// violation from the SDF gap measure
+    #[test]
+    fn the_sbc_case_slot_is_a_measured_gap() {
+        use crate::violation::Kind;
+        let sdf = alice_bamboo::lol_to_sdf("sbc_case(85, 56, 25)").expect("parse");
+        let v = sdf_gap_violation(&sdf).expect("the slot");
+        assert_eq!(v.kind, Kind::HoleTooSmall, "{v:?}");
+        let w = v.measured.expect("width");
+        assert!((1.45..=1.55).contains(&w), "{w} {}", v.message);
+        assert!(
+            v.message.starts_with("Printability gap width:"),
+            "{}",
+            v.message
+        );
     }
 
     #[test]

@@ -22,6 +22,8 @@
     "beam_overloaded": { "severity": "blocking", "source": "梁の荷重の安全率が素材の最小を下回る (荷重を指定した時だけ)" },
     "thermal_stress": { "severity": "info", "ours": true, "source": "冷却時の熱応力の安全率 < 2.0 (造形室の管理で解決するのが普通なので情報)" },
     "thermal_near_tg": { "severity": "info", "ours": true, "source": "使用温度が素材のガラス転移温度に近い" },
+    "printability_not_checked": { "severity": "info", "source": "印刷可能性の検査 (肉厚・突起・隙間・連結性) を走らせられなかった (形に大きさが無い、Preview の mesh が作れない 等) 合格ではない" },
+    "gap_not_measured": { "severity": "info", "source": "隙間 (穴・slot) を測れなかった / 決められなかった (格子が大きすぎる、証明が範囲を覆わない 等) 合格ではない: 隙間に問題が無いとは言えない" },
     "lol_parse": { "severity": "blocking", "source": "LOL を読めない" },
     "other": { "severity": "advisory", "ours": true, "source": "core が種類を判別できなかった結果 (検査の文字列の形が変わった時など)" }
   }
