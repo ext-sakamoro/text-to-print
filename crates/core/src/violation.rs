@@ -46,6 +46,10 @@ pub enum Kind {
     ThermalStress,
     /// 使用温度がガラス転移温度に近い
     ThermalNearTg,
+    /// 印刷可能性の検査 (肉厚・突起・隙間・連結性) を走らせられなかった (Preview の mesh が作れない 等)
+    PrintabilityNotChecked,
+    /// 隙間を測れなかった / 決められなかった (格子が作れない、証明が別の範囲 等)
+    GapNotMeasured,
     /// LOL を読めない
     LolParse,
     /// 判別できなかった
@@ -54,7 +58,7 @@ pub enum Kind {
 
 impl Kind {
     /// 全ての種類 (表の網羅の試験に使う)
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::WallThin,
         Self::WallTooThinEverywhere,
         Self::Disconnected,
@@ -66,6 +70,8 @@ impl Kind {
         Self::BeamOverloaded,
         Self::ThermalStress,
         Self::ThermalNearTg,
+        Self::PrintabilityNotChecked,
+        Self::GapNotMeasured,
         Self::LolParse,
         Self::Other,
     ];
@@ -85,6 +91,8 @@ impl Kind {
             Self::BeamOverloaded => "beam_overloaded",
             Self::ThermalStress => "thermal_stress",
             Self::ThermalNearTg => "thermal_near_tg",
+            Self::PrintabilityNotChecked => "printability_not_checked",
+            Self::GapNotMeasured => "gap_not_measured",
             Self::LolParse => "lol_parse",
             Self::Other => "other",
         }
@@ -837,13 +845,14 @@ mod tests {
                 close(p.limit_for(Kind::FeatureTooSmall, &l), feature),
                 "{nozzle}: feature"
             );
-            // the band split moves with the limit: just under the limit is advisory, at it info
+            // the band split moves with the limit read for this profile: just under it advisory, at it info
+            let read = p.limit_for(Kind::WallThin, &l).unwrap();
             assert_eq!(
-                p.severity_for(Kind::WallThin, Some(wall - 0.01), &l),
+                p.severity_for(Kind::WallThin, Some(read - 0.01), &l),
                 Severity::Advisory
             );
             assert_eq!(
-                p.severity_for(Kind::WallThin, Some(wall), &l),
+                p.severity_for(Kind::WallThin, Some(read), &l),
                 Severity::Info
             );
         }

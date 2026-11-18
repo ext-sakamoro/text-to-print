@@ -202,6 +202,8 @@ impl SafetyViolationKind {
         if let Some(rest) = lower.strip_prefix("printability ") {
             return if rest.starts_with("wall thickness") {
                 Some(Self::WallTooThin)
+            } else if rest.starts_with("gap width") {
+                Some(Self::HoleTooSmall)
             } else if rest.starts_with("connectivity") {
                 Some(Self::Disconnected)
             } else {
@@ -433,6 +435,16 @@ mod tests {
         assert!(out.contains("translate takes THREE coords"));
         assert!(out.contains("NO operators"));
         assert!(out.contains("subtract(a, b)"));
+    }
+
+    #[test]
+    fn the_sdf_gap_message_is_a_hole_to_fix() {
+        assert_eq!(
+            SafetyViolationKind::from_message(
+                "Printability gap width: narrowest gap 1.50 mm at [39.0, 27.5, -10.3] is below 2.00 mm (SDF gap measure, grid resolution 1.00 mm; 5 narrow-air witness(es), proof partial)"
+            ),
+            Some(SafetyViolationKind::HoleTooSmall)
+        );
     }
 
     #[test]

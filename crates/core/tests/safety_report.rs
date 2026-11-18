@@ -93,7 +93,8 @@ fn large_flat_plate_is_warp_critical() {
     assert_eq!(v[0].severity, Severity::Blocking);
 }
 
-/// sbc_case の穴径の標本は床の 0.4mm 上の入隅 (柱の脇) を読んで 0.09mm と報告する
+/// sbc_case の柱の脇の隙間 (以前の DfAM の穴径の標本は床の 0.4mm 上の入隅を読んで 0.09mm と報告し、
+/// 新しい DfAM の穴径はこの横に開いた slot を数えない SDF の隙間の測定はこの slot 自身を 1.5mm と読む)
 /// その位置 (柱の中心から z に 1.5mm ずれた所) の柱と壁の間は、spec から 1.74mm
 /// (壁の内側 43.5 と、柱 (中心 (39, 24.5)、半径 3) の表面の距離 √(4.5² + 1.5²) − 3) で、
 /// 柱の真横の最も狭い所が 1.5mm 測り直しは限界 2.0 を下回る (誤差扱いにはしない)
@@ -104,7 +105,8 @@ fn raspi_gap_is_remeasured_to_the_real_slot() {
         .iter()
         .find(|x| x.kind == Kind::HoleTooSmall)
         .expect("hole");
-    assert!(hole.measured.unwrap() < 0.2, "{hole:?}");
+    // the SDF gap measure reads the slot itself (spec: 1.5mm beside the post)
+    assert!((1.45..=1.55).contains(&hole.measured.unwrap()), "{hole:?}");
     let r = hole.remeasured.expect("位置があるので測り直す");
     // 柱の脇は z 方向に広がる楔なので、標本の点を含む最大の球は最も狭い所 (1.5) より少し大きい
     // (標本の点の位置で 1.5〜1.9 の間を動く) どちらでも限界 2.0 未満 = 誤差扱いにはしない
