@@ -83,8 +83,26 @@ step "security-audit.yml / deny: Licence exceptions equal the declarations (test
 python3 scripts/test_deny_exception_guard.py
 python3 scripts/deny_exception_guard.py
 
-step "security-audit.yml / deny: Run cargo deny check all"
-( export CARGO_TERM_COLOR="always" CARGO_NET_RETRY="5" CARGO_HTTP_MULTIPLEXING="false"; cargo deny --all-features check all )
+step "security-audit.yml / deny: Advisory hold guard (tests)"
+python3 scripts/test_advisory_hold_guard.py
+
+step "security-audit.yml / deny: Every Cargo.lock (the holds, then cargo deny check all)"
+(
+  set -euo pipefail
+  want=$(git ls-files '*Cargo.lock' | wc -l)
+  n=0
+  for lock in $(git ls-files '*Cargo.lock'); do
+    d=$(dirname "$lock")
+    test -f "$d/deny.toml" || { echo "$d has no deny.toml"; exit 1; }
+    if [ -f "$d/scripts/advisory_holds.toml" ]; then
+      python3 scripts/advisory_hold_guard.py --dir "$d"
+    fi
+    (cd "$d" && export CARGO_TERM_COLOR="always" CARGO_NET_RETRY="5" CARGO_HTTP_MULTIPLEXING="false" && cargo deny --locked --all-features check all)
+    n=$((n + 1))
+  done
+  echo "audited $n of $want Cargo.lock"
+  [ "$want" -gt 0 ] && [ "$n" -eq "$want" ]
+)
 
 step "security-audit.yml / unused-deps: Run cargo machete"
 ( export CARGO_TERM_COLOR="always" CARGO_NET_RETRY="5" CARGO_HTTP_MULTIPLEXING="false"; cargo machete )

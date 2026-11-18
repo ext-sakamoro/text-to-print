@@ -112,10 +112,8 @@ jobs:
       # deny.toml / .cargo/audit.toml の期限付きの保留 (scripts/advisory_holds.toml) を照合する
       # 保留した版が lock から消えた / 依存元が増減した / 同じ crate の別の版が該当する /
       # 期限を過ぎた / ignore と保留が食い違う、のどれでも fail (保留 0 件・lock 不在も fail)
-      - name: Advisory hold guard (tests, then the holds)
-        run: |
-          python3 scripts/test_advisory_hold_guard.py
-          python3 scripts/advisory_hold_guard.py
+      - name: Advisory hold guard (tests)
+        run: python3 scripts/test_advisory_hold_guard.py
 
       # each licence exception in deny.toml equals what the crate declares at the commits
       # Cargo.lock pins (an id it does not declare, an exception for a crate that is gone or
@@ -127,8 +125,26 @@ jobs:
           python3 scripts/test_deny_exception_guard.py
           python3 scripts/deny_exception_guard.py
 
-      - name: Run cargo deny check all
-        run: cargo deny --locked --all-features check all
+      # every Cargo.lock the repository tracks (the workspace, and crates outside it with their
+      # own lock: the upload backend, fuzz): its deny.toml, its dated holds where it has any, and
+      # cargo deny on its graph; fails when no lock was audited or fewer than git tracks
+      - name: Every Cargo.lock (the holds, then cargo deny check all)
+        run: |
+          set -euo pipefail
+          want=$(git ls-files '*Cargo.lock' | wc -l)
+          n=0
+          for lock in $(git ls-files '*Cargo.lock'); do
+            d=$(dirname "$lock")
+            echo "== $lock"
+            test -f "$d/deny.toml" || { echo "$d has no deny.toml"; exit 1; }
+            if [ -f "$d/scripts/advisory_holds.toml" ]; then
+              python3 scripts/advisory_hold_guard.py --dir "$d"
+            fi
+            (cd "$d" && cargo deny --locked --all-features check all)
+            n=$((n + 1))
+          done
+          echo "audited $n of $want Cargo.lock"
+          [ "$want" -gt 0 ] && [ "$n" -eq "$want" ]
 
   unused-deps:
     name: cargo-machete (unused dependencies)

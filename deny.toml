@@ -123,6 +123,14 @@ allow = ["LicenseRef-Proprietary"]
 name = "alice-sign"
 allow = ["LicenseRef-Proprietary"]
 
+[[licenses.exceptions]]
+name = "alice-ephemeris"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-ephemeris-os-local"
+allow = ["LicenseRef-Proprietary"]
+
 [[licenses.clarify]]
 name = "ring"
 version = "*"
