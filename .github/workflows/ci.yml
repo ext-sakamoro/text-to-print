@@ -225,3 +225,5 @@ jobs:
           grep -q "gallery_order_tests::the_listing_is_ordered_by_the_time_the_worker_received_each_post ... ok" test.log
           grep -q "webhook_issue_tests::a_retry_after_a_partial_success_resends_the_stored_key ... ok" test.log
           grep -q "webhook_issue_tests::only_a_settled_checkout_issues_a_licence ... ok" test.log
+          grep -q "time_forms_golden_tests::a_licence_time_reads_and_writes_as_recorded ... ok" test.log
+          grep -q "time_forms_golden_tests::a_stripe_period_end_is_stored_and_licensed_as_recorded ... ok" test.log

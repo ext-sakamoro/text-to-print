@@ -393,9 +393,7 @@ async fn handle_subscription_updated(
         .get("current_period_end")
         .and_then(|v| v.as_i64())
         .ok_or("subscription.updated missing current_period_end")?;
-    let current_period_end: DateTime<Utc> = Utc
-        .timestamp_opt(current_period_end_unix, 0)
-        .single()
+    let current_period_end = period_end_at(current_period_end_unix)
         .ok_or("subscription.updated current_period_end out of range")?;
 
     let tier = tier_for_price_id(env, &price_id)
@@ -431,7 +429,7 @@ async fn handle_subscription_updated(
     // Re-issue license only for active/trialing subscriptions — canceled
     // states just persist the status change
     if matches!(status.as_str(), "active" | "trialing") {
-        let expires_at = current_period_end + chrono::Duration::days(3);
+        let expires_at = licence_expiry(current_period_end);
         let issuer = load_issuer(env)?;
         let key = issuer
             .issue_until(&tier, &customer_id, expires_at)
@@ -497,7 +495,7 @@ async fn upsert_subscriber(
     current_period_end: Option<&DateTime<Utc>>,
 ) -> Result<(), String> {
     let now_iso = worker::Date::now().to_string();
-    let period_end_str = current_period_end.map(|d| d.to_rfc3339()).unwrap_or_default();
+    let period_end_str = current_period_end.map(row_time).unwrap_or_default();
     db.prepare(
         "INSERT INTO subscribers (stripe_customer_id, email, stripe_subscription_id, stripe_price_id, tier, status, current_period_end, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -546,8 +544,8 @@ async fn store_license_once(
             customer_id.into(),
             license_key.into(),
             tier.into(),
-            issued_at.to_rfc3339().into(),
-            expires_at.to_rfc3339().into(),
+            row_time(issued_at).into(),
+            row_time(expires_at).into(),
             issue_key.into(),
         ])
         .map_err(|e| format!("prepare: {e}"))?
@@ -568,9 +566,30 @@ async fn store_license_once(
         .ok_or_else(|| format!("no licence stored under {issue_key}"))
 }
 
+/// The instant of a Stripe `current_period_end` (whole unix seconds); `None` out of range
+fn period_end_at(unix: i64) -> Option<DateTime<Utc>> {
+    Utc.timestamp_opt(unix, 0).single()
+}
+
+/// A licence issued for a subscription period runs 3 days past the period's end (Stripe retries
+/// a failed renewal within that window)
+fn licence_expiry(period_end: DateTime<Utc>) -> DateTime<Utc> {
+    period_end + chrono::Duration::days(3)
+}
+
+/// The text a time is stored as in the D1 rows (`subscribers.current_period_end`,
+/// `licenses.issued_at` / `expires_at`): RFC 3339 with `+00:00`
+fn row_time(t: &DateTime<Utc>) -> String {
+    t.to_rfc3339()
+}
+
 #[cfg(test)]
 #[path = "webhook_issue_tests.rs"]
 mod webhook_issue_tests;
+
+#[cfg(test)]
+#[path = "time_forms_golden_tests.rs"]
+mod time_forms_golden_tests;
 
 #[cfg(test)]
 mod tests {
