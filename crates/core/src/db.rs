@@ -275,7 +275,7 @@ impl Database {
         &self,
         id: &str,
         verifier: &crate::license::LicenseVerifier,
-        now: chrono::DateTime<chrono::Utc>,
+        now: alice_ephemeris::time::Timestamp,
     ) -> Result<Tier> {
         self.ensure_profile(id)?;
         let stored: Option<String> = self.conn.query_row(

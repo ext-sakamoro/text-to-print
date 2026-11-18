@@ -1326,7 +1326,12 @@ fn apply_license(state: &mut AppState, settings: &mut SettingsState, lang: Lang)
         Ok(payload) => {
             let tier = payload.tier;
             let tier_str = format!("{tier:?}");
-            let expires = payload.expires_at.format("%Y-%m-%d").to_string();
+            // the expiry date in UTC (`YYYY-MM-DD`)
+            let expires = payload
+                .expires_at
+                .civil_date_at_offset(0)
+                .map(|d| d.to_string())
+                .unwrap_or_default();
 
             // DB に保存
             let _ = state

@@ -150,7 +150,7 @@ fn build_report(info: &std::panic::PanicHookInfo<'_>, app_version: &'static str)
     CrashReport {
         schema_version: "1".to_string(),
         uuid: uuid::Uuid::now_v7().to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        timestamp: crate::clock::now().rfc3339().to_string(),
         app_version: app_version.to_string(),
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),

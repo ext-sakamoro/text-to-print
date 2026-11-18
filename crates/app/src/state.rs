@@ -2825,7 +2825,10 @@ impl AppState {
             &crate::ui::settings::LICENSE_PUBLIC_KEY,
         )
         .ok()
-        .and_then(|v| db.load_tier(&profile_id, &v, chrono::Utc::now()).ok())
+        .and_then(|v| {
+            db.load_tier(&profile_id, &v, text_to_print_core::clock::now())
+                .ok()
+        })
         .unwrap_or(Tier::Free);
         let share_lol_dsl = db.get_share_lol_dsl(&profile_id).unwrap_or(true);
         let nickname = db.get_nickname(&profile_id).unwrap_or_default();
@@ -3125,8 +3128,14 @@ impl AppState {
             .unwrap_or_default();
     }
 
+    /// The date of the daily usage count: today in the OS's local time zone
+    /// (`YYYY-MM-DD`), UTC if the OS gives no offset
     pub fn today(&self) -> String {
-        chrono::Local::now().format("%Y-%m-%d").to_string()
+        let now = text_to_print_core::clock::now();
+        now.civil_date_in(&alice_ephemeris::time::OsLocalZone)
+            .or_else(|| now.civil_date_at_offset(0))
+            .map(|d| d.to_string())
+            .unwrap_or_default()
     }
 
     pub fn daily_usage(&self) -> u32 {

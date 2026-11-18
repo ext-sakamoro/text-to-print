@@ -69,7 +69,8 @@ tokio = { workspace = true }
 rfd = { workspace = true }
 directories = { workspace = true }
 uuid = { workspace = true }
-chrono = { workspace = true }
+# os-local: the date of the daily usage count is the OS's local date
+alice-ephemeris = { workspace = true, features = ["os-local"] }
 open = "5"
 alice-bamboo = { workspace = true }
 alice-browser-secure = { workspace = true }

@@ -19,7 +19,7 @@ serde_json = { workspace = true, features = ["raw_value"] }
 # strict Ed25519 verification of licence keys
 alice-sign = { git = "https://github.com/ext-sakamoro/ALICE-Sign", branch = "main", version = "0.1" }
 uuid = { workspace = true }
-chrono = { workspace = true }
+alice-ephemeris = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 directories = { workspace = true }

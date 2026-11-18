@@ -58,7 +58,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # utils
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
+# 時刻 (POSIX time、RFC 3339 の serde、unix ms の切り捨て、時差での日付)
+alice-ephemeris = { git = "https://github.com/ext-sakamoro/ALICE-Ephemeris", branch = "main", version = "0.1", features = ["std", "serde"] }
 anyhow = "1"
 thiserror = "2"
 directories = "6"

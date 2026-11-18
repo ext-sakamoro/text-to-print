@@ -1,5 +1,5 @@
+use alice_ephemeris::time::Timestamp;
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, Utc};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +9,8 @@ use crate::tier::Tier;
 pub struct LicensePayload {
     pub tier: Tier,
     pub user_id: String,
-    pub issued_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub issued_at: Timestamp,
+    pub expires_at: Timestamp,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -64,11 +64,11 @@ impl LicenseIssuer {
 
     /// ライセンスキーを発行
     pub fn issue(&self, tier: Tier, user_id: &str, valid_days: i64) -> Result<LicenseKey> {
-        let issued_at = Utc::now();
-        // `Duration::days` and `DateTime + Duration` panic for a span chrono cannot represent
-        // (`i64::MAX` days, or just 100 million days): report it as an error instead
-        let expires_at = chrono::Duration::try_days(valid_days)
-            .and_then(|span| issued_at.checked_add_signed(span))
+        let issued_at = crate::clock::now();
+        // a span past the representable range (`i64::MAX` days, or just 100 million days) is an
+        // error, not an expiry held at the end of time
+        let expires_at = issued_at
+            .checked_plus_days(valid_days)
             .with_context(|| {
                 format!("valid_days = {valid_days} is outside the representable range (about +-96 million days)")
             })?;
@@ -117,14 +117,14 @@ impl LicenseVerifier {
 
     /// [`Self::verify_at`] with the system clock
     pub fn verify(&self, key: &LicenseKey) -> Result<LicensePayload> {
-        self.verify_at(key, Utc::now())
+        self.verify_at(key, crate::clock::now())
     }
 
     /// The payload read from the signed bytes, if the signature is a strict Ed25519
     /// signature (alice-sign `verify_strict`) of the payload bytes exactly as issued
     /// or received, and `now` is not after its `expires_at` (`key.payload` is not
     /// trusted: a changed field there is not what was signed)
-    pub fn verify_at(&self, key: &LicenseKey, now: DateTime<Utc>) -> Result<LicensePayload> {
+    pub fn verify_at(&self, key: &LicenseKey, now: Timestamp) -> Result<LicensePayload> {
         let sig_bytes: [u8; SIGNATURE_LENGTH] = key
             .signature
             .as_slice()
@@ -175,7 +175,7 @@ impl LicenseKey {
 /// The tier a stored key (base64, as saved with the profile) gives at `now`: the
 /// payload's tier if the key verifies and has not expired, otherwise Free
 #[must_use]
-pub fn tier_of_stored_key(stored: &str, verifier: &LicenseVerifier, now: DateTime<Utc>) -> Tier {
+pub fn tier_of_stored_key(stored: &str, verifier: &LicenseVerifier, now: Timestamp) -> Tier {
     if stored.trim().is_empty() {
         return Tier::Free;
     }
@@ -271,8 +271,8 @@ mod tests {
             payload: LicensePayload {
                 tier: Tier::Pro,
                 user_id: "test".to_string(),
-                issued_at: Utc::now(),
-                expires_at: Utc::now() + chrono::Duration::days(30),
+                issued_at: crate::clock::now(),
+                expires_at: crate::clock::now().plus_days(30),
             },
             signature: vec![0u8; 10],
             signed_payload: Vec::new(),

@@ -321,7 +321,9 @@ pub(crate) fn spawn_gallery_publish(
         let client = GalleryClient::new(endpoint);
         let id = uuid::Uuid::now_v7().to_string();
         // UTC with a `Z`, to the millisecond (the worker accepts only UTC)
-        let created_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let created_at = text_to_print_core::clock::now()
+            .rfc3339_millis_z()
+            .to_string();
         let nick = if nickname.trim().is_empty() {
             None
         } else {

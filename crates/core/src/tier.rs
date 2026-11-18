@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Utc};
+use alice_ephemeris::time::Timestamp;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub enum TierState {
     /// the rollback trigger fires The wrapped `Tier` is the still-active
     /// paid tier and `until` is the wall-clock deadline at which the
     /// tier falls back to Free
-    Grace { tier: Tier, until: DateTime<Utc> },
+    Grace { tier: Tier, until: Timestamp },
     /// License expired past any grace period The effective tier has
     /// rolled back to Free
     RolledBack,
@@ -50,9 +50,9 @@ impl TierState {
 pub enum RollbackPolicy {
     /// Downgrade immediately at `expires_at` (default for skeleton)
     Immediate,
-    /// Keep the paid tier active for `Duration` past `expires_at` before
-    /// rolling back to Free (typical: 7-14 days for auto-renew retries)
-    GracePeriod(Duration),
+    /// Keep the paid tier active for this many seconds past `expires_at`
+    /// before rolling back to Free (typical: 7-14 days for auto-renew retries)
+    GracePeriod(i64),
     /// Never auto-downgrade Reserved for enterprise / manual admin
     /// override use cases
     NoRollback,
@@ -69,8 +69,8 @@ impl Tier {
     #[must_use]
     pub fn effective_state_with_policy(
         payload_tier: Self,
-        expires_at: DateTime<Utc>,
-        now: DateTime<Utc>,
+        expires_at: Timestamp,
+        now: Timestamp,
         policy: RollbackPolicy,
     ) -> TierState {
         if now <= expires_at {
@@ -79,19 +79,11 @@ impl Tier {
         match policy {
             RollbackPolicy::Immediate => TierState::RolledBack,
             RollbackPolicy::NoRollback => TierState::Active(payload_tier),
-            RollbackPolicy::GracePeriod(d) => {
-                // `expires_at + d` panics when the sum leaves chrono's range (an extreme instant,
-                // a negative or an enormous grace): saturate to the representable end instead, so
-                // an unbounded grace stays in grace and a grace that reaches before the start of
-                // time is already over
-                let deadline =
-                    expires_at
-                        .checked_add_signed(d)
-                        .unwrap_or(if d > Duration::zero() {
-                            DateTime::<Utc>::MAX_UTC
-                        } else {
-                            DateTime::<Utc>::MIN_UTC
-                        });
+            RollbackPolicy::GracePeriod(secs) => {
+                // a sum past the representable range (an extreme instant, a negative or an
+                // enormous grace) is held at that end, so an unbounded grace stays in grace and a
+                // grace that reaches before the start of time is already over
+                let deadline = expires_at.plus_seconds(secs);
                 if now <= deadline {
                     TierState::Grace {
                         tier: payload_tier,
@@ -205,7 +197,7 @@ mod tests {
     fn tier_state_effective_tier_grace_keeps_paid_tier() {
         let s = TierState::Grace {
             tier: Tier::Pro,
-            until: Utc::now(),
+            until: crate::clock::now(),
         };
         assert_eq!(s.effective_tier(), Tier::Pro);
     }
@@ -217,8 +209,8 @@ mod tests {
 
     #[test]
     fn effective_state_unexpired_is_active() {
-        let now = Utc::now();
-        let expires = now + Duration::days(30);
+        let now = crate::clock::now();
+        let expires = now.plus_days(30);
         let s =
             Tier::effective_state_with_policy(Tier::Pro, expires, now, RollbackPolicy::Immediate);
         assert!(matches!(s, TierState::Active(Tier::Pro)));
@@ -226,8 +218,8 @@ mod tests {
 
     #[test]
     fn effective_state_expired_immediate_rolls_back() {
-        let now = Utc::now();
-        let expires = now - Duration::minutes(1);
+        let now = crate::clock::now();
+        let expires = now.plus_seconds(-60);
         let s =
             Tier::effective_state_with_policy(Tier::Pro, expires, now, RollbackPolicy::Immediate);
         assert!(matches!(s, TierState::RolledBack));
@@ -236,13 +228,13 @@ mod tests {
 
     #[test]
     fn effective_state_expired_within_grace_keeps_paid_tier() {
-        let now = Utc::now();
-        let expires = now - Duration::days(3);
+        let now = crate::clock::now();
+        let expires = now.plus_days(-3);
         let s = Tier::effective_state_with_policy(
             Tier::Pro,
             expires,
             now,
-            RollbackPolicy::GracePeriod(Duration::days(7)),
+            RollbackPolicy::GracePeriod(7 * 86_400),
         );
         assert!(matches!(
             s,
@@ -256,21 +248,21 @@ mod tests {
 
     #[test]
     fn effective_state_expired_past_grace_rolls_back() {
-        let now = Utc::now();
-        let expires = now - Duration::days(10);
+        let now = crate::clock::now();
+        let expires = now.plus_days(-10);
         let s = Tier::effective_state_with_policy(
             Tier::Pro,
             expires,
             now,
-            RollbackPolicy::GracePeriod(Duration::days(7)),
+            RollbackPolicy::GracePeriod(7 * 86_400),
         );
         assert!(matches!(s, TierState::RolledBack));
     }
 
     #[test]
     fn effective_state_no_rollback_keeps_paid_tier_forever() {
-        let now = Utc::now();
-        let expires = now - Duration::days(365);
+        let now = crate::clock::now();
+        let expires = now.plus_days(-365);
         let s = Tier::effective_state_with_policy(
             Tier::Enterprise,
             expires,

@@ -1,5 +1,5 @@
+use alice_ephemeris::time::Timestamp;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read, Write};
@@ -19,7 +19,7 @@ pub const ALICE_DESIGNER: &str = "ALICE (alicelaw.net)";
 pub struct AliceManifest {
     pub schema_version: String,
     pub uuid: Uuid,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: Timestamp,
     pub generation: Generation,
     pub quality: Quality,
     pub environment: Environment,
@@ -115,7 +115,7 @@ pub struct ManifestBuilder<'a> {
 impl<'a> ManifestBuilder<'a> {
     pub fn build(self) -> AliceManifest {
         let uuid = Uuid::now_v7();
-        let timestamp = Utc::now();
+        let timestamp = crate::clock::now();
         let lol_sha256 = sha256_hex(self.lol_source.as_bytes());
         let attribution = default_attribution(self.tier, &uuid, &lol_sha256);
         AliceManifest {
@@ -300,7 +300,7 @@ fn inject_metadata_xml(model_xml: &str, m: &AliceManifest) -> String {
         short_hash,
         m.attribution.hashtags.join(" ")
     );
-    let creation_date = m.timestamp.to_rfc3339();
+    let creation_date = m.timestamp.rfc3339().to_string();
 
     out.push_str(before_model);
     out.push_str(&open_tag_with_ns);

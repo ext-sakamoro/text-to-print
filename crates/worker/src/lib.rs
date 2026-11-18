@@ -26,6 +26,7 @@ use worker::{
     event, Context, Env, Request, Response, Result as WorkerResult, RouteContext, Router,
 };
 
+mod clock;
 mod checkout;
 mod email;
 mod gallery_handler;

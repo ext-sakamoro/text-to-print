@@ -5,7 +5,7 @@
 //! on:
 //!
 //! 1. `LicensePayload` JSON structure — `{ tier, user_id, issued_at, expires_at }`
-//!    with `issued_at` / `expires_at` as `DateTime<Utc>` RFC3339 strings
+//!    with `issued_at` / `expires_at` as RFC 3339 strings with `Z`
 //! 2. Signature = Ed25519 over `serde_json::to_vec(&payload)`
 //! 3. `LicenseKey` = `{ payload, signature: Vec<u8> }` JSON-serialized then
 //!    base64-standard-encoded
@@ -16,7 +16,7 @@
 //! both crates and be covered by a round-trip test
 
 use base64::Engine;
-use chrono::{DateTime, Duration, Utc};
+use alice_ephemeris::time::Timestamp;
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 
@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 pub struct LicensePayload {
     pub tier: String,
     pub user_id: String,
-    pub issued_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub issued_at: Timestamp,
+    pub expires_at: Timestamp,
 }
 
 /// Mirrors [`text_to_print_core::license::LicenseKey`]
@@ -79,12 +79,12 @@ impl LicenseIssuer {
         user_id: &str,
         valid_days: i64,
     ) -> Result<LicenseKey, LicenseError> {
-        let now = Utc::now();
+        let now = crate::clock::now();
         let payload = LicensePayload {
             tier: tier.to_string(),
             user_id: user_id.to_string(),
             issued_at: now,
-            expires_at: now + Duration::days(valid_days),
+            expires_at: now.plus_days(valid_days),
         };
         let payload_bytes = serde_json::to_vec(&payload).map_err(LicenseError::Serialize)?;
         let signature = self.signing_key.sign(&payload_bytes);
@@ -100,12 +100,12 @@ impl LicenseIssuer {
         &self,
         tier: &str,
         user_id: &str,
-        expires_at: DateTime<Utc>,
+        expires_at: Timestamp,
     ) -> Result<LicenseKey, LicenseError> {
         let payload = LicensePayload {
             tier: tier.to_string(),
             user_id: user_id.to_string(),
-            issued_at: Utc::now(),
+            issued_at: crate::clock::now(),
             expires_at,
         };
         let payload_bytes = serde_json::to_vec(&payload).map_err(LicenseError::Serialize)?;
@@ -198,10 +198,10 @@ mod tests {
     #[test]
     fn issue_until_uses_explicit_expiry() {
         let issuer = LicenseIssuer::from_hex(TEST_SECRET_HEX).unwrap();
-        let expiry = Utc::now() + Duration::days(365);
+        let expiry = crate::clock::now().plus_days(365);
         let key = issuer.issue_until("Pro", "u1", expiry).unwrap();
         // Allow 1 second tolerance for clock movement between issue and assertion
-        let diff = (key.payload.expires_at - expiry).num_seconds().abs();
+        let diff = key.payload.expires_at.whole_seconds_since(expiry).abs();
         assert!(diff <= 1, "expires_at should match issue_until arg (diff {diff}s)");
     }
 

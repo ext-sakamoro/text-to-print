@@ -33,9 +33,9 @@ text-to-print-gallery-sign = { path = "../gallery-sign" }
 # existing `LicenseVerifier` on the desktop app (design B independent
 # implementation, no core crate wasm32 gymnastics)
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
-# Utc timestamps for LicensePayload / DB rows Need `wasmbind` for
-# `Utc::now()` to work under wasm32-unknown-unknown (js Date fallback)
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "wasmbind"] }
+# Timestamps for LicensePayload / DB rows (RFC 3339 serde); the clock is the
+# Workers runtime's `Date.now()` (see `clock::now`), the system clock in host tests
+alice-ephemeris = { git = "https://github.com/ext-sakamoro/ALICE-Ephemeris", branch = "main", version = "0.1", features = ["std", "serde"] }
 # License id + Stripe idempotency key generation `js` feature enables
 # wasm-friendly randomness (js Date + Math.random fallback via getrandom)
 uuid = { version = "1", features = ["v4", "js", "serde"] }

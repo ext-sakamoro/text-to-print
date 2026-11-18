@@ -11,7 +11,7 @@
 //! All other events are acknowledged 200 OK so Stripe stops retrying and we
 //! keep the dashboard clean
 
-use chrono::{DateTime, TimeZone, Utc};
+use alice_ephemeris::time::Timestamp;
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
@@ -492,7 +492,7 @@ async fn upsert_subscriber(
     price_id: &str,
     tier: &str,
     status: &str,
-    current_period_end: Option<&DateTime<Utc>>,
+    current_period_end: Option<&Timestamp>,
 ) -> Result<(), String> {
     let now_iso = worker::Date::now().to_string();
     let period_end_str = current_period_end.map(row_time).unwrap_or_default();
@@ -534,8 +534,8 @@ async fn store_license_once(
     customer_id: &str,
     license_key: &str,
     tier: &str,
-    issued_at: &DateTime<Utc>,
-    expires_at: &DateTime<Utc>,
+    issued_at: &Timestamp,
+    expires_at: &Timestamp,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
     db.prepare(INSERT_LICENSE_SQL)
@@ -567,20 +567,20 @@ async fn store_license_once(
 }
 
 /// The instant of a Stripe `current_period_end` (whole unix seconds); `None` out of range
-fn period_end_at(unix: i64) -> Option<DateTime<Utc>> {
-    Utc.timestamp_opt(unix, 0).single()
+fn period_end_at(unix: i64) -> Option<Timestamp> {
+    Timestamp::from_unix(unix, 0)
 }
 
 /// A licence issued for a subscription period runs 3 days past the period's end (Stripe retries
 /// a failed renewal within that window)
-fn licence_expiry(period_end: DateTime<Utc>) -> DateTime<Utc> {
-    period_end + chrono::Duration::days(3)
+fn licence_expiry(period_end: Timestamp) -> Timestamp {
+    period_end.plus_days(3)
 }
 
 /// The text a time is stored as in the D1 rows (`subscribers.current_period_end`,
 /// `licenses.issued_at` / `expires_at`): RFC 3339 with `+00:00`
-fn row_time(t: &DateTime<Utc>) -> String {
-    t.to_rfc3339()
+fn row_time(t: &Timestamp) -> String {
+    t.rfc3339().to_string()
 }
 
 #[cfg(test)]

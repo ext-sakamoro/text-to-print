@@ -7,8 +7,8 @@
 //!
 //! What this file pins:
 //!
-//! * `LicenseIssuer::issue(valid_days)`: `chrono::Duration::days` and `DateTime + Duration` panic for
-//!   an unrepresentable span (`i64::MAX` days, or just 100 million days) — it returns `Err` instead.
+//! * `LicenseIssuer::issue(valid_days)`: a span past the representable range (`i64::MAX` days, or
+//!   just 100 million days) returns `Err`, not a panic and not an expiry held at the end of time.
 //! * `Tier::effective_state_with_policy`: `expires_at + grace` overflowed for an extreme instant or a
 //!   negative grace; the deadline now saturates, checked against an independent `i128` reference.
 //! * License parsing (`from_base64`, `LicenseVerifier::new`, `verify`) and the text helpers of the
@@ -17,7 +17,7 @@
 //!   negative scale, a 1e30 size, an empty subtraction): the result may be an error or an empty
 //!   mesh, never a panic.
 
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use alice_ephemeris::time::Timestamp;
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use text_to_print_core::license::{LicenseIssuer, LicenseKey, LicenseVerifier};
@@ -65,7 +65,7 @@ impl Panics {
 fn issuing_a_license_with_an_unrepresentable_validity_is_an_error_not_a_panic() {
     let issuer = LicenseIssuer::generate();
     let mut p = Panics::default();
-    // `chrono` represents roughly +-262 143 years: 96 million days is the end of the range
+    // a timestamp holds roughly +-262 143 years: 96 million days is past the end of the range
     let unrepresentable = [
         i64::MAX,
         i64::MIN,
@@ -102,10 +102,13 @@ fn ordinary_validity_spans_still_issue_and_verify() {
         verifier
             .verify(&key)
             .unwrap_or_else(|e| panic!("{days} days must verify: {e}"));
-        let left = key.payload.expires_at - key.payload.issued_at;
+        let left = key
+            .payload
+            .expires_at
+            .whole_seconds_since(key.payload.issued_at);
         assert!(
-            (left - Duration::days(days)).num_seconds().abs() <= 1,
-            "{days} days: span {left}"
+            (left - days * 86_400).abs() <= 1,
+            "{days} days: span {left} s"
         );
     }
     // zero and negative spans are legal (an already-expired key, used by tests and revocation)
@@ -179,11 +182,17 @@ fn license_parsing_and_verification_never_panic_on_hostile_input() {
 
 // ───────────────────────── tier ─────────────────────────
 
-/// Independent reference: the grace deadline in milliseconds, saturated to chrono's range
+/// An instant in nanoseconds since 1970-01-01T00:00:00Z
+fn ns(t: Timestamp) -> i128 {
+    i128::from(t.unix_seconds()) * 1_000_000_000 + i128::from(t.subsec_nanos())
+}
+
+/// Independent reference: the grace deadline in nanoseconds, held at the ends of the
+/// representable range
 fn reference_state(
     tier: Tier,
-    expires: DateTime<Utc>,
-    now: DateTime<Utc>,
+    expires: Timestamp,
+    now: Timestamp,
     policy: RollbackPolicy,
 ) -> (&'static str, Option<i128>) {
     if now <= expires {
@@ -195,13 +204,10 @@ fn reference_state(
             let _ = tier;
             ("Active", None)
         }
-        RollbackPolicy::GracePeriod(d) => {
-            let lo = i128::from(DateTime::<Utc>::MIN_UTC.timestamp_millis());
-            let hi = i128::from(DateTime::<Utc>::MAX_UTC.timestamp_millis());
-            let deadline = (i128::from(expires.timestamp_millis())
-                + i128::from(d.num_milliseconds()))
-            .clamp(lo, hi);
-            if i128::from(now.timestamp_millis()) <= deadline || now <= expires {
+        RollbackPolicy::GracePeriod(secs) => {
+            let deadline = (ns(expires) + i128::from(secs) * 1_000_000_000)
+                .clamp(ns(Timestamp::MIN), ns(Timestamp::MAX));
+            if ns(now) <= deadline {
                 ("Grace", Some(deadline))
             } else {
                 ("RolledBack", None)
@@ -212,21 +218,22 @@ fn reference_state(
 
 #[test]
 fn the_tier_state_is_total_over_extreme_instants_and_grace_periods() {
-    let instants: Vec<DateTime<Utc>> = vec![
-        DateTime::<Utc>::MIN_UTC,
-        Utc.timestamp_opt(-1, 0).unwrap(),
-        Utc.timestamp_opt(0, 0).unwrap(),
-        Utc.with_ymd_and_hms(2026, 10, 2, 0, 0, 0).unwrap(),
-        DateTime::<Utc>::MAX_UTC,
+    let at = |secs| Timestamp::from_unix(secs, 0).unwrap();
+    let instants: Vec<Timestamp> = vec![
+        Timestamp::MIN,
+        at(-1),
+        at(0),
+        at(1_790_899_200), // 2026-10-02T00:00:00Z
+        Timestamp::MAX,
     ];
-    let graces = [
-        Duration::zero(),
-        Duration::days(-1),
-        Duration::days(14),
-        Duration::days(365 * 100_000),
-        Duration::MAX,
-        Duration::MIN,
-        Duration::seconds(i64::MAX / 1000),
+    let graces: [i64; 7] = [
+        0,
+        -86_400,
+        14 * 86_400,
+        365 * 100_000 * 86_400,
+        i64::MAX,
+        i64::MIN,
+        i64::MAX / 1000,
     ];
     let mut p = Panics::default();
     for &expires in &instants {
@@ -263,10 +270,10 @@ fn the_tier_state_is_total_over_extreme_instants_and_grace_periods() {
                     (TierState::Active(_), "Active") | (TierState::RolledBack, "RolledBack") => {}
                     (TierState::Grace { until, .. }, "Grace") => {
                         let want = deadline.expect("grace has a deadline");
-                        let got_ms = i128::from(until.timestamp_millis());
-                        assert!(
-                            (got_ms - want).abs() <= 1,
-                            "expires {expires} now {now} grace {grace}: until {until} ({got_ms} ms), want {want} ms"
+                        assert_eq!(
+                            ns(*until),
+                            want,
+                            "expires {expires} now {now} grace {grace} s: until {until}"
                         );
                     }
                     _ => panic!(

@@ -129,7 +129,8 @@ impl GalleryClient {
     /// Publish a Gallery post signs the canonical message with the
     /// supplied [`SigningKey`] and forwards to the Worker for validate +
     /// insert The `id` should be a fresh UUID v7 (`uuid::Uuid::now_v7()`)
-    /// The `created_at` should be `chrono::Utc::now().to_rfc3339()`
+    /// The `created_at` is the RFC 3339 UTC time with `Z` and 3 fraction
+    /// digits (`Timestamp::rfc3339_millis_z`)
     ///
     /// # Errors
     /// - Network or non-2xx status
