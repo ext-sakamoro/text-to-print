@@ -198,22 +198,19 @@ impl DfamSummary {
 }
 
 /// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
-/// DfAM の設定 限界は印刷可能性の方針の表 (`data/printability_policy.json`) から渡す
-/// (表が 1 つの出所、ALICE-Bamboo の FDM の値と同じことは `violation` の試験が確かめる)
+/// 壁・穴・突起の限界は選んだ printer profile ([`crate::printer::selected`]) から依存の
+/// 印刷可能性の Law で導く (印刷可能性の方針の表 `violation` も同じ限界を使う)
 fn dfam_config() -> DfamConfig {
-    use crate::violation::{Kind, policy};
     let mut cfg = DfamConfig::for_process(Process::Fdm);
-    let p = policy();
-    if let Some(v) = p.limit(Kind::WallThin) {
-        cfg.limits.min_unsupported_wall_mm = v;
-    }
-    if let Some(v) = p.limit(Kind::HoleTooSmall) {
-        cfg.limits.min_hole_diameter_mm = v;
-    }
-    if let Some(v) = p.limit(Kind::FeatureTooSmall) {
-        cfg.limits.min_positive_feature_mm = v;
-    }
+    cfg.limits = crate::violation::limits_of(&crate::printer::selected())
+        .expect("the selected printer profile derives printability limits");
     cfg
+}
+
+/// [`dfam_config`] の限界 (`violation` の試験が方針の表と同じことを確かめる)
+#[cfg(test)]
+pub(crate) fn dfam_limits_for_tests() -> alice_bamboo::dfam::ProcessLimits {
+    dfam_config().limits
 }
 
 /// 三値判定の結果ラベル (合格 / 違反 / 未決定)
@@ -1522,7 +1519,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
         .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
     let slice = alice_bamboo::slice_sdf(
         &sdf,
-        &alice_bamboo::SlicerConfig::bambu(),
+        &crate::printer::selected(),
         alice_bamboo::GcodeFlavor::Marlin,
     );
     std::fs::write(output_path, &slice.gcode)

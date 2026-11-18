@@ -12,6 +12,7 @@
 //! ([`remeasure`]) 標本が入隅で床と壁の両方に近い点を読むと実際より狭く出るので、
 //! 測り直した値が限界を満たすなら「測り方による誤差の可能性」として情報に下げる
 
+use alice_bamboo::dfam::ProcessLimits;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -323,17 +324,40 @@ impl Policy {
     /// 種類の限界 \[mm\]
     #[must_use]
     pub fn limit(&self, kind: Kind) -> Option<f32> {
-        self.kind(kind).limit_mm
+        self.limit_for(kind, selected_limits())
+    }
+
+    /// The limit of `kind` for the FDM limits `limits` (of a printer profile, [`limits_of`]): walls,
+    /// holes and features come from those limits, the other kinds from the table
+    #[must_use]
+    pub fn limit_for(&self, kind: Kind, limits: &ProcessLimits) -> Option<f32> {
+        match kind {
+            Kind::WallThin | Kind::WallTooThinEverywhere => Some(limits.min_unsupported_wall_mm),
+            Kind::HoleTooSmall => Some(limits.min_hole_diameter_mm),
+            Kind::FeatureTooSmall => Some(limits.min_positive_feature_mm),
+            _ => self.kind(kind).limit_mm,
+        }
     }
 
     /// 測定値から重大度を決める (`by_band` は限界の `band` 以内を advisory にする)
     #[must_use]
     pub fn severity(&self, kind: Kind, measured: Option<f32>) -> Severity {
+        self.severity_for(kind, measured, selected_limits())
+    }
+
+    /// [`Policy::severity`] against the FDM limits `limits` of a printer profile
+    #[must_use]
+    pub fn severity_for(
+        &self,
+        kind: Kind,
+        measured: Option<f32>,
+        limits: &ProcessLimits,
+    ) -> Severity {
         match self.kind(kind).severity.as_str() {
             "blocking" => Severity::Blocking,
             "advisory" => Severity::Advisory,
             "info" => Severity::Info,
-            _ => match (measured, self.limit(kind)) {
+            _ => match (measured, self.limit_for(kind, limits)) {
                 (Some(m), Some(l)) if m >= l => Severity::Info,
                 (Some(m), Some(l)) if m >= l * (1.0 - self.band.value) => Severity::Advisory,
                 _ => Severity::Blocking,
@@ -363,6 +387,26 @@ const ANNOTATIONS_JSON: &str = include_str!("../data/template_annotations.json")
 ///
 /// # Panics
 /// 同梱の表が読めない時 (crate に入れる data の誤り、試験が先に止める)
+/// The FDM limits of the printer profile `profile`, from the printability Law (the dependency's) (walls
+/// 2 lines blocking and the perimeter count advisory, holes 5 and features 2 nozzle widths)
+///
+/// # Errors
+/// A profile the Law cannot derive limits from (a non-positive nozzle, no perimeters)
+pub fn limits_of(
+    profile: &alice_bamboo::SlicerConfig,
+) -> Result<ProcessLimits, alice_bamboo::printability::ProfileError> {
+    ProcessLimits::fdm(profile)
+}
+
+/// The limits of the selected printer profile ([`crate::printer::selected`])
+fn selected_limits() -> &'static ProcessLimits {
+    static L: OnceLock<ProcessLimits> = OnceLock::new();
+    L.get_or_init(|| {
+        limits_of(&crate::printer::selected())
+            .expect("the selected printer profile derives printability limits")
+    })
+}
+
 pub fn policy() -> &'static Policy {
     static P: OnceLock<Policy> = OnceLock::new();
     P.get_or_init(|| serde_json::from_str(POLICY_JSON).expect("data/printability_policy.json"))
@@ -682,7 +726,7 @@ mod tests {
             );
             if pk.severity == "by_band" {
                 assert!(
-                    pk.limit_mm.is_some(),
+                    policy().limit(kind).is_some(),
                     "{} は by_band なのに limit が無い",
                     kind.key()
                 );
@@ -735,11 +779,24 @@ mod tests {
     #[test]
     fn band_splits_blocking_advisory_info() {
         let p = policy();
-        // limit 1.6、band 10% ⇒ 1.44 未満は blocking、1.44 以上 1.6 未満は advisory
+        // 限界 l (選んだ printer profile から)、band 10% ⇒ 0.9 l 未満は blocking、0.9 l 以上 l 未満は
+        // advisory、l 以上は info (0.4mm nozzle 3 周回で l = 1.2: 1.08 が境目)
+        let l = p.limit(Kind::WallThin).expect("wall limit");
+        let edge = l * (1.0 - p.band.value);
         assert_eq!(p.severity(Kind::WallThin, Some(0.04)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.43)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.45)), Severity::Advisory);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.6)), Severity::Info);
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(edge - 0.01)),
+            Severity::Blocking
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(edge + 0.01)),
+            Severity::Advisory
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(l - 0.01)),
+            Severity::Advisory
+        );
+        assert_eq!(p.severity(Kind::WallThin, Some(l)), Severity::Info);
         assert_eq!(p.severity(Kind::WallThin, None), Severity::Blocking);
         assert_eq!(p.severity(Kind::WarpHigh, None), Severity::Advisory);
         assert_eq!(p.severity(Kind::WarpCritical, None), Severity::Blocking);
@@ -750,22 +807,68 @@ mod tests {
         );
     }
 
-    /// 方針の表の限界が ALICE-Bamboo の FDM の値と同じ (違えば表の側を見直す)
+    /// oracle: 依存の印刷可能性の Law の閉形式 (壁 = 周回数 x nozzle、穴 = 5 x nozzle、突起 =
+    /// 2 x nozzle) を nozzle 0.4 / 0.6 (3 周回) で書いた値 選んだ profile (Bambu) は 0.4
     #[test]
-    fn policy_limits_match_the_bamboo_fdm_row() {
-        let l =
-            alice_bamboo::dfam::DfamConfig::for_process(alice_bamboo::dfam::Process::Fdm).limits;
+    fn the_limits_follow_the_printer_profile() {
         let p = policy();
-        assert_eq!(p.limit(Kind::WallThin), Some(l.min_unsupported_wall_mm));
+        for (nozzle, wall, hole, feature) in
+            [(0.4_f32, 1.2_f32, 2.0_f32, 0.8_f32), (0.6, 1.8, 3.0, 1.2)]
+        {
+            let profile = alice_bamboo::SlicerConfig {
+                nozzle_diameter: nozzle,
+                ..alice_bamboo::SlicerConfig::bambu()
+            };
+            let l = limits_of(&profile).expect("profile");
+            let close = |got: Option<f32>, want: f32| got.is_some_and(|g| (g - want).abs() < 1e-5);
+            assert!(
+                close(p.limit_for(Kind::WallThin, &l), wall),
+                "{nozzle}: wall"
+            );
+            assert!(
+                close(p.limit_for(Kind::WallTooThinEverywhere, &l), wall),
+                "{nozzle}: wall everywhere"
+            );
+            assert!(
+                close(p.limit_for(Kind::HoleTooSmall, &l), hole),
+                "{nozzle}: hole"
+            );
+            assert!(
+                close(p.limit_for(Kind::FeatureTooSmall, &l), feature),
+                "{nozzle}: feature"
+            );
+            // the band split moves with the limit: just under the limit is advisory, at it info
+            assert_eq!(
+                p.severity_for(Kind::WallThin, Some(wall - 0.01), &l),
+                Severity::Advisory
+            );
+            assert_eq!(
+                p.severity_for(Kind::WallThin, Some(wall), &l),
+                Severity::Info
+            );
+        }
+        // the selected profile is the 0.4 mm one, and the DfAM check gets the same limits
+        assert!((p.limit(Kind::WallThin).unwrap() - 1.2).abs() < 1e-5);
+        let d = crate::pipeline::dfam_limits_for_tests();
+        assert_eq!(Some(d.min_unsupported_wall_mm), p.limit(Kind::WallThin));
+        assert_eq!(Some(d.min_hole_diameter_mm), p.limit(Kind::HoleTooSmall));
         assert_eq!(
-            p.limit(Kind::WallTooThinEverywhere),
-            Some(l.min_unsupported_wall_mm)
+            Some(d.min_positive_feature_mm),
+            p.limit(Kind::FeatureTooSmall)
         );
-        assert_eq!(p.limit(Kind::HoleTooSmall), Some(l.min_hole_diameter_mm));
-        assert_eq!(
-            p.limit(Kind::FeatureTooSmall),
-            Some(l.min_positive_feature_mm)
-        );
+        // the table no longer copies the profile's numbers
+        for kind in [
+            Kind::WallThin,
+            Kind::WallTooThinEverywhere,
+            Kind::HoleTooSmall,
+            Kind::FeatureTooSmall,
+        ] {
+            assert!(
+                p.kind(kind).limit_mm.is_none(),
+                "{} copies a limit",
+                kind.key()
+            );
+        }
     }
 
     fn sdf(lol: &str) -> SdfNode {

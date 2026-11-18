@@ -16,10 +16,10 @@
     "source": "誤差扱いに下げる前に、標本の周り (半径 = limit × この値) の同じ側 (隙間なら空隙、突起なら材料) の点を全て測り直し、全てが limit 以上の時だけ下げる (標本の点 1 つだけで判断すると、厚い部分との境の近くの標本が本物の薄い部分を下げてしまう) 標本から tolerance 以内の点は除く"
   },
   "kinds": {
-    "wall_thin": { "limit_mm": 1.6, "severity": "by_band", "source": "FDM 0.4mm nozzle の最小の自立壁 (Hubs / Formlabs / HP / EOS design guides + ISO/ASTM 52910 §6.5/§6.7 の保守的な既定値、ALICE-Bamboo DfamConfig::for_process(Fdm) の min_unsupported_wall_mm)" },
-    "wall_too_thin_everywhere": { "limit_mm": 1.6, "severity": "blocking", "source": "wall_thin と同じ限界 (erosion の証明: どこにも限界の厚さが無い)" },
-    "hole_too_small": { "limit_mm": 2.0, "severity": "by_band", "source": "FDM の最小の穴径 (同上の design guides、DfamConfig の min_hole_diameter_mm)" },
-    "feature_too_small": { "limit_mm": 0.8, "severity": "by_band", "source": "FDM の最小の突起 (同上の design guides、DfamConfig の min_positive_feature_mm)" },
+    "wall_thin": { "severity": "by_band", "source": "限界は選んだ printer profile から 依存の印刷可能性の Law で導く (支持の無い壁 = 周回数 x nozzle、0.4mm 3 周回で 1.2mm、ProcessLimits::fdm の min_unsupported_wall_mm) 前は FDM 0.4mm nozzle の最小の自立壁 (Hubs / Formlabs / HP / EOS design guides + ISO/ASTM 52910 §6.5/§6.7 の保守的な既定値)" },
+    "wall_too_thin_everywhere": { "severity": "blocking", "source": "wall_thin と同じ限界 (printer profile から) (erosion の証明: どこにも限界の厚さが無い)" },
+    "hole_too_small": { "severity": "by_band", "source": "限界は printer profile から (5 x nozzle、0.4mm で 2.0mm、min_hole_diameter_mm) 前は FDM の最小の穴径 (同上の design guides、DfamConfig の min_hole_diameter_mm)" },
+    "feature_too_small": { "severity": "by_band", "source": "限界は printer profile から (2 x nozzle、0.4mm で 0.8mm、min_positive_feature_mm) 前は FDM の最小の突起 (同上の design guides、DfamConfig の min_positive_feature_mm)" },
     "disconnected": { "severity": "blocking", "source": "連結性の証明 (2 点間に道が無いことの証明) 造形物が 2 つ以上に分かれる" },
     "warp_critical": { "severity": "blocking", "source": "alice-physics の反りの危険度 Critical (score ≥ 0.75)" },
     "warp_high": { "severity": "advisory", "ours": true, "source": "反りの危険度 High (0.5 ≤ score < 0.75) ブリム・ベッドの温度・囲いで対処できることが多いので advisory にする" },

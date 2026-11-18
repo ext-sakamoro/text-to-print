@@ -83,9 +83,51 @@ impl SafetyViolationKind {
         }
     }
 
-    /// Per-violation remediation directive for the LLM
+    /// Per-violation remediation directive for the LLM, with the limits of the selected printer
+    /// profile (`text_to_print_core::printer::selected`)
     #[must_use]
-    pub const fn fix_directive(self) -> &'static str {
+    pub fn fix_directive(self) -> String {
+        use text_to_print_core::violation::{Kind, policy};
+        let p = policy();
+        let mm = |k| p.limit(k).map_or_else(String::new, format_mm);
+        self.directive_with(
+            &mm(Kind::WallThin),
+            &mm(Kind::FeatureTooSmall),
+            &mm(Kind::HoleTooSmall),
+        )
+    }
+
+    /// [`Self::fix_directive`] with the FDM limits `limits` of a printer profile
+    #[must_use]
+    pub fn fix_directive_for(self, limits: &text_to_print_core::printer::ProcessLimits) -> String {
+        self.directive_with(
+            &format_mm(limits.min_unsupported_wall_mm),
+            &format_mm(limits.min_positive_feature_mm),
+            &format_mm(limits.min_hole_diameter_mm),
+        )
+    }
+
+    fn directive_with(self, wall: &str, feature: &str, hole: &str) -> String {
+        match self {
+            Self::WallTooThin => format!(
+                "Every wall must be at least {wall} mm thick for this printer (a little thicker \
+                 is safer) Increase wall / plate thickness and the shell of any onion() or \
+                 hollow shape"
+            ),
+            Self::FeatureTooSmall => format!(
+                "Pins, ribs, and text must be at least {feature} mm wide for this printer \
+                 Enlarge the smallest feature or remove it"
+            ),
+            Self::HoleTooSmall => format!(
+                "Holes and slots must be at least {hole} mm in diameter for this printer (a \
+                 little larger prints cleaner) Enlarge the cylinder / box used for the cutout"
+            ),
+            other => other.fixed_directive().to_string(),
+        }
+    }
+
+    /// The directives that quote no limit of the printer profile
+    const fn fixed_directive(self) -> &'static str {
         match self {
             Self::WarpCritical | Self::WarpHigh => {
                 "Reduce the maximum XY footprint (under 200 mm on the long side) or add fillets \
@@ -114,18 +156,8 @@ impl SafetyViolationKind {
                  coincident faces, and subtract() that leaves paper-thin slivers; overlap \
                  solids by at least 1 mm in union() and make cutouts punch fully through"
             }
-            Self::WallTooThin => {
-                "Every wall must be at least 1.6 mm thick for FDM (2 mm is safer) Increase \
-                 wall / plate thickness and the shell of any onion() or hollow shape"
-            }
-            Self::FeatureTooSmall => {
-                "Pins, ribs, and text must be at least 0.8 mm wide for FDM Enlarge the \
-                 smallest feature or remove it"
-            }
-            Self::HoleTooSmall => {
-                "Holes and slots must be at least 2 mm in diameter for FDM (3 mm prints \
-                 cleaner) Enlarge the cylinder / box used for the cutout"
-            }
+            // these three quote the printer profile's limits (`directive_with`)
+            Self::WallTooThin | Self::FeatureTooSmall | Self::HoleTooSmall => "",
             Self::BridgeTooLong => {
                 "Unsupported horizontal spans must be under 10 mm for FDM Add a chamfer / \
                  arch under the span, split it with a rib, or thicken the supporting legs so \
@@ -239,11 +271,18 @@ pub fn fix_prompt_for_violations(kinds: &[SafetyViolationKind]) -> String {
         out.push_str("  - ");
         out.push_str(k.label());
         out.push_str(": ");
-        out.push_str(k.fix_directive());
+        out.push_str(&k.fix_directive());
         out.push('\n');
     }
     out.push_str("Please generate a revised LOL DSL that resolves all of the above.");
     out
+}
+
+/// A length in mm as the directives write it: up to 2 decimals, trailing zeros dropped (`1.2`, `2`)
+fn format_mm(v: f32) -> String {
+    let s = format!("{v:.2}");
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    s.to_string()
 }
 
 /// Convenience: build a fix prompt directly from a set of `SafetyReport`
@@ -441,7 +480,47 @@ mod tests {
             "DfAM wall thickness: p05 wall 0.9 mm below 1.60 mm".to_string(),
             "DfAM bridge: longest unsupported downward span 32.0 mm exceeds 10.0 mm".to_string(),
         ]);
-        assert!(out.contains("1.6 mm"), "{out}");
+        // the directive quotes the selected profile's wall limit (0.4 mm nozzle, 3 perimeters: 1.2 mm)
+        assert!(out.contains("at least 1.2 mm thick"), "{out}");
         assert!(out.contains("under 10 mm"), "{out}");
+    }
+
+    /// oracle: the printability Law (the dependency's) in closed form (wall = perimeters x nozzle, hole =
+    /// 5 x nozzle, feature = 2 x nozzle) for 0.4 and 0.6 mm nozzles with 3 perimeters
+    #[test]
+    fn the_directives_quote_the_printer_profile_limits() {
+        use text_to_print_core::printer::SlicerConfig;
+        for (nozzle, wall, hole, feature) in
+            [(0.4_f32, "1.2", "2", "0.8"), (0.6, "1.8", "3", "1.2")]
+        {
+            let profile = SlicerConfig {
+                nozzle_diameter: nozzle,
+                ..SlicerConfig::bambu()
+            };
+            let l = text_to_print_core::violation::limits_of(&profile).expect("profile");
+            let w = SafetyViolationKind::WallTooThin.fix_directive_for(&l);
+            let f = SafetyViolationKind::FeatureTooSmall.fix_directive_for(&l);
+            let h = SafetyViolationKind::HoleTooSmall.fix_directive_for(&l);
+            assert!(
+                w.contains(&format!("at least {wall} mm thick")),
+                "{nozzle}: {w}"
+            );
+            assert!(
+                f.contains(&format!("at least {feature} mm wide")),
+                "{nozzle}: {f}"
+            );
+            assert!(
+                h.contains(&format!("at least {hole} mm in diameter")),
+                "{nozzle}: {h}"
+            );
+        }
+        // the selected profile is the 0.4 mm one
+        assert!(
+            SafetyViolationKind::WallTooThin
+                .fix_directive()
+                .contains("at least 1.2 mm thick")
+        );
+        assert_eq!(format_mm(2.0), "2");
+        assert_eq!(format_mm(1.25), "1.25");
     }
 }
