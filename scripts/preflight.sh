@@ -28,7 +28,7 @@ has_toolchain() { rustup toolchain list | grep -q "^$1"; }
 
 need actionlint "brew install actionlint"
 need cargo-audit "cargo install cargo-audit --locked"
-need cargo-deny "cargo install cargo-deny --locked"
+need cargo-deny "cargo install cargo-deny --locked --version 0.22.0"
 need cargo-machete "cargo install cargo-machete --locked"
 
 step "ci.yml / clippy-test-doc: cargo fmt --check"
@@ -89,6 +89,8 @@ python3 scripts/test_advisory_hold_guard.py
 step "security-audit.yml / deny: Every Cargo.lock (the holds, then cargo deny check all)"
 (
   set -euo pipefail
+  test "$(cargo deny --version)" = "cargo-deny 0.22.0" \
+    || { echo "cargo-deny is $(cargo deny --version), the pinned version is 0.22.0"; exit 1; }
   want=$(git ls-files '*Cargo.lock' | wc -l)
   n=0
   for lock in $(git ls-files '*Cargo.lock'); do

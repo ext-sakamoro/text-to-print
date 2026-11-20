@@ -96,8 +96,10 @@ jobs:
         with:
           workspaces: text-to-print
 
+      # the version is pinned: a new cargo-deny can change what a check reports (0.22.0 made
+      # advisories.unmaintained default to workspace crates only); the deny step checks it
       - name: Install cargo-deny
-        run: cargo install --locked cargo-deny
+        run: cargo install --locked cargo-deny --version 0.22.0
 
       # the private dependencies over ssh with their read-only deploy keys, in one fetch-only step;
       # the keys are gone (checked) before any build step
@@ -131,6 +133,8 @@ jobs:
       - name: Every Cargo.lock (the holds, then cargo deny check all)
         run: |
           set -euo pipefail
+          test "$(cargo deny --version)" = "cargo-deny 0.22.0" \
+            || { echo "cargo-deny is $(cargo deny --version), the pinned version is 0.22.0"; exit 1; }
           want=$(git ls-files '*Cargo.lock' | wc -l)
           n=0
           for lock in $(git ls-files '*Cargo.lock'); do

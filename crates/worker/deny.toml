@@ -13,6 +13,9 @@ feature-depth = 1
 
 [advisories]
 unused-ignored-advisory = "deny"
+# 保守終了 (unmaintained) の勧告は依存の木の全部で見る (cargo-deny 0.22.0 から既定が workspace の crate だけになった、
+# 推移的に引く crate の保守終了も ignore と保留で管理しているので all を明示する)
+unmaintained = "all"
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 version = 2
