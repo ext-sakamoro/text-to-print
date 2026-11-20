@@ -13,6 +13,7 @@
 //! unconditionally
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// Discrete safety violation categories surfaced by the pipeline
 ///
@@ -84,9 +85,14 @@ impl SafetyViolationKind {
     }
 
     /// Per-violation remediation directive for the LLM
+    ///
+    /// The wall / feature / hole sizes are the limits the printability Law derives from the
+    /// printing profile ([`text_to_print_core::violation::printer_limits`]), the same values the
+    /// safety check judges by
     #[must_use]
-    pub const fn fix_directive(self) -> &'static str {
-        match self {
+    pub fn fix_directive(self) -> Cow<'static, str> {
+        let l = text_to_print_core::violation::printer_limits();
+        Cow::Borrowed(match self {
             Self::WarpCritical | Self::WarpHigh => {
                 "Reduce the maximum XY footprint (under 200 mm on the long side) or add fillets \
                  / brims to redistribute cool-down stress"
@@ -115,16 +121,25 @@ impl SafetyViolationKind {
                  solids by at least 1 mm in union() and make cutouts punch fully through"
             }
             Self::WallTooThin => {
-                "Every wall must be at least 1.6 mm thick for FDM (2 mm is safer) Increase \
-                 wall / plate thickness and the shell of any onion() or hollow shape"
+                return Cow::Owned(format!(
+                    "Every wall must be at least {} mm thick for FDM (2 mm is safer) Increase \
+                     wall / plate thickness and the shell of any onion() or hollow shape",
+                    mm(l.wall_advisory_mm)
+                ));
             }
             Self::FeatureTooSmall => {
-                "Pins, ribs, and text must be at least 0.8 mm wide for FDM Enlarge the \
-                 smallest feature or remove it"
+                return Cow::Owned(format!(
+                    "Pins, ribs, and text must be at least {} mm wide for FDM Enlarge the \
+                     smallest feature or remove it",
+                    mm(l.feature_min_mm)
+                ));
             }
             Self::HoleTooSmall => {
-                "Holes and slots must be at least 2 mm in diameter for FDM (3 mm prints \
-                 cleaner) Enlarge the cylinder / box used for the cutout"
+                return Cow::Owned(format!(
+                    "Holes and slots must be at least {} mm in diameter for FDM (3 mm prints \
+                     cleaner) Enlarge the cylinder / box used for the cutout",
+                    mm(l.hole_min_mm)
+                ));
             }
             Self::BridgeTooLong => {
                 "Unsupported horizontal spans must be under 10 mm for FDM Add a chamfer / \
@@ -146,7 +161,7 @@ impl SafetyViolationKind {
                  - Match every ( with exactly one ) — count them before closing\n\
                  - Example (stand with cable hole): subtract(rotate(0, 0, 65, box3d(40, 30, 20)), translate(0, 0, -20, cylinder(5, 20)))"
             }
-        }
+        })
     }
 
     /// Attempt to infer the violation kind from an existing
@@ -239,7 +254,7 @@ pub fn fix_prompt_for_violations(kinds: &[SafetyViolationKind]) -> String {
         out.push_str("  - ");
         out.push_str(k.label());
         out.push_str(": ");
-        out.push_str(k.fix_directive());
+        out.push_str(&k.fix_directive());
         out.push('\n');
     }
     out.push_str("Please generate a revised LOL DSL that resolves all of the above.");
@@ -258,6 +273,13 @@ pub fn fix_prompt_from_messages(messages: &[String]) -> String {
         .filter_map(|m| SafetyViolationKind::from_message(m))
         .collect();
     fix_prompt_for_violations(&kinds)
+}
+
+/// A limit in mm as the prompt prints it (one decimal, a whole number without ".0")
+fn mm(v: f32) -> String {
+    let s = format!("{v:.1}");
+    s.strip_suffix(".0")
+        .map_or_else(|| s.clone(), str::to_string)
 }
 
 #[cfg(test)]
@@ -441,7 +463,8 @@ mod tests {
             "DfAM wall thickness: p05 wall 0.9 mm below 1.60 mm".to_string(),
             "DfAM bridge: longest unsupported downward span 32.0 mm exceeds 10.0 mm".to_string(),
         ]);
-        assert!(out.contains("1.6 mm"), "{out}");
+        let wall = text_to_print_core::violation::printer_limits().wall_advisory_mm;
+        assert!(out.contains(&format!("at least {} mm", mm(wall))), "{out}");
         assert!(out.contains("under 10 mm"), "{out}");
     }
 }
