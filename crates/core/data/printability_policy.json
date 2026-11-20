@@ -1,10 +1,5 @@
 {
-  "comment": "印刷可能性の判定の方針 (表 1 つ) 各項目の limit と出所、重大度の決め方 limit は core の検査 (DfAM の限界 / 肉厚の証明) にもこの表から渡す `ours` の付いた値は設計の指針の値ではなく、この製品で選んだ値",
-  "band": {
-    "value": 0.10,
-    "ours": true,
-    "source": "限界から 10% 以内の測定値は advisory にする (測定の誤差と、限界の近くでも多くの場合は印刷できることを考えた選択)"
-  },
+  "comment": "印刷可能性の判定の方針 (表 1 つ) 各項目の limit と出所、重大度の決め方 限界と重大度の帯は印刷に使う printer profile から `alice_bamboo` の印刷可能性の Law が導き (この表に数値を書かない)、core の検査 (DfAM の限界 / 肉厚の証明) にも同じ値を渡す `ours` の付いた値は設計の指針の値ではなく、この製品で選んだ値",
   "discriminator_tolerance_mm": {
     "value": 0.1,
     "ours": true,
@@ -16,10 +11,10 @@
     "source": "誤差扱いに下げる前に、標本の周り (半径 = limit × この値) の同じ側 (隙間なら空隙、突起なら材料) の点を全て測り直し、全てが limit 以上の時だけ下げる (標本の点 1 つだけで判断すると、厚い部分との境の近くの標本が本物の薄い部分を下げてしまう) 標本から tolerance 以内の点は除く"
   },
   "kinds": {
-    "wall_thin": { "limit_mm": 1.6, "severity": "by_band", "source": "FDM 0.4mm nozzle の最小の自立壁 (Hubs / Formlabs / HP / EOS design guides + ISO/ASTM 52910 §6.5/§6.7 の保守的な既定値、ALICE-Bamboo DfamConfig::for_process(Fdm) の min_unsupported_wall_mm)" },
-    "wall_too_thin_everywhere": { "limit_mm": 1.6, "severity": "blocking", "source": "wall_thin と同じ限界 (erosion の証明: どこにも限界の厚さが無い)" },
-    "hole_too_small": { "limit_mm": 2.0, "severity": "by_band", "source": "FDM の最小の穴径 (同上の design guides、DfamConfig の min_hole_diameter_mm)" },
-    "feature_too_small": { "limit_mm": 0.8, "severity": "by_band", "source": "FDM の最小の突起 (同上の design guides、DfamConfig の min_positive_feature_mm)" },
+    "wall_thin": { "limit": "wall", "severity": "law", "source": "印刷に使う printer profile (alice_bamboo::SlicerConfig::bambu) から `alice_bamboo` の印刷可能性の Law が導く壁の限界 (周回数 × nozzle 径 未満は advisory、2 本の線 = 2 × nozzle 径 未満は blocking)" },
+    "wall_too_thin_everywhere": { "limit": "wall", "severity": "blocking", "source": "wall_thin と同じ限界 (erosion の証明: どこにも限界の厚さが無い)" },
+    "hole_too_small": { "limit": "hole", "severity": "law", "source": "同じ profile から Law が導く最小の穴径 (5 × nozzle 径、限界の band 以内は advisory)" },
+    "feature_too_small": { "limit": "feature", "severity": "law", "source": "同じ profile から Law が導く最小の突起 (2 × nozzle 径、限界の band 以内は advisory)" },
     "disconnected": { "severity": "blocking", "source": "連結性の証明 (2 点間に道が無いことの証明) 造形物が 2 つ以上に分かれる" },
     "warp_critical": { "severity": "blocking", "source": "alice-physics の反りの危険度 Critical (score ≥ 0.75)" },
     "warp_high": { "severity": "advisory", "ours": true, "source": "反りの危険度 High (0.5 ≤ score < 0.75) ブリム・ベッドの温度・囲いで対処できることが多いので advisory にする" },
