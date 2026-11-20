@@ -30,7 +30,6 @@ ignore = [
     # or replacement. Tracked upstream but not blocking release.
 
     "RUSTSEC-2024-0436",  # paste v1.0       unmaintained, via metal → wgpu-hal 24 (GPU 必須)
-    "RUSTSEC-2025-0141",  # bincode v1.3     unmaintained, via alice-sdf → alice-bamboo
     "RUSTSEC-2026-0192",  # ttf-parser v0.25 unmaintained, via egui / font stack
     "RUSTSEC-2026-0186",  # memmap2 v0.9     unsound, via alice-llm (mmap GGUF pattern)
     "RUSTSEC-2026-0190",  # anyhow v1.0.104  unsound Error::downcast_mut, wait for 1.0.105+

@@ -1,0 +1,135 @@
+name: Template gates
+
+# 同梱 template 116 件の 2 つの全件試験 (release build、各 `#[ignore]`):
+#   * crates/core/tests/safety_report.rs  strings_are_unchanged_for_every_template
+#     (検査の文字列が fixture と同じ bytes、LLM の修正の指示はこの文字列で分類する)
+#   * crates/core/tests/template_one_piece.rs  every_template_is_one_piece
+# 以前はどの CI も走らせておらず、fixture が main の出力と 8 件食い違ったまま残っていた
+# 各試験がちょうど 1 件走って通ったことを数える (0 件は失敗)
+
+on:
+  push:
+    # no paths here: a branch created at a SHA another ref already has gets an empty
+    # diff from GitHub's filter and the run is skipped; the changes job below compares
+    # with merge-base(origin/main) instead (patterns: .github/paths/template-gates.txt)
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/core/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - '.github/workflows/template-gates.yml'
+      - '.github/actions/fetch-private-deps/**'
+      - 'scripts/changed_paths.py'
+      - '.github/paths/template-gates.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # which files changed: a new or force-pushed branch is compared with merge-base(origin/main),
+  # another push with before..after, a pull request with base...head; manual runs always run;
+  # any error runs (fail-closed) — scripts/changed_paths.py
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+          CREATED: ${{ github.event.created }}
+          FORCED: ${{ github.event.forced }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python3 scripts/changed_paths.py decide --event "$EVENT"
+          --before "$BEFORE" --after "$AFTER" --created "$CREATED" --forced "$FORCED"
+          --base "$PR_BASE" --head "$PR_HEAD"
+          --patterns-file .github/paths/template-gates.txt
+
+  templates:
+    name: Templates (${{ matrix.target }})
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # flat keys (an include list): the CI evidence check expands matrix.<key>, not nested objects
+      matrix:
+        include:
+          - target: safety_report
+            test: strings_are_unchanged_for_every_template
+          - target: template_one_piece
+            test: every_template_is_one_piece
+    defaults:
+      run:
+        working-directory: text-to-print
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: text-to-print
+      - uses: dtolnay/rust-toolchain@stable
+
+      # the private dependencies over ssh with their read-only deploy keys, in one fetch-only step;
+      # the keys are gone (checked) before any build step
+      - name: Fetch the dependencies (private ones with their deploy keys)
+        uses: ./text-to-print/.github/actions/fetch-private-deps
+        with:
+          repos: ALICE-Bamboo ALICE-Print
+          key-1: ${{ secrets.ALICE_DEPKEY_BAMBOO }}
+          key-2: ${{ secrets.ALICE_DEPKEY_PRINT }}
+
+      # text-to-print-core links keyring (libdbus-sys) on Linux
+      - name: Install libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
+      # exactly the one named test runs and passes (a renamed or removed test runs 0 and fails)
+      - name: cargo test --release (${{ matrix.test }}, counted)
+        env:
+          TARGET: ${{ matrix.target }}
+          NAME: ${{ matrix.test }}
+        run: |
+          set -o pipefail
+          cargo test --release --locked -p text-to-print-core --test "$TARGET" -- \
+            --ignored --exact "$NAME" 2>&1 | tee test.log
+          ran=$(grep -cE "^test $NAME \.\.\. ok$" test.log || true)
+          summary=$(grep -cE "^test result: ok\. 1 passed; 0 failed" test.log || true)
+          echo "ran=$ran summary=$summary"
+          if [ "$ran" != 1 ] || [ "$summary" != 1 ]; then
+            echo "::error::$TARGET::$NAME did not run exactly once and pass (ran=$ran)"
+            exit 1
+          fi
+
+  # red when the changes job said run and a job was skipped, cancelled or failed
+  gate:
+    name: Gate
+    if: always()
+    needs: [changes, templates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/changed_paths.py gate --needs-json "$NEEDS"

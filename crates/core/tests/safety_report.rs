@@ -1,11 +1,12 @@
 //! 構造で返す安全性の検査 (`pipeline::safety_report`) の試験
 //!
 //! * 文字列 (`safety_check_lol`) が構造化の前と同じ bytes であること: LLM の修正の指示は
-//!   この文字列で分類するので、変わると retry loop の振る舞いが変わる 期待値は構造化の前の
-//!   core (main a39e48c) で同梱 template 116 件を検査した結果 (`fixtures/safety_messages_templates.json`)
+//!   この文字列で分類するので、変わると retry loop の振る舞いが変わる 期待値は同梱 template 116 件を
+//!   検査した結果 (`fixtures/safety_messages_templates.json`、ALICE の lock を上げた時に作り直し、
+//!   template ごとの差は CHANGELOG に書く)
 //!   通常の試験は速い数件、全件は `--release -- --ignored` で走らせる
 //! * 構造の各欄 (種類 / 重大度 / 確かさ / 値) と、利用者向けの文に検査の元の文字列が出ないこと
-//! * sbc_case の穴径の標本 (0.09mm) を測り直すと本当の隙間 (柱と壁の間 1.5mm) が出ること
+//! * sbc_case の柱と壁の間の溝が囲まれた穴として報告されず、測り直すと spec の幅 (1.5mm) が出ること
 
 use std::collections::BTreeMap;
 
@@ -72,7 +73,11 @@ fn thin_plate_reports_measured_wall_and_proved_erosion() {
         .expect("wall_thin");
     // oracle: 板厚 2 × 0.3 = 0.6mm
     assert!((wall.measured.unwrap() - 0.6).abs() < 0.05, "{wall:?}");
-    assert_eq!(wall.limit, Some(1.6));
+    // 限界は印刷に使う printer profile から Law が導いた値 (nozzle 0.4 × 周回 3 = 1.2)
+    assert_eq!(
+        wall.limit,
+        Some(text_to_print_core::violation::printer_limits().wall_advisory_mm)
+    );
     assert_eq!(wall.severity, Severity::Blocking);
     assert!(wall.count.unwrap() > 0);
     let everywhere = v
@@ -89,24 +94,39 @@ fn large_flat_plate_is_warp_critical() {
     assert_eq!(v[0].severity, Severity::Blocking);
 }
 
-/// sbc_case の穴径の標本は床の 0.4mm 上の入隅 (柱の脇) を読んで 0.09mm と報告する
-/// その位置 (柱の中心から z に 1.5mm ずれた所) の柱と壁の間は、spec から 1.74mm
-/// (壁の内側 43.5 と、柱 (中心 (39, 24.5)、半径 3) の表面の距離 √(4.5² + 1.5²) − 3) で、
-/// 柱の真横の最も狭い所が 1.5mm 測り直しは限界 2.0 を下回る (誤差扱いにはしない)
+/// sbc_case の柱 (standoff) と壁の間の隙間
+///
+/// 以前は柱の底の円が床の面だけで接する継ぎ目があり、穴径の検査はその継ぎ目 (0.09mm) を標本に読んで
+/// 測り直しが柱と壁の間 (1.5〜1.9mm) を返していた 柱を床の厚みの半分だけ床の中へ下ろした今は継ぎ目が無く、
+/// 囲まれた隙間の検査は何も報告しない 柱と壁の間は上が開いた溝で、測り直すと spec の閉形式の幅が出る
+///
+/// oracle (spec `sbc_case(85, 56, 25)`、既定の壁 2 / 床 3 / clearance 1 / 柱 直径 6 高さ 5 / inset 3.5):
+/// 壁の内側 x = (85 + 2·1) / 2 = 43.5、柱の中心 x = 85/2 − 3.5 = 39 (半径 3)、柱と壁の最も狭い所は
+/// 43.5 − 42 = 1.5 柱は z = −28/2 + 3 = −11 から 5mm 高い
 #[test]
-fn raspi_gap_is_remeasured_to_the_real_slot() {
+fn sbc_case_standoff_slot_is_not_an_enclosed_hole_and_measures_to_spec() {
     let v = safety_report("sbc_case(85, 56, 25)");
-    let hole = v
-        .iter()
-        .find(|x| x.kind == Kind::HoleTooSmall)
-        .expect("hole");
-    assert!(hole.measured.unwrap() < 0.2, "{hole:?}");
-    let r = hole.remeasured.expect("位置があるので測り直す");
-    // 柱の脇は z 方向に広がる楔なので、標本の点を含む最大の球は最も狭い所 (1.5) より少し大きい
-    // (標本の点の位置で 1.5〜1.9 の間を動く) どちらでも限界 2.0 未満 = 誤差扱いにはしない
-    assert!((1.45..=1.9).contains(&r), "remeasured {r}");
-    assert_ne!(hole.severity, Severity::Info);
-    assert_eq!(hole.confidence, Confidence::Measured);
+    let holes = v.iter().filter(|x| x.kind == Kind::HoleTooSmall).count();
+    assert_eq!(holes, 0, "{v:?}");
+    let sdf = alice_bamboo::lol_to_sdf("sbc_case(85, 56, 25)").expect("parse");
+    let mut measured = 0;
+    for (x, y) in [
+        (42.75f32, 24.5f32),
+        (42.75, -24.5),
+        (-42.75, 24.5),
+        (-42.75, -24.5),
+    ] {
+        let at = glam::Vec3::new(x, y, -8.5);
+        assert!(
+            alice_sdf::eval(&sdf, at) > 0.0,
+            "柱と壁の間の点 {at} が空隙でない"
+        );
+        let r = text_to_print_core::violation::remeasure(&sdf, at, 2.0, 0.1, true);
+        // 柱の脇は y 方向に広がる楔なので、点を含む最大の球は最も狭い所 (1.5) より少し大きい
+        assert!((1.45..=1.9).contains(&r), "{at}: remeasured {r}");
+        measured += 1;
+    }
+    assert_eq!(measured, 4, "比較 0 件で通らない");
 }
 
 /// 利用者向けの文 (題 / 対処 / 注記) に検査の元の文字列の語が出ない (ja / en)
