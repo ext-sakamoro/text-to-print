@@ -438,7 +438,7 @@ fn printability_summary(
     let mut notes = Vec::new();
     if erosion == ProofVerdict::Violated {
         fail_messages.push(format!(
-            "Printability wall thickness: 造形物のどこも {:.1}mm 未満 (erosion で残る材料なしを証明)",
+            "Printability wall thickness: 造形物のどこも {:.2}mm 未満 (erosion で残る材料なしを証明)",
             req.min_wall
         ));
     }
@@ -447,7 +447,7 @@ fn printability_summary(
             .min_local_thickness
             .map_or_else(|| "計測不能".to_string(), |t| format!("{t:.2}mm"));
         fail_messages.push(format!(
-            "Printability wall thickness: 最小局所肉厚 {min} < {:.1}mm (薄い三角形 {} 枚、三角形ごとの厳密 march)",
+            "Printability wall thickness: 最小局所肉厚 {min} < {:.2}mm (薄い三角形 {} 枚、三角形ごとの厳密 march)",
             req.min_wall, report.thin_triangles
         ));
     }
@@ -2663,11 +2663,11 @@ mod tests {
     #[test]
     fn safety_check_lol_flags_thin_plate_via_printability_proof() {
         // 0.8mm 板 (box3d は half extents なので厚さ 0.8mm) → 壁の限界 (printer profile から Law が
-        // 導く 1.2mm) を割る 2026-09-28 に肉厚の canonical source を
+        // 導く 1.35mm、blocking は 0.9mm) を割る 2026-09-28 に肉厚の canonical source を
         // `alice_sdf::validity` に移したので prefix は "Printability wall thickness:"
         //
-        // oracle: erosion は限界の半分 (0.6mm) = d(p) + 0.6 が全域で正
-        // (板の半厚 0.4mm < 0.6mm) なので残る材料なし = EntirelyTooThin を証明できる
+        // oracle: erosion は限界の半分 (0.675mm) = d(p) + 0.675 が全域で正
+        // (板の半厚 0.4mm < 0.675mm) なので残る材料なし = EntirelyTooThin を証明できる
         let violations = safety_check_lol("box3d(15.0, 15.0, 0.4)");
         assert!(
             violations
@@ -2685,8 +2685,8 @@ mod tests {
 
     /// 厚い球は肉厚も連結性も **証明付き** 合格になる (未決定に倒れない)
     ///
-    /// oracle: `sphere(10)` を限界の半分 (0.6mm) erode しても半径 9.4mm の球が残るので
-    /// 「限界 (1.2mm) 以上の肉厚を持つ領域がある」は八分木で必ず証明できる
+    /// oracle: `sphere(10)` を限界の半分 (0.675mm) erode しても半径 9.325mm の球が残るので
+    /// 「限界 (1.35mm) 以上の肉厚を持つ領域がある」は八分木で必ず証明できる
     #[test]
     fn printability_proves_a_thick_sphere() {
         let sdf = alice_bamboo::lol_to_sdf("sphere(10.0)").expect("parse");
@@ -2777,7 +2777,7 @@ mod tests {
 
     /// fail が 1 つも無くても、証明が揃わなければ合格にしない
     ///
-    /// oracle: 半径 5mm、肉厚が壁の限界 + 0.1mm の球殻 (限界 1.2mm で `sphere(5) - sphere(3.7)`) は
+    /// oracle: 半径 5mm、肉厚が壁の限界 + 0.1mm の球殻 (限界 1.35mm で `sphere(5) - sphere(3.55)`) は
     /// 限界を上回るので薄い三角形は 0 枚、連結性は `Proved` それでも erosion の大域判定は
     /// octree 深さ 6 では決着せず `Undecided` で残る 連結性が決まっているので、`ok == false` は
     /// erosion の未決定だけから来る (連結性も未決定の形では、この試験は erosion を確かめない)
@@ -2785,6 +2785,7 @@ mod tests {
     /// 2026-11-20 に測った境界 (限界 1.2mm、箱は半径 + 2mm): 半径 4 / 5mm で肉厚 1.25 / 1.35mm は
     /// erosion `Undecided` + 連結性 `Proved`、1.45mm から erosion `Proved` 半径 8mm 以上は連結性も
     /// 未決定 (限界 1.6mm の時に使った `sphere(10) - sphere(8)` は、限界 1.2mm では erosion が決まる)
+    /// 限界 1.35mm (線 0.45mm × 3 周回) の肉厚 1.45mm でも erosion `Undecided` + 連結性 `Proved` (2026-11-21 実測)
     ///
     /// 「探索で見つからなかった」を合格に繰り上げないことが本 judge の要点なので、
     /// **fail が空 かつ `ok == false` かつ notes で理由が出る** をここで固定する

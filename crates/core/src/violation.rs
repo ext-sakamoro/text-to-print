@@ -782,16 +782,16 @@ mod tests {
         }
     }
 
-    /// oracle: `alice_bamboo` の印刷可能性の Law の閉形式 (nozzle 0.4 mm、周回 3) 壁は 2 本の線 0.8 未満が
-    /// blocking、周回 × nozzle = 1.2 未満が advisory、穴は 5 × nozzle = 2.0 と突起は 2 × nozzle = 0.8 の
+    /// oracle: `alice_bamboo` の印刷可能性の Law の閉形式 (nozzle 0.4 mm、線 0.45 mm、周回 3) 壁は線 2 本
+    /// 0.9 未満が blocking、周回 × 線 = 1.35 未満が advisory、穴は 5 × nozzle = 2.0 と突起は 2 × nozzle = 0.8 の
     /// 10% 内が advisory
     #[test]
     fn law_bands_split_blocking_advisory_info() {
         let p = policy();
         let l = printer_limits();
         // 帯の境は Law が導いた値から読み、手で書いた数値と食い違えば落ちる
-        assert!((l.wall_blocking_mm - 0.8).abs() < 1e-6, "{l:?}");
-        assert!((l.wall_advisory_mm - 1.2).abs() < 1e-6, "{l:?}");
+        assert!((l.wall_blocking_mm - 0.9).abs() < 1e-6, "{l:?}");
+        assert!((l.wall_advisory_mm - 1.35).abs() < 1e-6, "{l:?}");
         assert!((l.hole_min_mm - 2.0).abs() < 1e-6, "{l:?}");
         assert!((l.feature_min_mm - 0.8).abs() < 1e-6, "{l:?}");
         let below = |x: f32| x - 0.01;
