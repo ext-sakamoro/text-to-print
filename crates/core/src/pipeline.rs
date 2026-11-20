@@ -198,8 +198,8 @@ impl DfamSummary {
 }
 
 /// text-to-print の DfAM 設定 (Bambu H2D = FDM、Z-up)
-/// DfAM の設定 限界は印刷可能性の方針の表 (`data/printability_policy.json`) から渡す
-/// (表が 1 つの出所、ALICE-Bamboo の FDM の値と同じことは `violation` の試験が確かめる)
+/// DfAM の設定 限界は印刷に使う printer profile から印刷可能性の Law が導いた値を渡す
+/// ([`crate::violation::printer_limits`] が 1 つの出所、方針の表には数値を書かない)
 fn dfam_config() -> DfamConfig {
     use crate::violation::{Kind, policy};
     let mut cfg = DfamConfig::for_process(Process::Fdm);
@@ -414,8 +414,8 @@ fn printability_summary(
     use alice_sdf::validity::{ErosionVerdict, PrintRequirements, validate_for_printing};
 
     let limits = dfam_config().limits;
-    // 肉厚の閾値は DfAM と同じ値を使う (canonical source は 1 つ、
-    // `SafetyViolationKind::WallTooThin` の LLM 向け directive も 1.6mm)
+    // 肉厚の閾値は DfAM と同じ値を使う (出所は印刷に使う printer profile から Law が導いた限界 1 つ、
+    // `SafetyViolationKind::WallTooThin` の LLM 向け directive も同じ値を読む)
     let req = PrintRequirements {
         min_wall: limits.min_unsupported_wall_mm,
         max_overhang: limits
@@ -1510,7 +1510,8 @@ fn export_step_via_alice_sdf(
 
 /// LOL → G-code via `alice_print::slice_sdf`
 ///
-/// The slicer uses the Bambu Lab preset (`SlicerConfig::bambu()`) with
+/// The slicer uses the printing profile ([`crate::violation::printer_profile`], the Bambu Lab
+/// preset `SlicerConfig::bambu()`, the same profile the printability limits come from) with
 /// Marlin flavor by default Consumers who need Klipper / a different
 /// printer preset should call `alice_print::slice_sdf` directly for now
 /// (a `GcodeConfig` UI slot is planned separately)
@@ -1522,7 +1523,7 @@ fn export_gcode_via_alice_print(lol_source: &str, output_path: &Path) -> Result<
         .map_err(|e| anyhow::anyhow!("{}", dedup_lol_parse_prefix(e)))?;
     let slice = alice_bamboo::slice_sdf(
         &sdf,
-        &alice_bamboo::SlicerConfig::bambu(),
+        &crate::violation::printer_profile(),
         alice_bamboo::GcodeFlavor::Marlin,
     );
     std::fs::write(output_path, &slice.gcode)
@@ -2661,12 +2662,12 @@ mod tests {
 
     #[test]
     fn safety_check_lol_flags_thin_plate_via_printability_proof() {
-        // 0.8mm 板 (box3d は half extents なので厚さ 0.8mm) → FDM min unsupported
-        // wall 1.6mm を割る 2026-09-28 に肉厚の canonical source を
+        // 0.8mm 板 (box3d は half extents なので厚さ 0.8mm) → 壁の限界 (printer profile から Law が
+        // 導く 1.2mm) を割る 2026-09-28 に肉厚の canonical source を
         // `alice_sdf::validity` に移したので prefix は "Printability wall thickness:"
         //
-        // oracle: erosion は `Round { radius: -0.8 }` = d(p) + 0.8 が全域で正
-        // (板の半厚 0.4mm < 0.8mm) なので残る材料なし = EntirelyTooThin を証明できる
+        // oracle: erosion は限界の半分 (0.6mm) = d(p) + 0.6 が全域で正
+        // (板の半厚 0.4mm < 0.6mm) なので残る材料なし = EntirelyTooThin を証明できる
         let violations = safety_check_lol("box3d(15.0, 15.0, 0.4)");
         assert!(
             violations
@@ -2684,8 +2685,8 @@ mod tests {
 
     /// 厚い球は肉厚も連結性も **証明付き** 合格になる (未決定に倒れない)
     ///
-    /// oracle: `sphere(10)` を 1.6mm erode しても半径 9.2mm の球が残るので
-    /// 「1.6mm 以上の肉厚を持つ領域がある」は八分木で必ず証明できる
+    /// oracle: `sphere(10)` を限界の半分 (0.6mm) erode しても半径 9.4mm の球が残るので
+    /// 「限界 (1.2mm) 以上の肉厚を持つ領域がある」は八分木で必ず証明できる
     #[test]
     fn printability_proves_a_thick_sphere() {
         let sdf = alice_bamboo::lol_to_sdf("sphere(10.0)").expect("parse");
@@ -2776,10 +2777,10 @@ mod tests {
 
     /// fail が 1 つも無くても、証明が揃わなければ合格にしない
     ///
-    /// oracle: 肉厚 2.0mm の球殻 (`sphere(10) - sphere(8)`) は min_wall 1.6mm を
-    /// 上回るので薄い三角形は 0 枚、連結性も `Proved` それでも erosion の大域
-    /// 判定は octree 深さ 6 では決着せず `Undecided` で残る (2026-09-28 実測の
-    /// 境界: 2.5mm → `Proved` / 2.0mm → 未決定で fail 0 件 / 1.6mm → 薄い三角形
+    /// oracle: 肉厚が壁の限界の 1.25 倍の球殻 (限界 1.2mm で `sphere(10) - sphere(8.5)`) は
+    /// 限界を上回るので薄い三角形は 0 枚、連結性も `Proved` それでも erosion の大域
+    /// 判定は octree 深さ 6 では決着せず `Undecided` で残る (2026-09-28 に限界 1.6mm で
+    /// 実測した境界: 2.5mm → `Proved` / 2.0mm → 未決定で fail 0 件 / 1.6mm → 薄い三角形
     /// 59,024 枚で違反)
     ///
     /// 「探索で見つからなかった」を合格に繰り上げないことが本 judge の要点なので、
@@ -2787,8 +2788,36 @@ mod tests {
     /// erosion の深さを上げてこの形状が `Proved` になったら本 test は red になる
     /// (その時は境界となる別の肉厚に付け替える)
     #[test]
+    #[ignore]
+    fn zz_shell_scan_tmp() {
+        for r in [4.0f32, 5.0, 6.0, 8.0, 14.0] {
+            for t in [1.25f32, 1.35, 1.45, 1.55] {
+                let sdf = alice_bamboo::lol_to_sdf(&format!("subtract(sphere({r}), sphere({}))", r - t)).expect("parse");
+                let b = Vec3::splat(r + 2.0);
+                let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
+                let p = printability_summary(&sdf, &mesh, -b, b);
+                println!("SHELL r={r} t={t} erosion={:?} conn={:?} thin={} fails={}", p.erosion, p.connectivity, p.thin_triangles, p.fail_messages.len());
+            }
+        }
+        for side in [10.0f32, 20.0] {
+            for t in [1.25f32, 1.35, 1.45, 1.55] {
+                let sdf = alice_bamboo::lol_to_sdf(&format!("box3d({side}, {side}, {})", t * 0.5)).expect("parse");
+                let b = glam::Vec3::new(side + 2.0, side + 2.0, 3.0);
+                let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
+                let p = printability_summary(&sdf, &mesh, -b, b);
+                println!("SHELL plate side={side} t={t} erosion={:?} conn={:?} thin={} fails={}", p.erosion, p.connectivity, p.thin_triangles, p.fail_messages.len());
+            }
+        }
+    }
+
+    #[test]
     fn undecided_proof_is_not_promoted_to_ok() {
-        let sdf = alice_bamboo::lol_to_sdf("subtract(sphere(10.0), sphere(8.0))").expect("parse");
+        // 殻の厚みは限界の 1.25 倍 (限界 1.6 の時の 2mm と同じ比、限界の近くで erosion の証明が予算内に
+        // 決まらない形)
+        let limit = crate::violation::printer_limits().wall_advisory_mm;
+        let inner = 1.25f32.mul_add(-limit, 10.0);
+        let sdf = alice_bamboo::lol_to_sdf(&format!("subtract(sphere(10.0), sphere({inner}))"))
+            .expect("parse");
         let b = Vec3::splat(12.0);
         let mesh = generate_mesh(&sdf, -b, b, Quality::Preview, false);
         let p = printability_summary(&sdf, &mesh, -b, b);
