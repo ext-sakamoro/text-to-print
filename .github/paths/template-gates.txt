@@ -1,0 +1,13 @@
+# the paths that run .github/workflows/template-gates.yml (scripts/changed_paths.py decide)
+# on.pull_request.paths of the workflow must list the same patterns in the same order
+# (scripts/changed_paths.py sync)
+# every file that can change a job's result is listed: a missing one skips the job on a
+# change that alters it (the template checks read crates/core and the alice-* commits in
+# Cargo.lock / Cargo.toml)
+crates/core/**
+Cargo.lock
+Cargo.toml
+.github/workflows/template-gates.yml
+.github/actions/fetch-private-deps/**
+scripts/changed_paths.py
+.github/paths/template-gates.txt

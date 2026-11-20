@@ -176,6 +176,16 @@ grep -q "signature_scope_tests::a_changed_nickname_is_refused ... ok" "$worker_l
 grep -q "signature_scope_tests::bytes_moved_between_the_source_and_the_date_are_refused ... ok" "$worker_log"
 rm -f "$worker_log"
 
+step "template-gates.yml / templates: the two release template tests (each counted, 0 run fails)"
+for pair in "safety_report strings_are_unchanged_for_every_template" "template_one_piece every_template_is_one_piece"; do
+  set -- $pair
+  t_log="$(mktemp)"
+  ( set -o pipefail; export CARGO_TERM_COLOR="never"; cargo test --release --locked -p text-to-print-core --test "$1" -- --ignored --exact "$2" 2>&1 | tee "$t_log" )
+  grep -qE "^test $2 \.\.\. ok$" "$t_log"
+  grep -qE "^test result: ok\. 1 passed; 0 failed" "$t_log"
+  rm -f "$t_log"
+done
+
 step "ci.yml / clippy-test-doc: sidecar lifecycle (real alice-llm-server)"
 ( export CARGO_TERM_COLOR="always"; scripts/sidecar_lifecycle_test.sh )
 

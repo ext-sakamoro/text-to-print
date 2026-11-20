@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use alice_bamboo::SlicerConfig;
+use alice_bamboo::printability::{PrintabilityLimits, Severity as LawSeverity};
 use alice_sdf::SdfNode;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -271,12 +273,26 @@ struct Text {
     errors: BTreeMap<String, BTreeMap<String, String>>,
 }
 
+/// 限界の出所 (印刷可能性の Law が printer profile から導く値のどれか)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LimitOf {
+    /// 壁 (advisory の限界 = 周回数 × nozzle 径)
+    Wall,
+    /// 穴の最小径
+    Hole,
+    /// 突起の最小
+    Feature,
+}
+
 /// 方針の表の 1 項目
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PolicyKind {
-    /// 限界 \[mm\] (測る項目だけ)
-    pub limit_mm: Option<f32>,
-    /// `blocking` / `advisory` / `info` / `by_band`
+    /// 限界の出所 (測る項目だけ、値は [`printer_limits`] から読む)
+    #[serde(default)]
+    pub limit: Option<LimitOf>,
+    /// `blocking` / `advisory` / `info` / `law` (Law の重大度の帯で決める)
     pub severity: String,
     /// この製品で選んだ値 (設計の指針の値ではない)
     #[serde(default)]
@@ -300,8 +316,6 @@ pub struct PolicyValue {
 /// 印刷可能性の判定の方針 (`data/printability_policy.json`)
 #[derive(Debug, Clone, Deserialize)]
 pub struct Policy {
-    /// 限界から何割以内を advisory にするか
-    pub band: PolicyValue,
     /// 測り直しで標本の点を含むとみなす余裕 \[mm\]
     pub discriminator_tolerance_mm: PolicyValue,
     /// 誤差扱いに下げる前に確かめる周りの範囲 (limit に掛ける)
@@ -320,24 +334,41 @@ impl Policy {
         &self.kinds[kind.key()]
     }
 
-    /// 種類の限界 \[mm\]
+    /// 種類の限界 \[mm\] (印刷に使う printer profile から Law が導いた値)
     #[must_use]
     pub fn limit(&self, kind: Kind) -> Option<f32> {
-        self.kind(kind).limit_mm
+        let l = printer_limits();
+        self.kind(kind).limit.map(|of| match of {
+            LimitOf::Wall => l.wall_advisory_mm,
+            LimitOf::Hole => l.hole_min_mm,
+            LimitOf::Feature => l.feature_min_mm,
+        })
     }
 
-    /// 測定値から重大度を決める (`by_band` は限界の `band` 以内を advisory にする)
+    /// 測定値から重大度を決める (`law` は Law の重大度の帯をそのまま使う、限界以上は info)
     #[must_use]
     pub fn severity(&self, kind: Kind, measured: Option<f32>) -> Severity {
-        match self.kind(kind).severity.as_str() {
+        let pk = self.kind(kind);
+        match pk.severity.as_str() {
             "blocking" => Severity::Blocking,
             "advisory" => Severity::Advisory,
             "info" => Severity::Info,
-            _ => match (measured, self.limit(kind)) {
-                (Some(m), Some(l)) if m >= l => Severity::Info,
-                (Some(m), Some(l)) if m >= l * (1.0 - self.band.value) => Severity::Advisory,
-                _ => Severity::Blocking,
-            },
+            _ => {
+                let (Some(m), Some(of)) = (measured, pk.limit) else {
+                    return Severity::Blocking;
+                };
+                let l = printer_limits();
+                let law = match of {
+                    LimitOf::Wall => l.wall_severity(m),
+                    LimitOf::Hole => l.hole_severity(m),
+                    LimitOf::Feature => l.feature_severity(m),
+                };
+                match law {
+                    Some(LawSeverity::Blocking) => Severity::Blocking,
+                    Some(LawSeverity::Advisory) => Severity::Advisory,
+                    Some(LawSeverity::Info) | None => Severity::Info,
+                }
+            }
         }
     }
 }
@@ -358,6 +389,25 @@ struct Annotations {
 const POLICY_JSON: &str = include_str!("../data/printability_policy.json");
 const TEXT_JSON: &str = include_str!("../data/violation_text.json");
 const ANNOTATIONS_JSON: &str = include_str!("../data/template_annotations.json");
+
+/// 印刷に使う printer profile (G-code の slice と印刷可能性の限界の両方がこれを読む)
+#[must_use]
+pub fn printer_profile() -> SlicerConfig {
+    SlicerConfig::bambu()
+}
+
+/// printer profile から `alice_bamboo` の印刷可能性の Law が導く限界
+///
+/// # Panics
+/// Law が profile を拒んだ時 (定数の profile で起きない、試験
+/// `printer_limits_come_from_the_printing_profile` が固定する)
+pub fn printer_limits() -> &'static PrintabilityLimits {
+    static L: OnceLock<PrintabilityLimits> = OnceLock::new();
+    L.get_or_init(|| {
+        PrintabilityLimits::from_slicer(&printer_profile())
+            .expect("the printing profile derives printability limits")
+    })
+}
 
 /// 方針の表
 ///
@@ -675,15 +725,15 @@ mod tests {
                 .unwrap_or_else(|| panic!("{} が方針の表に無い", kind.key()));
             assert!(!pk.source.trim().is_empty(), "{} の出所が空", kind.key());
             assert!(
-                ["blocking", "advisory", "info", "by_band"].contains(&pk.severity.as_str()),
+                ["blocking", "advisory", "info", "law"].contains(&pk.severity.as_str()),
                 "{}: {}",
                 kind.key(),
                 pk.severity
             );
-            if pk.severity == "by_band" {
+            if pk.severity == "law" {
                 assert!(
-                    pk.limit_mm.is_some(),
-                    "{} は by_band なのに limit が無い",
+                    pk.limit.is_some(),
+                    "{} は law なのに limit が無い",
                     kind.key()
                 );
             }
@@ -732,39 +782,100 @@ mod tests {
         }
     }
 
+    /// oracle: `alice_bamboo` の印刷可能性の Law の閉形式 (nozzle 0.4 mm、周回 3) 壁は 2 本の線 0.8 未満が
+    /// blocking、周回 × nozzle = 1.2 未満が advisory、穴は 5 × nozzle = 2.0 と突起は 2 × nozzle = 0.8 の
+    /// 10% 内が advisory
     #[test]
-    fn band_splits_blocking_advisory_info() {
+    fn law_bands_split_blocking_advisory_info() {
         let p = policy();
-        // limit 1.6、band 10% ⇒ 1.44 未満は blocking、1.44 以上 1.6 未満は advisory
+        let l = printer_limits();
+        // 帯の境は Law が導いた値から読み、手で書いた数値と食い違えば落ちる
+        assert!((l.wall_blocking_mm - 0.8).abs() < 1e-6, "{l:?}");
+        assert!((l.wall_advisory_mm - 1.2).abs() < 1e-6, "{l:?}");
+        assert!((l.hole_min_mm - 2.0).abs() < 1e-6, "{l:?}");
+        assert!((l.feature_min_mm - 0.8).abs() < 1e-6, "{l:?}");
+        let below = |x: f32| x - 0.01;
         assert_eq!(p.severity(Kind::WallThin, Some(0.04)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.43)), Severity::Blocking);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.45)), Severity::Advisory);
-        assert_eq!(p.severity(Kind::WallThin, Some(1.6)), Severity::Info);
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(below(l.wall_blocking_mm))),
+            Severity::Blocking
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(l.wall_blocking_mm)),
+            Severity::Advisory
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(below(l.wall_advisory_mm))),
+            Severity::Advisory
+        );
+        assert_eq!(
+            p.severity(Kind::WallThin, Some(l.wall_advisory_mm)),
+            Severity::Info
+        );
         assert_eq!(p.severity(Kind::WallThin, None), Severity::Blocking);
+        let hole_edge = l.hole_min_mm * (1.0 - l.band);
+        assert_eq!(
+            p.severity(Kind::HoleTooSmall, Some(below(hole_edge))),
+            Severity::Blocking
+        );
+        assert_eq!(
+            p.severity(Kind::HoleTooSmall, Some(hole_edge)),
+            Severity::Advisory
+        );
+        assert_eq!(
+            p.severity(Kind::HoleTooSmall, Some(l.hole_min_mm)),
+            Severity::Info
+        );
+        let feature_edge = l.feature_min_mm * (1.0 - l.band);
+        assert_eq!(
+            p.severity(Kind::FeatureTooSmall, Some(below(feature_edge))),
+            Severity::Blocking
+        );
+        assert_eq!(
+            p.severity(Kind::FeatureTooSmall, Some(feature_edge)),
+            Severity::Advisory
+        );
+        assert_eq!(
+            p.severity(Kind::FeatureTooSmall, Some(l.feature_min_mm)),
+            Severity::Info
+        );
         assert_eq!(p.severity(Kind::WarpHigh, None), Severity::Advisory);
         assert_eq!(p.severity(Kind::WarpCritical, None), Severity::Blocking);
         assert_eq!(p.severity(Kind::ThermalNearTg, None), Severity::Info);
         assert!(
-            p.band.ours && p.discriminator_tolerance_mm.ours,
+            p.discriminator_tolerance_mm.ours,
             "製品で選んだ値は ours を付ける"
         );
     }
 
-    /// 方針の表の限界が ALICE-Bamboo の FDM の値と同じ (違えば表の側を見直す)
+    /// 限界は G-code を作る時と同じ printer profile から Law が導き、`alice_bamboo` の FDM の行と同じ
+    /// (方針の表が数値を持たないので、表と Law が食い違う経路が無い)
     #[test]
-    fn policy_limits_match_the_bamboo_fdm_row() {
-        let l =
+    fn printer_limits_come_from_the_printing_profile() {
+        let law = PrintabilityLimits::from_slicer(&printer_profile()).expect("profile");
+        assert_eq!(*printer_limits(), law);
+        let fdm =
             alice_bamboo::dfam::DfamConfig::for_process(alice_bamboo::dfam::Process::Fdm).limits;
         let p = policy();
-        assert_eq!(p.limit(Kind::WallThin), Some(l.min_unsupported_wall_mm));
-        assert_eq!(
-            p.limit(Kind::WallTooThinEverywhere),
-            Some(l.min_unsupported_wall_mm)
+        let mut checked = 0;
+        for (kind, want) in [
+            (Kind::WallThin, fdm.min_unsupported_wall_mm),
+            (Kind::WallTooThinEverywhere, fdm.min_unsupported_wall_mm),
+            (Kind::HoleTooSmall, fdm.min_hole_diameter_mm),
+            (Kind::FeatureTooSmall, fdm.min_positive_feature_mm),
+        ] {
+            assert_eq!(p.limit(kind), Some(want), "{}", kind.key());
+            checked += 1;
+        }
+        assert_eq!(checked, 4, "比較 0 件で通らない");
+        // 方針の表 (data) に限界の数値を書かない (書くと 2 つ目の出所になる)
+        assert!(
+            !POLICY_JSON.contains("limit_mm"),
+            "printability_policy.json に limit_mm がある"
         );
-        assert_eq!(p.limit(Kind::HoleTooSmall), Some(l.min_hole_diameter_mm));
-        assert_eq!(
-            p.limit(Kind::FeatureTooSmall),
-            Some(l.min_positive_feature_mm)
+        assert!(
+            !POLICY_JSON.contains("\"band\""),
+            "printability_policy.json に band がある"
         );
     }
 

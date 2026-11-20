@@ -20,12 +20,14 @@ dependencies = [
 [[package]]
 name = "alice-bamboo"
 version = "0.1.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Bamboo?branch=main#09d9dbc893f99ec3ae4be58243c56c758a02bfb2"
+source = "git+https://github.com/ext-sakamoro/ALICE-Bamboo?branch=main#31c43c03f20be2b762218c32abc41e86a4a59916"
 dependencies = [
+ "alice-det-math",
  "alice-lol",
  "alice-physics",
  "alice-print",
  "alice-sdf",
+ "alice-zip",
  "clap",
  "glam",
  "image",
@@ -36,7 +38,7 @@ dependencies = [
 [[package]]
 name = "alice-det-math"
 version = "0.6.1"
-source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#d80446ebce73c5c397f7df12435cf574460400bf"
+source = "git+https://github.com/ext-sakamoro/ALICE-DetMath?branch=main#8a46fde1e2899016b76822762439a2e9e2adad49"
 dependencies = [
  "bytemuck",
  "wide",
@@ -54,7 +56,7 @@ dependencies = [
 [[package]]
 name = "alice-lol"
 version = "0.5.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#0008b70326810e4874168d9b94b78010348c3e88"
 dependencies = [
  "alice-det-math",
  "alice-lol-layout",
@@ -69,7 +71,7 @@ dependencies = [
 [[package]]
 name = "alice-lol-layout"
 version = "0.1.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#0008b70326810e4874168d9b94b78010348c3e88"
 dependencies = [
  "sha2",
 ]
@@ -77,7 +79,7 @@ dependencies = [
 [[package]]
 name = "alice-lol-macro"
 version = "0.4.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#67a637bb6d43b5b799dd1fec790f3c06cffcbcd0"
+source = "git+https://github.com/ext-sakamoro/ALICE-LOL?branch=main#0008b70326810e4874168d9b94b78010348c3e88"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -87,7 +89,7 @@ dependencies = [
 [[package]]
 name = "alice-physics"
 version = "4.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#cc239dd0a7a809d6f7626e716ef788b22272d5f0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#c77854eb2460262fdaeb5ee546de87ca65783336"
 dependencies = [
  "alice-physics-core",
 ]
@@ -95,7 +97,7 @@ dependencies = [
 [[package]]
 name = "alice-physics-core"
 version = "4.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#cc239dd0a7a809d6f7626e716ef788b22272d5f0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Physics?branch=main#c77854eb2460262fdaeb5ee546de87ca65783336"
 dependencies = [
  "alice-det-math",
  "sha2",
@@ -104,7 +106,7 @@ dependencies = [
 [[package]]
 name = "alice-print"
 version = "0.1.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Print?branch=main#7deaa9e87f9e8bfded83529a78a10a1c65653b02"
+source = "git+https://github.com/ext-sakamoro/ALICE-Print?branch=main#8822f1a4f88ccba8081c7bdedb213f70504d8b34"
 dependencies = [
  "alice-lol",
  "alice-sdf",
@@ -117,12 +119,13 @@ dependencies = [
 [[package]]
 name = "alice-sdf"
 version = "7.0.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-SDF?branch=main#16dabf082f2695b50a9e12d9838d1c75a06119eb"
+source = "git+https://github.com/ext-sakamoro/ALICE-SDF?branch=main#a8f4ccd0dd2c1cb14532d9a76e9996ab7454129c"
 dependencies = [
  "alice-det-math",
+ "alice-serial",
  "alice-zip",
+ "arrayvec",
  "ash",
- "bincode",
  "bytemuck",
  "clap",
  "crc32fast",
@@ -139,6 +142,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "alice-serial"
+version = "0.2.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Serial?branch=main#ccf4338606257aae8cbfdbfac8544577d11bb927"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "alice-sign"
 version = "0.1.0"
 source = "git+https://github.com/ext-sakamoro/ALICE-Sign?branch=main#8c8d1eebf4ef9fc4059dae08779f8846e832df5e"
@@ -149,8 +160,8 @@ dependencies = [
 
 [[package]]
 name = "alice-zip"
-version = "0.11.0"
-source = "git+https://github.com/ext-sakamoro/ALICE-Zip?branch=main#977c755b70672e9716c972b5cbf46c2f4a56849e"
+version = "0.12.0"
+source = "git+https://github.com/ext-sakamoro/ALICE-Zip?branch=main#52186410b2f445090b33429270671d8c4fe47683"
 dependencies = [
  "alice-det-math",
  "libm",
@@ -204,7 +215,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -215,7 +226,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -271,26 +282,6 @@ name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
-
-[[package]]
-name = "bincode"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
-dependencies = [
- "bincode_derive",
- "serde",
- "unty",
-]
-
-[[package]]
-name = "bincode_derive"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
-dependencies = [
- "virtue",
-]
 
 [[package]]
 name = "bit-set"
@@ -637,7 +628,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1812,7 +1803,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2026,12 +2017,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
-name = "unty"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
-
-[[package]]
 name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2060,12 +2045,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "virtue"
-version = "0.0.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "wasi"
@@ -2263,7 +2242,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
