@@ -86,6 +86,12 @@ jobs:
           path: text-to-print
       - uses: dtolnay/rust-toolchain@stable
 
+      # the cache is restored before the fetch: restoring it after would put an older registry back over
+      # the fetched one, and the offline build would then miss a crate the lock was just moved to
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
       # the private dependencies over ssh with their read-only deploy keys, in one fetch-only step;
       # the keys are gone (checked) before any build step
       - name: Fetch the dependencies (private ones with their deploy keys)
@@ -98,10 +104,6 @@ jobs:
       # text-to-print-core links keyring (libdbus-sys) on Linux
       - name: Install libdbus-1-dev
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: text-to-print
 
       # exactly the one named test runs and passes (a renamed or removed test runs 0 and fails)
       - name: cargo test --release (${{ matrix.test }}, counted)

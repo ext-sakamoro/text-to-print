@@ -57,6 +57,12 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # the cache is restored before the fetch: restoring it after would put an older registry back over
+      # the fetched one, and the offline build would then miss a crate the lock was just moved to
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: text-to-print
+
       # the private dependencies over ssh with their read-only deploy keys, in one fetch-only step;
       # the keys are gone (checked) before any build step
       - name: Fetch the dependencies (private ones with their deploy keys)
@@ -78,10 +84,6 @@ jobs:
       - name: Install libdbus-1-dev (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: text-to-print
 
       # fmt は本 repo の package だけを見る (`--all` は依存の alice-* 全体、
       # 1800 file 超を 1 回の rustfmt に渡し、Windows で引数長の上限
