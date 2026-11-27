@@ -5391,6 +5391,7 @@ dependencies = [
  "glam",
  "image",
  "open",
+ "pollster 0.4.0",
  "reqwest",
  "rfd",
  "serde",

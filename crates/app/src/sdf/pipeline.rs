@@ -371,3 +371,177 @@ impl MeshPipeline {
         });
     }
 }
+
+/// 3D 表示の pipeline を実際の GPU で 1 frame 描き、読み戻して確かめる
+///
+/// GPU の adapter が要るので既定では走らせない (`--ignored`)
+/// `T2P_GPU_REQUIRE_VENDOR` (例: `0x10de`) を渡すと、adapter の vendor がそれでなければ
+/// 失敗する (software の描画 (llvmpipe など) で通ったことにしない)
+#[cfg(test)]
+mod gpu_tests {
+    use super::{COLOR_FORMAT, DEPTH_FORMAT, MeshPipeline, MeshUniforms};
+    use glam::{Mat4, Vec3};
+
+    const SIZE: u32 = 64;
+
+    fn device() -> (wgpu::Device, wgpu::Queue, wgpu::AdapterInfo) {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            force_fallback_adapter: false,
+            compatible_surface: None,
+            apply_limit_buckets: false,
+        }))
+        .expect("no GPU adapter");
+        let info = adapter.get_info();
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("request_device");
+        (device, queue, info)
+    }
+
+    fn triangle() -> alice_sdf::mesh::Mesh {
+        let n = Vec3::Z;
+        let mut mesh = alice_sdf::mesh::Mesh::new();
+        // counter-clockwise seen from +z (the camera), so back-face culling keeps it
+        for p in [
+            Vec3::new(-1.0, -1.0, 0.0),
+            Vec3::new(1.0, -1.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        ] {
+            mesh.vertices.push(alice_sdf::mesh::Vertex::new(p, n));
+        }
+        mesh.indices = vec![0, 1, 2];
+        mesh
+    }
+
+    fn render(with_mesh: bool) -> (Vec<u8>, wgpu::AdapterInfo) {
+        let (device, queue, info) = device();
+        let mut pipeline = MeshPipeline::new(&device, COLOR_FORMAT);
+        if with_mesh {
+            pipeline.upload_mesh(&device, &triangle());
+        }
+        let extent = wgpu::Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 1,
+        };
+        let color = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("gpu test color"),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: COLOR_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let depth = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("gpu test depth"),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let eye = Vec3::new(0.0, 0.0, 3.0);
+        let view = Mat4::look_at_rh(eye, Vec3::ZERO, Vec3::Y);
+        let proj = Mat4::perspective_rh(45f32.to_radians(), 1.0, 0.1, 100.0);
+        pipeline.render(
+            &device,
+            &queue,
+            &color_view,
+            &depth_view,
+            MeshUniforms::from_camera(eye, proj * view),
+        );
+
+        let row = SIZE * 4; // 256, already a multiple of COPY_BYTES_PER_ROW_ALIGNMENT
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu test readback"),
+            size: u64::from(row * SIZE),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        encoder.copy_texture_to_buffer(
+            color.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(row),
+                    rows_per_image: Some(SIZE),
+                },
+            },
+            extent,
+        );
+        queue.submit(std::iter::once(encoder.finish()));
+        let slice = buffer.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |r| r.expect("map"));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("poll");
+        let bytes = slice.get_mapped_range().expect("mapped range").to_vec();
+        (bytes, info)
+    }
+
+    fn pixel(bytes: &[u8], x: u32, y: u32) -> [u8; 4] {
+        let i = ((y * SIZE + x) * 4) as usize;
+        [bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]
+    }
+
+    fn near(a: [u8; 4], b: [u8; 4]) -> bool {
+        a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 2)
+    }
+
+    fn check_vendor(info: &wgpu::AdapterInfo) {
+        println!(
+            "[t2p gpu-test] adapter name={} vendor=0x{:04x} device=0x{:04x} type={:?} backend={:?}",
+            info.name, info.vendor, info.device, info.device_type, info.backend
+        );
+        if let Ok(want) = std::env::var("T2P_GPU_REQUIRE_VENDOR") {
+            let want = u32::from_str_radix(want.trim_start_matches("0x"), 16)
+                .expect("T2P_GPU_REQUIRE_VENDOR is hex");
+            assert_eq!(info.vendor, want, "adapter vendor is not the required one");
+        }
+    }
+
+    /// 背景は mesh の無い frame から読む (clear の色を sRGB に直す計算を試験に持たない)
+    #[test]
+    #[ignore = "needs a GPU adapter (run with --ignored on a GPU machine)"]
+    fn the_mesh_pipeline_draws_a_triangle_over_the_clear_colour() {
+        let (empty, info) = render(false);
+        check_vendor(&info);
+        let clear = pixel(&empty, SIZE / 2, SIZE / 2);
+        assert!(
+            (0..SIZE).all(|y| (0..SIZE).all(|x| pixel(&empty, x, y) == clear)),
+            "the frame without a mesh is not one colour"
+        );
+        let (bytes, _) = render(true);
+        let centre = pixel(&bytes, SIZE / 2, SIZE / 2);
+        let corner = pixel(&bytes, 1, 1);
+        let covered = (0..SIZE)
+            .flat_map(|y| (0..SIZE).map(move |x| (x, y)))
+            .filter(|&(x, y)| !near(pixel(&bytes, x, y), clear))
+            .count();
+        println!(
+            "[t2p gpu-test] clear={clear:?} centre={centre:?} corner={corner:?} covered={covered}/{}",
+            SIZE * SIZE
+        );
+        assert!(
+            near(corner, clear),
+            "corner {corner:?} is not the clear colour {clear:?}"
+        );
+        assert!(!near(centre, clear), "centre {centre:?} shows no triangle");
+        assert_eq!(centre[3], 0xff);
+        // the triangle spans x in [-1, 1], y in [-1, 1] at distance 3 with a 45 degree fov:
+        // a quarter of the frame or so, never all of it
+        assert!(covered > 200 && covered < 3000, "covered {covered} pixels");
+    }
+}
