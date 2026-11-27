@@ -12,7 +12,7 @@ crate = "chrono"
 version = "0.4.45"
 dependents = ["worker 0.8.5"]
 fixed = []
-expires = "2026-12-02"
+expires = "2026-12-18"
 until = "a release of the worker crate without chrono"
-reason = "chrono 0.4.45 <- worker 0.8.5 <- text-to-print-worker (crates/worker) (cargo tree --locked -e normal -i chrono in crates/worker); the newest worker (0.9.0) still requires chrono ^0.4.41 with no feature that drops it (crates.io, 2026-11-18)"
+reason = "chrono 0.4.45 <- worker 0.8.5 <- text-to-print-worker (crates/worker) (cargo tree --locked -e normal -i chrono in crates/worker); the newest worker (0.9.0) still requires chrono ^0.4.41 with no feature that drops it (crates.io, re-checked 2026-11-28: worker 0.9.0 is still the newest release, chrono ^0.4.41 non-optional; chrono 0.4.45 is the newest chrono)"
 until_release = [{crate = "worker", newer_than = "0.9.0"}]

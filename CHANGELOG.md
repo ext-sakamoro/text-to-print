@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Security — upload backend の chrono の保留を確かめ直す (2026-11-28)
+
+- crates/worker の RUSTSEC-2026-0543 (chrono が保守終了) は直す版がまだ無い: Cloudflare の SDK crate `worker` の最新は今も 0.9.0 で、chrono ^0.4.41 を外せない依存として要求する 経路 (chrono 0.4.45 ← worker 0.8.5 ← crates/worker) とこの crate 自身が chrono を使わないことを確かめ直し、期限を 2026-12-02 → 2026-12-18 にした 出口は chrono を外した `worker` の版 (0.9.0 より新しい版)
+
 ### Changed — eframe / egui を 0.37、画面の wgpu を 30 に上げる (2026-11-27)
 
 - eframe / egui / egui-wgpu を 0.31 → 0.37 に上げた egui 0.37 の名前の変更に合わせ、`App::update` を `App::ui` に、`TopBottomPanel` / `SidePanel` を `Panel` に、`Id::new` を `Id::unique` に直した (`Id::new` は `Id::unique` を呼ぶだけなので id は変わらない) 左の prompt の欄の幅は `default_width(350)` → `default_size(350)`
