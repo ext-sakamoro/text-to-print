@@ -269,7 +269,7 @@ fn spawn_gallery_refresh(state: &AppState) {
 /// Preview-quality item is ~1-5s on M-series (same order as generate
 /// tab) A follow-up refactor to spawn on the runtime would need a new
 /// `GenerationMessage` variant to hand the `Arc<Mesh>` back safely
-/// without racing `App::update` reads β scope keeps it inline
+/// without racing `App::ui` reads β scope keeps it inline
 fn spawn_preview_generation(state: &mut AppState, lol_source: String) {
     match pipeline::preview_lol_to_mesh(&lol_source, Quality::Preview) {
         Ok(mesh) => {

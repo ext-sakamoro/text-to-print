@@ -21,50 +21,50 @@
 #        version in Cargo.lock must be held.
 
 # zvariant / zbus_names / zvariant_derive are no longer published as separate
-# crates (merged into zbus). zbus 4.4 comes from eframe 0.31 (egui-winit ->
-# accesskit_unix -> atspi, the Linux screen-reader bridge). rfd 0.17 no longer uses
-# zbus. No version of these crates is safe.
+# crates (merged into zbus 6). zbus 5.19 comes from eframe 0.37 (egui-winit ->
+# accesskit_winit -> accesskit_unix -> atspi, the Linux screen-reader bridge), on
+# Linux only. No version of these crates is safe.
 [[hold]]
 id = "RUSTSEC-2026-0370"
 kind = "unmaintained"
 crate = "zvariant"
-version = "4.2.0"
+version = "5.15.1"
 dependents = [
-    "accesskit_atspi_common 0.10.1",
-    "atspi-common 0.6.0",
-    "atspi-proxies 0.6.0",
-    "zbus 4.4.0",
-    "zbus-lockstep 0.4.4",
-    "zbus-lockstep-macros 0.4.4",
-    "zbus_names 3.0.0",
-    "zbus_xml 4.0.0",
+    "accesskit_atspi_common 0.21.1",
+    "atspi-common 0.13.0",
+    "zbus 5.19.0",
+    "zbus-lockstep 0.5.2",
+    "zbus-lockstep-macros 0.5.2",
+    "zbus_macros 5.19.0",
+    "zbus_names 4.3.5",
+    "zbus_xml 5.2.1",
 ]
 fixed = []
-expires = "2026-11-26"
-until = "accesskit_unix (and so eframe) on zbus 6"
-reason = "zvariant 4.2.0 <- (accesskit_atspi_common 0.10.1, atspi-common 0.6.0, atspi-proxies 0.6.0, zbus 4.4.0, zbus-lockstep 0.4.4, zbus_names 3.0.0, zbus_xml 4.0.0) <- atspi 0.22.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal -i zvariant@4.2.0; 0 lines for aarch64-apple-darwin and x86_64-pc-windows-msvc); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+expires = "2026-12-18"
+until = "accesskit_unix > 0.24.1 on zbus 6"
+reason = "zvariant 5.15.1 <- (accesskit_atspi_common 0.21.1, atspi-common 0.13.0, zbus 5.19.0, zbus-lockstep 0.5.2, zbus_macros 5.19.0, zbus_names 4.3.5, zbus_xml 5.2.1) <- atspi 0.29.0 / atspi-common 0.13.0 / atspi-proxies 0.13.0 <- accesskit_unix 0.24.1 <- accesskit_winit 0.34.2 <- egui-winit 0.37.0 <- eframe 0.37.0 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal,build -i zvariant@5.15.1; 0 lines for aarch64-apple-darwin and x86_64-pc-windows-msvc); no release removes it yet: accesskit_unix 0.24.1 (newest) uses zbus 5.19, and zbus 5 still pulls zvariant / zbus_names / zvariant_derive as separate crates; zbus 6 drops them; eframe 0.37 moved the hold from the 4.x versions (zbus 4.4, eframe 0.31) to these 5.x versions; no ALICE crate replaces the platform screen-reader bridge"
 until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]
 
 [[hold]]
 id = "RUSTSEC-2026-0371"
 kind = "unmaintained"
 crate = "zbus_names"
-version = "3.0.0"
-dependents = ["atspi-common 0.6.0", "zbus 4.4.0", "zbus_xml 4.0.0"]
+version = "4.3.5"
+dependents = ["atspi-common 0.13.0", "zbus 5.19.0", "zbus_macros 5.19.0", "zbus_xml 5.2.1"]
 fixed = []
-expires = "2026-11-26"
-until = "accesskit_unix (and so eframe) on zbus 6"
-reason = "zbus_names 3.0.0 <- (atspi-common 0.6.0, zbus 4.4.0, zbus_xml 4.0.0) <- atspi 0.22.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal -i zbus_names@3.0.0); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+expires = "2026-12-18"
+until = "accesskit_unix > 0.24.1 on zbus 6"
+reason = "zbus_names 4.3.5 <- (atspi-common 0.13.0, zbus 5.19.0, zbus_macros 5.19.0, zbus_xml 5.2.1) <- atspi 0.29.0 / atspi-common 0.13.0 / atspi-proxies 0.13.0 <- accesskit_unix 0.24.1 <- accesskit_winit 0.34.2 <- egui-winit 0.37.0 <- eframe 0.37.0 <- text-to-print (crates/app); compiled on Linux only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal,build -i zbus_names@4.3.5; 0 lines for aarch64-apple-darwin and x86_64-pc-windows-msvc); no release removes it yet: accesskit_unix 0.24.1 (newest) uses zbus 5.19, and zbus 5 still pulls zvariant / zbus_names / zvariant_derive as separate crates; zbus 6 drops them; eframe 0.37 moved the hold from the 4.x versions (zbus 4.4, eframe 0.31) to these 5.x versions; no ALICE crate replaces the platform screen-reader bridge"
 until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]
 
 [[hold]]
 id = "RUSTSEC-2026-0372"
 kind = "unmaintained"
 crate = "zvariant_derive"
-version = "4.2.0"
-dependents = ["zvariant 4.2.0"]
+version = "5.15.1"
+dependents = ["zvariant 5.15.1"]
 fixed = []
-expires = "2026-11-26"
-until = "accesskit_unix (and so eframe) on zbus 6"
-reason = "zvariant_derive 4.2.0 (proc-macro) <- zvariant 4.2.0 <- atspi / zbus 4.4.0 <- accesskit_unix 0.13.1 <- accesskit_winit 0.23.1 <- egui-winit 0.31.1 <- eframe 0.31.1 <- text-to-print (crates/app); built for Linux targets only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal,build -i zvariant_derive@4.2.0); no release removes it yet: the newest accesskit_unix (0.24.1) and atspi (0.30.0) still use zbus 5, whose zvariant / zbus_names / zvariant_derive carry the same advisories, so upgrading eframe (0.37.0) moves the hold to the 5.x versions instead of removing it; zbus 6 drops these crates"
+expires = "2026-12-18"
+until = "accesskit_unix > 0.24.1 on zbus 6"
+reason = "zvariant_derive 5.15.1 (proc-macro) <- zvariant 5.15.1 <- zbus 5.19.0 / atspi <- accesskit_unix 0.24.1 <- accesskit_winit 0.34.2 <- egui-winit 0.37.0 <- eframe 0.37.0 <- text-to-print (crates/app); built for Linux targets only (cargo tree --locked --target x86_64-unknown-linux-gnu -e normal,build -i zvariant_derive@5.15.1; 0 lines for aarch64-apple-darwin and x86_64-pc-windows-msvc); no release removes it yet: accesskit_unix 0.24.1 (newest) uses zbus 5.19, and zbus 5 still pulls zvariant / zbus_names / zvariant_derive as separate crates; zbus 6 drops them; eframe 0.37 moved the hold from the 4.x versions (zbus 4.4, eframe 0.31) to these 5.x versions; no ALICE crate replaces the platform screen-reader bridge"
 until_release = [{crate = "accesskit_unix", newer_than = "0.24.1"}]

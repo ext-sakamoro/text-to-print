@@ -140,7 +140,8 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
         self.update_checker.poll();
 
         // Re-resolve every frame so a Settings UI Lang change applies live
@@ -172,7 +173,7 @@ impl eframe::App for App {
             }
         }
 
-        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+        egui::Panel::top("tabs").show(root, |ui| {
             ui.horizontal(|ui| {
                 let l = self.lang;
                 ui.selectable_value(&mut self.current_tab, Tab::Generate, i18n::T::generate(l));
@@ -196,7 +197,7 @@ impl eframe::App for App {
         });
 
         // ステータスバー（下部）
-        egui::TopBottomPanel::bottom("statusbar").show(ctx, |ui| {
+        egui::Panel::bottom("statusbar").show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
 
@@ -231,13 +232,13 @@ impl eframe::App for App {
 
         match self.current_tab {
             Tab::Generate => {
-                egui::SidePanel::left("prompt_panel")
-                    .default_width(350.0)
-                    .show(ctx, |ui| {
+                egui::Panel::left("prompt_panel")
+                    .default_size(350.0)
+                    .show(root, |ui| {
                         ui::prompt::show(ui, &mut self.state, &mut self.prompt_ui, self.lang);
                     });
 
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(root, |ui| {
                     ui::viewer::show(
                         ui,
                         &self.state,
@@ -248,7 +249,7 @@ impl eframe::App for App {
                 });
             }
             Tab::Gallery => {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(root, |ui| {
                     ui::gallery::show(
                         ui,
                         &mut self.state,
@@ -271,17 +272,17 @@ impl eframe::App for App {
                 }
             }
             Tab::History => {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(root, |ui| {
                     ui::history::show(ui, &mut self.state, self.lang);
                 });
             }
             Tab::Settings => {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(root, |ui| {
                     ui::settings::show(ui, &mut self.state, &mut self.settings, self.lang);
                 });
             }
             Tab::About => {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                egui::CentralPanel::default().show(root, |ui| {
                     ui::about::show(ui, self.lang);
                 });
             }

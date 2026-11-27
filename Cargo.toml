@@ -35,8 +35,8 @@ alice-crypto = { git = "https://github.com/ext-sakamoro/ALICE-Crypto", branch = 
 alice-browser-secure = { git = "https://github.com/ext-sakamoro/ALICE-Browser-Secure", branch = "main", version = "0.1" }
 
 # GUI
-eframe = { version = "0.31", features = ["wgpu"] }
-egui = "0.31"
+eframe = { version = "0.37", features = ["wgpu"] }
+egui = "0.37"
 
 # async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }

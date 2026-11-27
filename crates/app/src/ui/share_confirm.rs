@@ -21,7 +21,7 @@ use crate::i18n::{Lang, T};
 use crate::state::AppState;
 
 /// Render the modal if a payload is awaiting confirmation No-op
-/// otherwise Called once per frame from `App::update`
+/// otherwise Called once per frame from `App::ui`
 pub fn show(ctx: &Context, state: &mut AppState, identity: &Identity, lang: Lang) {
     let Some(path) = state.pending_share_confirm.clone() else {
         return;

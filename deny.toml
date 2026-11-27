@@ -20,16 +20,13 @@ yanked = "deny"
 # text-to-print 側 CVE ignore の canonical は .cargo/audit.toml (ci.yml audit job 用)
 # 本 deny.toml と同期を保つ (両方 update する時は忘れず片側に反映)
 ignore = [
-    # zbus 4.4 (eframe 0.31 → egui-winit → accesskit_unix → atspi、Linux の読み上げ) 経由 (.cargo/audit.toml と同期)
-    "RUSTSEC-2026-0194",  # quick-xml v0.30 (zbus_xml 4.0)
-    "RUSTSEC-2026-0195",  # quick-xml DoS v0.30 (zbus_xml 4.0)
     "RUSTSEC-2024-0436",  # paste unmaintained (pyo3-macros transitive)
     "RUSTSEC-2026-0192",  # ttf-parser unmaintained (egui transitive)
     # ALICE-* sibling transitive (.cargo/audit.toml と同期、2026-09-16)
     # 期限付きの保留 (scripts/advisory_holds.toml、scripts/advisory_hold_guard.py が版・経路・期限を照合する)
-    { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
-    { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
-    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained, via zbus 4.4 (eframe 0.31) only (accesskit on Linux); held until 2026-12-31 (eframe upgrade)" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained, via zbus 5.19 (eframe 0.37) only (accesskit on Linux); held until 2026-12-18 (accesskit_unix on zbus 6)" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained, via zbus 5.19 (eframe 0.37) only (accesskit on Linux); held until 2026-12-18 (accesskit_unix on zbus 6)" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained, via zbus 5.19 (eframe 0.37) only (accesskit on Linux); held until 2026-12-18 (accesskit_unix on zbus 6)" },
 ]
 
 [licenses]

@@ -211,7 +211,7 @@ fn show_inner(ui: &mut Ui, state: &mut AppState, ui_state: &mut PromptUiState, l
         ui.add_space(4.0);
         ui.label(crate::i18n::T::prompt_p008(lang));
 
-        let prompt_id = egui::Id::new("prompt_input");
+        let prompt_id = egui::Id::unique("prompt_input");
         let prompt_widget = egui::TextEdit::multiline(&mut state.prompt_input)
             .id(prompt_id)
             .desired_rows(3)
@@ -4885,5 +4885,60 @@ mod check_output_tests {
         // render_check_details 以外は元の要約の文字列の欄を読まない (テレメトリの 2 箇所は除く)
         let details = fn_body(src, "render_check_details");
         assert!(details.contains("safety.messages") && details.contains("p.fail_messages"));
+    }
+}
+
+#[cfg(test)]
+mod paste_tests {
+    use super::{PromptUiState, show};
+    use crate::i18n::Lang;
+    use crate::state::AppState;
+
+    fn frame(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        state: &mut AppState,
+        ui_state: &mut PromptUiState,
+    ) {
+        // the prompt field lives in the collapsed experimental section; open it the
+        // way the Gallery edit flow does
+        ui_state.force_open_experimental = true;
+        let input = egui::RawInput {
+            events,
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1200.0, 4000.0),
+            )),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            show(ui, state, ui_state, Lang::En);
+        });
+        // no renderer in the test: drop the font texture upload on purpose
+        out.textures_delta.clear();
+    }
+
+    /// 貼り付け (OS の clipboard から egui に届く `Event::Paste`) が実際の prompt 欄に入る
+    /// eframe / egui を上げた時に、prompt 欄の id や focus の扱いが変わって貼り付けが
+    /// 届かなくなる形を止める
+    #[test]
+    fn a_paste_event_reaches_the_prompt_field() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut state = AppState::new(dir.path().to_path_buf());
+        state.prompt_input.clear();
+        let mut ui_state = PromptUiState::default();
+        let ctx = egui::Context::default();
+
+        frame(&ctx, vec![], &mut state, &mut ui_state);
+        ctx.memory_mut(|m| m.request_focus(egui::Id::unique("prompt_input")));
+        frame(&ctx, vec![], &mut state, &mut ui_state);
+        frame(
+            &ctx,
+            vec![egui::Event::Paste("a mug with a handle".to_owned())],
+            &mut state,
+            &mut ui_state,
+        );
+
+        assert_eq!(state.prompt_input, "a mug with a handle");
     }
 }

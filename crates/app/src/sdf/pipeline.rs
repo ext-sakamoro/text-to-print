@@ -169,8 +169,8 @@ impl MeshPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("mesh_view pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
         });
 
         let vertex_layout = VertexBufferLayout {
@@ -196,7 +196,7 @@ impl MeshPipeline {
             vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[vertex_layout],
+                buffers: &[Some(vertex_layout)],
                 compilation_options: Default::default(),
             },
             fragment: Some(FragmentState {
@@ -227,13 +227,13 @@ impl MeshPipeline {
             // and hollow shapes render with correct front/back occlusion
             depth_stencil: Some(DepthStencilState {
                 format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(CompareFunction::Less),
                 stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
             multisample: MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -273,6 +273,7 @@ impl MeshPipeline {
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: color_view,
                         resolve_target: None,
+                        depth_slice: None,
                         ops: Operations {
                             load: LoadOp::Clear(Color {
                                 r: 0.11,
@@ -293,6 +294,7 @@ impl MeshPipeline {
                     }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 });
             }
             queue.submit(std::iter::once(encoder.finish()));
@@ -308,6 +310,7 @@ impl MeshPipeline {
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: None,
+                    depth_slice: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color {
                             r: 0.11,
@@ -328,6 +331,7 @@ impl MeshPipeline {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             pass.set_pipeline(&self.render_pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);

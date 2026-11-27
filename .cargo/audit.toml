@@ -17,13 +17,6 @@
 informational_warnings = ["unmaintained", "unsound", "notice"]
 
 ignore = [
-    # ── zbus 4.4 chain (eframe 0.31 → egui-winit → accesskit_unix → atspi) ──
-    #
-    # Linux screen-reader support. Resolves with the eframe / egui upgrade.
-
-    "RUSTSEC-2026-0194",  # quick-xml v0.30      ← zbus_xml 4.0 ← zbus-lockstep ← atspi-common
-    "RUSTSEC-2026-0195",  # quick-xml v0.30      ← zbus_xml 4.0 ← zbus-lockstep ← atspi-common
-
     # ── upstream ALICE-* / wgpu / egui font stack ───────────────────
     #
     # Not fixable from text-to-print alone — need upstream crate updates

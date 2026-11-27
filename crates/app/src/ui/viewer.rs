@@ -229,12 +229,12 @@ pub fn show(
 /// egui memory id used to stash the shared camera handle so the drag / scroll
 /// handlers can reach it without threading the wgpu render_state through
 fn camera_id() -> egui::Id {
-    egui::Id::new("text_to_print_mesh_camera")
+    egui::Id::unique("text_to_print_mesh_camera")
 }
 
 /// Publish the current mesh_view camera handle to egui memory so `show()`
 /// can mutate it in response to drag / scroll input Called once per frame
-/// from `App::update` after wgpu resources have been ensured
+/// from `App::ui` after wgpu resources have been ensured
 pub fn publish_camera(ctx: &egui::Context, camera: Arc<std::sync::Mutex<crate::sdf::Camera>>) {
     ctx.memory_mut(|m| m.data.insert_temp(camera_id(), camera));
 }
