@@ -17,6 +17,7 @@
 - 試験 `a_paste_event_reaches_the_prompt_field`: 貼り付けの入力 (`egui::Event::Paste`) が実際の prompt の欄に入る prompt の欄の id を外す変異で落ちる
 - RUSTSEC-2026-0370 / 0371 / 0372 (zvariant / zbus_names / zvariant_derive が保守終了) の保留は消えない: eframe 0.37 の Linux の読み上げ (accesskit_unix 0.24.1、最新) も zbus 5.19 を使い、zbus 5 はこの 3 crate を別に引く 保留を 4.x の版 (zbus 4.4) から 5.x の版 (zvariant 5.15.1 / zbus_names 4.3.5 / zvariant_derive 5.15.1) に記録し直し、期限は 2026-12-18、出口は zbus 6 に乗った accesskit_unix (0.24.1 より新しい版) 前の保留は 2026-11-26 に期限が切れていた
 - quick-xml 0.30 (zbus_xml 4.0 経由) が lock から消えたので、RUSTSEC-2026-0194 / 0195 の ignore を deny.toml と .cargo/audit.toml から外した
+- lock で gpu-allocator 0.28 (wgpu-hal 30 が引く) を windows 0.62 に結んだ gpu-allocator は windows 0.53〜0.62 を受けるので既に lock にあった 0.58 に寄せられ、Windows で wgpu-hal 30 の dx12 が型の不一致で build できなかった
 - paste (RUSTSEC-2024-0436) は残る: wgpu-hal 24 (metal 0.31) を alice-sdf / alice-llm が引く SDF と LLM の wgpu 30 化で外れる
 
 ### Changed — LOL / SDF / 印刷の Law の lock を上げ、壁の限界を printer profile から導く (2026-11-21)
